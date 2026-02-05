@@ -6,7 +6,7 @@ import { extractTimelineAudio } from "@/lib/media/mediabunny";
 import { decodeAudioToFloat32 } from "@/lib/media/audio";
 import { transcriptionService } from "@/services/transcription/service";
 import { isCaptionTextElement } from "@/lib/transcription/caption-metadata";
-import { frameExtractorService } from "../services/frame-extractor";
+import { encodeCanvasAsJpeg } from "../utils/image";
 import { LMStudioProvider } from "../providers/lm-studio-provider";
 import type { AgentTool, ToolResult } from "../types";
 import { transcriptAnalyzerService } from "../services/transcript-analyzer";
@@ -598,30 +598,158 @@ function createTimelineToAssetMapper({
 	};
 }
 
+interface FrameExtractor {
+	video: HTMLVideoElement;
+	objectUrl: string;
+}
+
+async function createFrameExtractor(
+	file: File,
+): Promise<FrameExtractor | null> {
+	const video = document.createElement("video");
+	const objectUrl = URL.createObjectURL(file);
+	video.muted = true;
+	video.preload = "auto";
+
+	try {
+		await new Promise<void>((resolve, reject) => {
+			const timeoutId = setTimeout(
+				() => reject(new Error("Video load timeout (30s)")),
+				30_000,
+			);
+			video.addEventListener(
+				"canplay",
+				() => {
+					clearTimeout(timeoutId);
+					resolve();
+				},
+				{ once: true },
+			);
+			video.addEventListener(
+				"error",
+				() => {
+					clearTimeout(timeoutId);
+					reject(
+						new Error(
+							`Video load error: ${video.error?.message ?? "unknown"}`,
+						),
+					);
+				},
+				{ once: true },
+			);
+			video.src = objectUrl;
+		});
+		console.debug(
+			`[highlight] Video loaded: ${video.videoWidth}x${video.videoHeight}, duration=${video.duration.toFixed(2)}s`,
+		);
+		return { video, objectUrl };
+	} catch (error) {
+		console.warn("[highlight] Failed to create frame extractor:", error);
+		URL.revokeObjectURL(objectUrl);
+		return null;
+	}
+}
+
+function destroyFrameExtractor(extractor: FrameExtractor): void {
+	URL.revokeObjectURL(extractor.objectUrl);
+	extractor.video.removeAttribute("src");
+	extractor.video.load();
+}
+
+async function captureFrameAt(
+	extractor: FrameExtractor,
+	time: number,
+): Promise<HTMLCanvasElement | null> {
+	const { video } = extractor;
+	const clamped = Math.min(Math.max(0, time), video.duration || 0);
+
+	try {
+		video.currentTime = clamped;
+		await new Promise<void>((resolve, reject) => {
+			const timeoutId = setTimeout(
+				() => reject(new Error("Seek timeout (10s)")),
+				10_000,
+			);
+			video.addEventListener(
+				"seeked",
+				() => {
+					clearTimeout(timeoutId);
+					resolve();
+				},
+				{ once: true },
+			);
+		});
+
+		const w = video.videoWidth || 640;
+		const h = video.videoHeight || 360;
+		const canvas = document.createElement("canvas");
+		canvas.width = w;
+		canvas.height = h;
+		const ctx = canvas.getContext("2d");
+		if (!ctx) return null;
+
+		ctx.drawImage(video, 0, 0, w, h);
+		return canvas;
+	} catch (error) {
+		console.warn(
+			`[highlight] captureFrameAt(${time.toFixed(2)}s) failed:`,
+			error,
+		);
+		return null;
+	}
+}
+
+function isCanvasBlank(canvas: HTMLCanvasElement | OffscreenCanvas): boolean {
+	try {
+		const ctx =
+			"getContext" in canvas
+				? (canvas as HTMLCanvasElement).getContext("2d")
+				: (canvas as OffscreenCanvas).getContext("2d");
+		if (!ctx) return true;
+		const w = Math.min(canvas.width, 64);
+		const h = Math.min(canvas.height, 64);
+		if (w === 0 || h === 0) return true;
+		const data = ctx.getImageData(0, 0, w, h).data;
+		let nonZero = 0;
+		for (let i = 0; i < data.length; i += 4) {
+			if (data[i] > 5 || data[i + 1] > 5 || data[i + 2] > 5) {
+				nonZero++;
+			}
+		}
+		return nonZero < w * h * 0.01;
+	} catch {
+		return false;
+	}
+}
+
 async function extractFrameDataUrl({
-	asset,
+	extractor,
 	timelineTime,
 	timelineToAssetTime,
 }: {
-	asset: MediaAsset;
+	extractor: FrameExtractor;
 	timelineTime: number;
 	timelineToAssetTime: (timelineTime: number) => number;
 }): Promise<string | null> {
 	const assetTime = timelineToAssetTime(timelineTime);
-	const frames = await frameExtractorService.sampleVideoFramesAtTimestamps({
-		asset,
-		timestamps: [assetTime],
-	});
 
-	if (frames.length === 0) {
+	const canvas = await captureFrameAt(extractor, assetTime);
+	if (!canvas) {
+		console.warn(
+			`[highlight] No frame at tl=${timelineTime.toFixed(2)} asset=${assetTime.toFixed(2)}`,
+		);
 		return null;
 	}
 
-	const encoded = await frameExtractorService.encodeFramesAsJpeg({
-		frames: [frames[0]],
-	});
+	const blank = isCanvasBlank(canvas);
+	console.debug(
+		`[highlight] Frame: tl=${timelineTime.toFixed(2)} asset=${assetTime.toFixed(2)} ${canvas.width}x${canvas.height} blank=${blank}`,
+	);
 
-	return encoded[0]?.dataUrl ?? null;
+	if (blank) return null;
+
+	const encoded = await encodeCanvasAsJpeg({ canvas, quality: 0.8 });
+	return encoded.dataUrl;
 }
 
 interface TimeRange {
@@ -1035,23 +1163,34 @@ export const validateHighlightsVisualTool: AgentTool = {
 				assetId: asset.id,
 			});
 
-			const candidatesWithFrames = await mapWithConcurrency({
-				items: topCandidates,
-				limit: frameConcurrency,
-				worker: async (candidate) => {
-					const center =
-						(candidate.chunk.startTime + candidate.chunk.endTime) / 2;
-					const dataUrl = await extractFrameDataUrl({
-						asset,
-						timelineTime: center,
-						timelineToAssetTime: timelineToAsset,
-					});
-					return {
-						...candidate,
-						thumbnailDataUrl: dataUrl ?? undefined,
-					} satisfies ScoredSegment;
-				},
-			});
+			const extractor = asset.file
+				? await createFrameExtractor(asset.file)
+				: null;
+
+			let candidatesWithFrames: ScoredSegment[];
+			try {
+				candidatesWithFrames = extractor
+					? await mapWithConcurrency({
+							items: topCandidates,
+							limit: frameConcurrency,
+							worker: async (candidate) => {
+								const center =
+									(candidate.chunk.startTime + candidate.chunk.endTime) / 2;
+								const dataUrl = await extractFrameDataUrl({
+									extractor,
+									timelineTime: center,
+									timelineToAssetTime: timelineToAsset,
+								});
+								return {
+									...candidate,
+									thumbnailDataUrl: dataUrl ?? undefined,
+								} satisfies ScoredSegment;
+							},
+						})
+					: topCandidates.map((c) => ({ ...c }));
+			} finally {
+				if (extractor) destroyFrameExtractor(extractor);
+			}
 
 			const visualMap = await highlightScorerService.scoreWithVision(
 				candidatesWithFrames,

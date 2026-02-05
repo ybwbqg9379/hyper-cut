@@ -224,11 +224,12 @@ function parseSemanticScores(content: string): ParsedSemanticScore[] | null {
 function buildVisualPrompt(): string {
 	return [
 		"你是一位视频画面质量评估专家。",
-		"请评估这帧画面作为短视频片段的视觉吸引力。",
+		"请仔细观察这帧画面，评估其作为短视频片段的视觉质量。",
 		"评分标准:",
-		"- frameQuality: 画面清晰度、构图、光线 (0.0-1.0)",
-		"- visualInterest: 视觉吸引力，人物表情/动作/场景变化 (0.0-1.0)",
-		'仅返回 JSON: {"frameQuality": 0.8, "visualInterest": 0.7}',
+		"- frameQuality: 画面清晰度、构图、光线 (0.0-1.0)。模糊/过暗/过曝给低分，清晰/构图好给高分",
+		"- visualInterest: 视觉吸引力 (0.0-1.0)。空白/静态场景给低分，人物表情丰富/动作明显/场景有趣给高分",
+		"请根据画面实际内容给出你的判断，不要固定输出相同分数。",
+		'返回格式: {"frameQuality": <分数>, "visualInterest": <分数>}',
 	].join("\n");
 }
 

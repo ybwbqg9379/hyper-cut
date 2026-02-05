@@ -187,11 +187,9 @@ class StorageService {
 			id: serializedProject.metadata.id,
 			name: serializedProject.metadata.name,
 			thumbnail: serializedProject.metadata.thumbnail,
-			duration:
-				serializedProject.metadata.duration ??
-				getProjectDurationFromScenes({
-					scenes: (serializedProject.scenes ?? []) as unknown as TScene[],
-				}),
+			duration: getProjectDurationFromScenes({
+				scenes: (serializedProject.scenes ?? []) as unknown as TScene[],
+			}),
 			createdAt: new Date(serializedProject.metadata.createdAt),
 			updatedAt: new Date(serializedProject.metadata.updatedAt),
 		}));

@@ -455,6 +455,7 @@ export function AgentChatbox() {
 			timestamp: new Date(),
 		};
 		setMessages((prev) => [...prev, userMessage]);
+		setActiveView("chat");
 
 		const response = await runWorkflow({
 			workflowName: selectedWorkflowName,

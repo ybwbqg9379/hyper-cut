@@ -103,6 +103,18 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Fixed
 
+- **Highlight 帧提取可靠性**: 重构视觉验证帧提取链路，修复 4/5 帧空白问题
+  - 根因：共享 `videoCache` 单例被编辑器渲染器与 Agent 同时使用，seek 互相干扰导致 canvas 被覆写
+  - 新方案：独立 `HTMLVideoElement` + `canvas.drawImage()`，完全绕过共享 videoCache
+  - 优化：视频只加载一次（`createFrameExtractor`），多帧复用同一 video 元素（`captureFrameAt`）
+  - 加载超时 30s，seek 超时 10s，`canplay` 事件确保视频真正可用
+- **Highlight VLM 固定评分**: 重写视觉评分 prompt，消除模型复制示例值的问题
+  - 移除 prompt 中的数值示例 `{"frameQuality": 0.8, ...}`，改用 `<分数>` 占位符
+  - 新增提示"请根据画面实际内容给出判断，不要固定输出相同分数"
+- **Highlight 工具超时**: `DEFAULT_HIGHLIGHT_TOP_N_VISUAL` 15→5 减少帧提取量
+- **工作流发送按钮无响应**: `handleRunWorkflow()` 新增 `setActiveView("chat")` 自动切换到聊天视图
+- **帧提取并发安全**: `DEFAULT_HIGHLIGHT_FRAME_EXTRACTION_CONCURRENCY` 4→1，避免 VideoCache 并发 seek 竞争
+- **项目列表时长显示**: `StorageService` 始终从场景数据计算时长，不依赖可能过期的 metadata.duration
 - **Timeline hydration error**: Fixed nested `<button>` elements causing React hydration mismatch
   - Changed outer `<button>` in `TimelineTrackContent` to `<div>` with proper ARIA attributes
   - Added `role="button"`, `tabIndex={0}`, and keyboard event handlers for accessibility
