@@ -697,8 +697,14 @@ describe("AgentOrchestrator", () => {
 		expect(secondConfirmResult.success).toBe(false);
 		expect(secondConfirmResult.message).toContain("计划正在执行中");
 
-		resolveTool?.({ success: true, message: "ok" });
-		const firstConfirmResult = await firstConfirmPromise;
-		expect(firstConfirmResult.success).toBe(true);
-	});
+			if (!resolveTool) {
+				throw new Error("Resolver not initialized");
+			}
+			(resolveTool as (value: { success: boolean; message: string }) => void)({
+				success: true,
+				message: "ok",
+			});
+			const firstConfirmResult = await firstConfirmPromise;
+			expect(firstConfirmResult.success).toBe(true);
+		});
 });

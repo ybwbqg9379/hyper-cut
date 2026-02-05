@@ -28,6 +28,7 @@ Available capabilities:
 - Project: update/save project settings, export the project to video, get project info
 - Assets: add/remove media assets, paste at specific time
 - Query information: get timeline info, current position, selected elements
+- Vision understanding: detect scenes, analyze frames, suggest edit points
 - Workflow automation: run predefined workflows for multi-step edits
 
 When the user asks you to do something:

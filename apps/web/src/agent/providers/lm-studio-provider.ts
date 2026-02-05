@@ -1,10 +1,10 @@
 import type {
+  ContentPart,
   Message,
   LLMProvider,
   ChatParams,
   ChatResponse,
   ToolCall,
-  LMStudioConfig,
 } from '../types';
 
 export interface LMStudioProviderOptions {
@@ -40,8 +40,19 @@ export class LMStudioProvider implements LLMProvider {
   name = 'lm-studio';
   private options: typeof DEFAULT_OPTIONS;
 
-  constructor(options: LMStudioProviderOptions = {}) {
-    this.options = { ...DEFAULT_OPTIONS, ...options };
+  constructor(options?: LMStudioProviderOptions);
+  /** @deprecated Use constructor with options object instead */
+  constructor(baseUrl?: string, model?: string, timeoutMs?: number);
+  constructor(
+    optionsOrBaseUrl: LMStudioProviderOptions | string = {},
+    model?: string,
+    timeoutMs?: number
+  ) {
+    const normalizedOptions =
+      typeof optionsOrBaseUrl === 'string'
+        ? { url: optionsOrBaseUrl, model, timeoutMs }
+        : optionsOrBaseUrl;
+    this.options = { ...DEFAULT_OPTIONS, ...normalizedOptions };
   }
 
   /** @deprecated Use constructor with options object instead */
@@ -142,7 +153,7 @@ export class LMStudioProvider implements LLMProvider {
       }) ?? [];
 
     return {
-      content: choice.message?.content ?? null,
+      content: normalizeOpenAIResponseContent(choice.message?.content),
       toolCalls,
       finishReason: choice.finish_reason === 'tool_calls' ? 'tool_calls' : 'stop',
     };
@@ -165,7 +176,7 @@ export class LMStudioProvider implements LLMProvider {
 interface OpenAICompatibleResponse {
   choices?: Array<{
     message?: {
-      content?: string | null;
+      content?: OpenAICompatibleContent | null;
       tool_calls?: OpenAIToolCall[];
     };
     finish_reason?: string;
@@ -183,17 +194,92 @@ interface OpenAIToolCall {
 
 interface OpenAICompatibleMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  content: OpenAICompatibleContent | null;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
   name?: string;
 }
 
+type OpenAICompatibleContent =
+  | string
+  | Array<
+      | {
+          type: 'text';
+          text: string;
+        }
+      | {
+          type: 'image_url';
+          image_url: {
+            url: string;
+          };
+        }
+    >;
+
+function isContentParts(content: Message['content']): content is ContentPart[] {
+  return Array.isArray(content);
+}
+
+function toOpenAIContentParts(contentParts: ContentPart[]): OpenAICompatibleContent {
+  return contentParts.map((part) => {
+    if (part.type === 'text') {
+      return {
+        type: 'text' as const,
+        text: part.text,
+      };
+    }
+    return {
+      type: 'image_url' as const,
+      image_url: {
+        url: part.image_url.url,
+      },
+    };
+  });
+}
+
+function contentPartsToPlainText(contentParts: ContentPart[]): string {
+  return contentParts
+    .map((part) => {
+      if (part.type === 'text') {
+        return part.text;
+      }
+      return `[image: ${part.image_url.url.slice(0, 32)}...]`;
+    })
+    .join('\n')
+    .trim();
+}
+
+function normalizeOpenAIResponseContent(
+  content: OpenAICompatibleContent | null | undefined
+): string | null {
+  if (!content) {
+    return null;
+  }
+
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  const text = content
+    .map((part) => (part.type === 'text' ? part.text : ''))
+    .join('')
+    .trim();
+  return text || null;
+}
+
 function mapMessageToOpenAIFormat(message: Message): OpenAICompatibleMessage {
+  const normalizedContent: OpenAICompatibleContent | null = isContentParts(
+    message.content
+  )
+    ? toOpenAIContentParts(message.content)
+    : message.content ?? null;
+
   if (message.role === 'assistant' && message.toolCalls?.length) {
+    const contentForToolCallMessage = isContentParts(message.content)
+      ? contentPartsToPlainText(message.content) || null
+      : message.content ?? null;
     return {
       role: message.role,
-      content: message.content ?? null,
+      content: contentForToolCallMessage,
       tool_calls: message.toolCalls.map((call) => ({
         id: call.id,
         type: 'function',
@@ -209,9 +295,12 @@ function mapMessageToOpenAIFormat(message: Message): OpenAICompatibleMessage {
   }
 
   if (message.role === 'tool') {
+    const toolContent = isContentParts(message.content)
+      ? contentPartsToPlainText(message.content)
+      : message.content ?? null;
     return {
       role: message.role,
-      content: message.content ?? null,
+      content: toolContent,
       tool_call_id: message.toolCallId,
       name: message.name,
     };
@@ -219,6 +308,6 @@ function mapMessageToOpenAIFormat(message: Message): OpenAICompatibleMessage {
 
   return {
     role: message.role,
-    content: message.content ?? null,
+    content: normalizedContent,
   };
 }

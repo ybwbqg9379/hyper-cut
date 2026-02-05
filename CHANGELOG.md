@@ -65,6 +65,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Agent 面板新增“工作流”视图：选择工作流、编辑 `stepOverrides`、一键发送执行
   - `stepOverrides` 编辑升级为按步骤可视化参数表单，减少手写 JSON 出错
   - 工作流参数编辑新增“恢复本步骤默认 / 恢复全部默认参数”按钮
+- **Agent 视觉理解（L3）**：新增浏览器端视频视觉分析链路（无 Python sidecar）
+  - Provider：`Message.content` 扩展为多模态 `ContentPart[]`，`lm-studio-provider` 支持 OpenAI 兼容 `image_url` 内容块
+  - 新增工具：`detect_scenes`、`analyze_frames`、`suggest_edits`
+  - 新增服务：`frame-extractor`（VideoCache 帧采样 + JPEG/base64 编码）与 `scene-detector`（Canvas 像素差分）
+  - 支持场景检测结果缓存与帧分析缓存，`analyze_frames` 可复用 `detect_scenes` 的关键帧
+  - `run_workflow` 执行映射已接入 Vision 工具类别
 
 ### Changed
 

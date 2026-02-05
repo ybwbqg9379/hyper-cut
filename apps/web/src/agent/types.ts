@@ -9,11 +9,26 @@
 
 export interface Message {
 	role: "system" | "user" | "assistant" | "tool";
-	content: string | null;
+	content: MessageContent;
 	toolCallId?: string;
 	name?: string;
 	toolCalls?: ToolCall[];
 }
+
+export interface TextContentPart {
+	type: "text";
+	text: string;
+}
+
+export interface ImageUrlContentPart {
+	type: "image_url";
+	image_url: {
+		url: string;
+	};
+}
+
+export type ContentPart = TextContentPart | ImageUrlContentPart;
+export type MessageContent = string | ContentPart[] | null;
 
 export interface ToolDefinition {
 	name: string;

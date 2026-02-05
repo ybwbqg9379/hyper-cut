@@ -101,6 +101,29 @@ describe('LMStudioProvider', () => {
       });
     });
 
+    it('should parse multimodal response content array into text', () => {
+      const response = {
+        choices: [{
+          message: {
+            content: [
+              { type: 'text', text: 'Scene looks calm. ' },
+              { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,abc' } },
+              { type: 'text', text: 'A person is speaking.' },
+            ],
+          },
+          finish_reason: 'stop',
+        }],
+      };
+
+      const result = callParseResponse(provider, response);
+
+      expect(result).toEqual({
+        content: 'Scene looks calm. A person is speaking.',
+        toolCalls: [],
+        finishReason: 'stop',
+      });
+    });
+
     it('should handle malformed JSON in tool arguments gracefully', () => {
       const response = {
         choices: [{
@@ -324,6 +347,55 @@ describe('LMStudioProvider', () => {
           tools: [],
         })
       ).rejects.toThrow('LM Studio API error: Internal Server Error');
+
+      global.fetch = originalFetch;
+    });
+
+    it('should send multimodal content parts to OpenAI-compatible API', async () => {
+      const originalFetch = global.fetch;
+      let capturedBody: Record<string, unknown> | null = null;
+      global.fetch = vi.fn((_url, init) => {
+        const rawBody = typeof init?.body === 'string' ? init.body : '{}';
+        capturedBody = JSON.parse(rawBody) as Record<string, unknown>;
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: { content: 'ok' },
+              finish_reason: 'stop',
+            }],
+          }),
+        });
+      }) as unknown as typeof fetch;
+
+      await provider.chat({
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Describe this frame' },
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/jpeg;base64,abc123' },
+            },
+          ],
+        }],
+        tools: [],
+      });
+
+      expect(capturedBody).not.toBeNull();
+      const requestMessages = (capturedBody as { messages?: unknown } | null)?.messages;
+      expect(requestMessages).toEqual([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Describe this frame' },
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/jpeg;base64,abc123' },
+            },
+          ],
+        },
+      ]);
 
       global.fetch = originalFetch;
     });

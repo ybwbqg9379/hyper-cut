@@ -6,6 +6,8 @@
 // Core types
 export type {
 	Message,
+	ContentPart,
+	MessageContent,
 	ToolDefinition,
 	ToolCall,
 	ChatParams,
@@ -39,6 +41,7 @@ export { getTimelineTools } from "./tools/timeline-tools";
 export { getPlaybackTools } from "./tools/playback-tools";
 export { getQueryTools } from "./tools/query-tools";
 export { getProjectTools } from "./tools/project-tools";
+export { getVisionTools } from "./tools/vision-tools";
 export { getWorkflowTools } from "./tools/workflow-tools";
 
 // Workflows
