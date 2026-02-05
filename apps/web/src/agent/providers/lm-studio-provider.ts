@@ -15,14 +15,16 @@ export class LMStudioProvider implements LLMProvider {
   name = 'lm-studio';
   private baseUrl: string;
   private model: string;
-  private readonly requestTimeoutMs = 15000;
+  private readonly requestTimeoutMs: number;
 
   constructor(
     baseUrl = 'http://localhost:1234/v1',
-    model = 'qwen/qwen3-vl-8b'
+    model = 'qwen/qwen3-vl-8b',
+    timeoutMs = 120000
   ) {
     this.baseUrl = baseUrl;
     this.model = model;
+    this.requestTimeoutMs = timeoutMs;
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {

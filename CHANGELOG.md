@@ -42,6 +42,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Timeline：`move_elements`
   - Clipboard：`paste_at_time`
 
+### Changed
+
+- **Agent timeout configuration**: Increased default timeouts and made them configurable
+  - LM Studio request timeout: 15s → 120s (configurable via `NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS`)
+  - Tool execution timeout: 30s → 60s (configurable via `NEXT_PUBLIC_AGENT_TOOL_TIMEOUT_MS`)
+  - Added `lmStudioModel` and `lmStudioTimeoutMs` to `AgentConfig` interface
+
 ### Fixed
 
 - **Timeline hydration error**: Fixed nested `<button>` elements causing React hydration mismatch

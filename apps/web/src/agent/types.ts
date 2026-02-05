@@ -88,6 +88,8 @@ export type ProviderType = 'lm-studio' | 'gemini';
 export interface AgentConfig {
   provider: ProviderType;
   lmStudioUrl?: string;
+  lmStudioModel?: string;
+  lmStudioTimeoutMs?: number;
   geminiApiKey?: string;
   systemPrompt?: string;
 }

@@ -35,7 +35,7 @@ Always be helpful and explain what actions you're taking.`;
 
 const MAX_HISTORY_MESSAGES = 30;
 const DEFAULT_MAX_TOOL_ITERATIONS = 4;
-const DEFAULT_TOOL_TIMEOUT_MS = 30000;
+const DEFAULT_TOOL_TIMEOUT_MS = 60000;
 
 /**
  * AgentOrchestrator

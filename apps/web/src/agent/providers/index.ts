@@ -10,13 +10,22 @@ export function createProvider(
   config?: Partial<AgentConfig>
 ): LLMProvider {
   switch (type) {
-    case 'lm-studio':
+    case 'lm-studio': {
+      const timeoutMs =
+        config?.lmStudioTimeoutMs ??
+        (process.env.NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS
+          ? Number(process.env.NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS)
+          : 120000);
       return new LMStudioProvider(
         config?.lmStudioUrl ??
           process.env.NEXT_PUBLIC_LM_STUDIO_URL ??
           'http://localhost:1234/v1',
-        process.env.NEXT_PUBLIC_LM_STUDIO_MODEL ?? 'qwen/qwen3-vl-8b'
+        config?.lmStudioModel ??
+          process.env.NEXT_PUBLIC_LM_STUDIO_MODEL ??
+          'qwen/qwen3-vl-8b',
+        timeoutMs
       );
+    }
     case 'gemini':
       return new GeminiProvider(
         config?.geminiApiKey ?? process.env.GEMINI_API_KEY ?? ''

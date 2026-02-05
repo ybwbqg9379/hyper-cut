@@ -17,7 +17,10 @@ export function useAgent() {
     const tools = getAllTools();
     const systemPrompt =
       process.env.NEXT_PUBLIC_AGENT_SYSTEM_PROMPT?.trim() || undefined;
-    return new AgentOrchestrator(tools, { systemPrompt });
+    const toolTimeoutMs = process.env.NEXT_PUBLIC_AGENT_TOOL_TIMEOUT_MS
+      ? Number(process.env.NEXT_PUBLIC_AGENT_TOOL_TIMEOUT_MS)
+      : undefined;
+    return new AgentOrchestrator(tools, { systemPrompt, toolTimeoutMs });
   }, []);
 
   // Process a user message
