@@ -24,6 +24,7 @@ import {
 import { extractTimelineAudio } from '@/lib/media/mediabunny';
 import { decodeAudioToFloat32 } from '@/lib/media/audio';
 import { buildCaptionChunks } from '@/lib/transcription/caption';
+import { createCaptionMetadata } from '@/lib/transcription/caption-metadata';
 import { transcriptionService } from '@/services/transcription/service';
 import { UpdateElementTransformCommand } from '@/lib/commands/timeline';
 import { invokeActionWithCheck } from './action-utils';
@@ -1006,6 +1007,12 @@ export const generateCaptionsTool: AgentTool = {
             content: caption.text,
             duration: caption.duration,
             startTime: caption.startTime,
+            metadata: createCaptionMetadata({
+              origin: 'agent-tool',
+              segmentIndex: i,
+              language: transcription.language,
+              modelId,
+            }),
           },
         });
       }

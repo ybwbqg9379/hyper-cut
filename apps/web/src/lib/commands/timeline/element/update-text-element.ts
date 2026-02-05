@@ -20,6 +20,9 @@ export class UpdateTextElementCommand extends Command {
 				| "fontWeight"
 				| "fontStyle"
 				| "textDecoration"
+				| "transform"
+				| "opacity"
+				| "metadata"
 			>
 		>,
 	) {

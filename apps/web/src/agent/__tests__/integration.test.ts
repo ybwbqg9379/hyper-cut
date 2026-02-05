@@ -729,6 +729,23 @@ describe("Agent Tools Integration", () => {
 			const result = await tool.execute({ source: "selection" });
 			expect(result.success).toBe(true);
 			expect(editor.timeline.insertElement).toHaveBeenCalledTimes(2);
+			expect(editor.timeline.insertElement).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({
+					element: expect.objectContaining({
+						metadata: {
+							kind: "caption",
+							caption: expect.objectContaining({
+								source: "whisper",
+								origin: "agent-tool",
+								segmentIndex: 0,
+								language: "en",
+								modelId: "whisper-small",
+							}),
+						},
+					}),
+				}),
+			);
 		});
 
 		it("generate_captions should fail without selection", async () => {

@@ -6,6 +6,7 @@ import { useAgent } from "@/hooks/use-agent";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { TranscriptPanel } from "./TranscriptPanel";
 import { cn } from "@/utils/ui";
 import {
 	Bot,
@@ -18,6 +19,8 @@ import {
 	Pencil,
 	Ban,
 	Play,
+	MessagesSquare,
+	ScrollText,
 } from "lucide-react";
 
 interface Message {
@@ -48,6 +51,7 @@ export function AgentChatbox() {
 	const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
 	const [stepDrafts, setStepDrafts] = useState<Record<string, string>>({});
 	const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
+	const [activeView, setActiveView] = useState<"chat" | "transcript">("chat");
 
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -190,7 +194,8 @@ export function AgentChatbox() {
 		clearHistory();
 	};
 
-	const inputDisabled = isProcessing || Boolean(pendingPlanId);
+	const inputDisabled =
+		activeView !== "chat" || isProcessing || Boolean(pendingPlanId);
 
 	return (
 		<div className="flex flex-col h-full bg-panel">
@@ -200,6 +205,38 @@ export function AgentChatbox() {
 					<div className="flex items-center gap-2">
 						<Bot className="size-4 text-primary" />
 						<span className="font-medium text-sm">AI 助手</span>
+						<div className="ml-1 flex items-center rounded-md border border-border p-0.5">
+							<Button
+								variant="text"
+								size="sm"
+								className={cn(
+									"h-6 px-2 text-xs",
+									activeView === "chat"
+										? "bg-accent text-foreground"
+										: "text-muted-foreground",
+								)}
+								onClick={() => setActiveView("chat")}
+								title="聊天视图"
+							>
+								<MessagesSquare className="size-3 mr-1" />
+								聊天
+							</Button>
+							<Button
+								variant="text"
+								size="sm"
+								className={cn(
+									"h-6 px-2 text-xs",
+									activeView === "transcript"
+										? "bg-accent text-foreground"
+										: "text-muted-foreground",
+								)}
+								onClick={() => setActiveView("transcript")}
+								title="转录联动视图"
+							>
+								<ScrollText className="size-3 mr-1" />
+								转录
+							</Button>
+						</div>
 						{providerStatus && (
 							<span
 								className={cn(
@@ -226,86 +263,96 @@ export function AgentChatbox() {
 				<Separator />
 			</div>
 
-			{/* Messages - uses ScrollArea like PanelBaseView */}
-			<ScrollArea className="flex-1">
-				<div className="p-4 space-y-3">
-					{messages.length === 0 && (
-						<div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
-							<Bot className="size-10 mb-3 opacity-20" />
-							<p>输入指令来控制视频编辑</p>
-							<p className="text-xs mt-1 opacity-70">
-								例如: "在当前位置分割视频"
-							</p>
+			{activeView === "chat" ? (
+				<>
+					{/* Messages - uses ScrollArea like PanelBaseView */}
+					<ScrollArea className="flex-1">
+						<div className="p-4 space-y-3">
+							{messages.length === 0 && (
+								<div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
+									<Bot className="size-10 mb-3 opacity-20" />
+									<p>输入指令来控制视频编辑</p>
+									<p className="text-xs mt-1 opacity-70">
+										例如: "在当前位置分割视频"
+									</p>
+								</div>
+							)}
+
+							{messages.map((message) => (
+								<MessageBubble
+									key={message.id}
+									message={message}
+									isActivePlan={message.plan?.id === pendingPlanId}
+									stepDrafts={stepDrafts}
+									stepErrors={stepErrors}
+									onStepDraftChange={(stepId, value) => {
+										setStepDrafts((prev) => ({ ...prev, [stepId]: value }));
+									}}
+									onUpdateStep={handleUpdateStep}
+									onRemoveStep={handleRemoveStep}
+									onConfirmPlan={handleConfirmPlan}
+									onCancelPlan={handleCancelPlan}
+									controlsDisabled={isProcessing}
+								/>
+							))}
+
+							{isProcessing && (
+								<div className="flex items-center gap-2 text-muted-foreground text-sm px-3 py-2">
+									<Loader2 className="size-4 animate-spin" />
+									<span>处理中...</span>
+								</div>
+							)}
+
+							{error && (
+								<div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-md px-3 py-2">
+									<AlertCircle className="size-4" />
+									<span>{error}</span>
+								</div>
+							)}
+
+							<div ref={messagesEndRef} />
 						</div>
-					)}
+					</ScrollArea>
 
-					{messages.map((message) => (
-						<MessageBubble
-							key={message.id}
-							message={message}
-							isActivePlan={message.plan?.id === pendingPlanId}
-							stepDrafts={stepDrafts}
-							stepErrors={stepErrors}
-							onStepDraftChange={(stepId, value) => {
-								setStepDrafts((prev) => ({ ...prev, [stepId]: value }));
-							}}
-							onUpdateStep={handleUpdateStep}
-							onRemoveStep={handleRemoveStep}
-							onConfirmPlan={handleConfirmPlan}
-							onCancelPlan={handleCancelPlan}
-							controlsDisabled={isProcessing}
-						/>
-					))}
-
-					{isProcessing && (
-						<div className="flex items-center gap-2 text-muted-foreground text-sm px-3 py-2">
-							<Loader2 className="size-4 animate-spin" />
-							<span>处理中...</span>
+					{/* Input - follows consistent spacing and border patterns */}
+					<div className="bg-panel border-t border-border p-3">
+						<div className="flex gap-2">
+							<textarea
+								ref={inputRef}
+								value={input}
+								onChange={(e) => setInput(e.target.value)}
+								onKeyDown={handleKeyDown}
+								placeholder={
+									pendingPlanId
+										? "请先确认或取消当前计划..."
+										: "输入编辑指令..."
+								}
+								disabled={inputDisabled}
+								className={cn(
+									"flex-1 min-h-[38px] max-h-[100px] resize-none rounded-md",
+									"bg-background border border-border px-3 py-2 text-sm",
+									"placeholder:text-muted-foreground",
+									"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary",
+									"disabled:opacity-50 disabled:cursor-not-allowed",
+								)}
+								rows={1}
+							/>
+							<Button
+								onClick={handleSend}
+								disabled={!input.trim() || inputDisabled}
+								size="icon"
+								className="shrink-0 size-[38px]"
+							>
+								<Send className="size-4" />
+							</Button>
 						</div>
-					)}
-
-					{error && (
-						<div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-md px-3 py-2">
-							<AlertCircle className="size-4" />
-							<span>{error}</span>
-						</div>
-					)}
-
-					<div ref={messagesEndRef} />
+					</div>
+				</>
+			) : (
+				<div className="flex-1 min-h-0">
+					<TranscriptPanel />
 				</div>
-			</ScrollArea>
-
-			{/* Input - follows consistent spacing and border patterns */}
-			<div className="bg-panel border-t border-border p-3">
-				<div className="flex gap-2">
-					<textarea
-						ref={inputRef}
-						value={input}
-						onChange={(e) => setInput(e.target.value)}
-						onKeyDown={handleKeyDown}
-						placeholder={
-							pendingPlanId ? "请先确认或取消当前计划..." : "输入编辑指令..."
-						}
-						disabled={inputDisabled}
-						className={cn(
-							"flex-1 min-h-[38px] max-h-[100px] resize-none rounded-md",
-							"bg-background border border-border px-3 py-2 text-sm",
-							"placeholder:text-muted-foreground",
-							"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary",
-							"disabled:opacity-50 disabled:cursor-not-allowed",
-						)}
-						rows={1}
-					/>
-					<Button
-						onClick={handleSend}
-						disabled={!input.trim() || inputDisabled}
-						size="icon"
-						className="shrink-0 size-[38px]"
-					>
-						<Send className="size-4" />
-					</Button>
-				</div>
-			</div>
+			)}
 		</div>
 	);
 }

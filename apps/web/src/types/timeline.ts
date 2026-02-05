@@ -80,6 +80,20 @@ interface BaseTimelineElement {
 	trimEnd: number;
 }
 
+export interface CaptionMetadata {
+	version: 1;
+	source: "whisper";
+	origin: "agent-tool" | "assets-panel" | "legacy-upgrade";
+	segmentIndex: number;
+	language?: string;
+	modelId?: string;
+}
+
+export interface TextElementMetadata {
+	kind: "caption";
+	caption: CaptionMetadata;
+}
+
 export interface VideoElement extends BaseTimelineElement {
 	type: "video";
 	mediaId: string;
@@ -108,6 +122,7 @@ export interface TextElement extends BaseTimelineElement {
 	fontWeight: "normal" | "bold";
 	fontStyle: "normal" | "italic";
 	textDecoration: "none" | "underline" | "line-through";
+	metadata?: TextElementMetadata;
 	hidden?: boolean;
 	transform: Transform;
 	opacity: number;

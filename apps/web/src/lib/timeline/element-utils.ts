@@ -142,6 +142,7 @@ export function buildTextElement({
 		fontWeight: t.fontWeight ?? DEFAULT_TEXT_ELEMENT.fontWeight,
 		fontStyle: t.fontStyle ?? DEFAULT_TEXT_ELEMENT.fontStyle,
 		textDecoration: t.textDecoration ?? DEFAULT_TEXT_ELEMENT.textDecoration,
+		metadata: t.metadata,
 		transform: t.transform ?? DEFAULT_TEXT_ELEMENT.transform,
 		opacity: t.opacity ?? DEFAULT_TEXT_ELEMENT.opacity,
 	};

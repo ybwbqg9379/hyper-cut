@@ -20,6 +20,7 @@ import type {
 import { transcriptionService } from "@/services/transcription/service";
 import { decodeAudioToFloat32 } from "@/lib/media/audio";
 import { buildCaptionChunks } from "@/lib/transcription/caption";
+import { createCaptionMetadata } from "@/lib/transcription/caption-metadata";
 import { Spinner } from "@/components/ui/spinner";
 
 export function Captions() {
@@ -80,6 +81,11 @@ export function Captions() {
 						startTime: caption.startTime,
 						fontSize: 65,
 						fontWeight: "bold",
+						metadata: createCaptionMetadata({
+							origin: "assets-panel",
+							segmentIndex: i,
+							language: result.language,
+						}),
 					},
 				});
 			}

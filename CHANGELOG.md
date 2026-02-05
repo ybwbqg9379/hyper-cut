@@ -50,6 +50,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `get_elements_in_range`
   - `get_track_details`
   - `get_timeline_summary`
+- **转录面板（Phase 2 - MVP）**：新增转录文本与时间线联动视图
+  - Agent 面板新增“聊天 / 转录”双视图切换
+  - 点击转录段落可跳转到对应时间并联动选中元素
+  - 支持文本范围选择并联动多元素选中
+  - 支持从转录面板直接删除对应字幕片段
+  - 支持逐条编辑字幕文本并一键同步写回时间线元素
+  - 转录面板优先使用字幕 metadata 识别 caption（兼容旧 `Caption *` 命名）
 
 ### Changed
 
@@ -88,6 +95,7 @@ All notable changes to this project (forked from HyperCut) will be documented in
 - **Clipboard tooling**: Routed `paste_at_time` through action system to avoid direct store coupling
 - **Env examples**: Documented Agent-related environment variables
 - **Gemini provider**: Marked unavailable until implementation is complete
+- **Caption metadata stability**: `generate_captions` 与资产面板字幕生成均写入结构化 metadata，不再依赖名称前缀作为唯一判定
 
 ### Changed
 
