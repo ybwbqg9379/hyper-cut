@@ -160,6 +160,38 @@ vi.mock('@/services/transcription/service', () => ({
   },
 }));
 
+vi.mock('@/lib/media/processing', () => ({
+  processMediaAssets: vi.fn(async () => [
+    {
+      name: 'mock-asset',
+      type: 'image',
+      file: new File([], 'mock.png', { type: 'image/png' }),
+      url: 'blob:mock',
+      thumbnailUrl: 'blob:thumb',
+      duration: undefined,
+      width: 100,
+      height: 100,
+      fps: undefined,
+    },
+  ]),
+}));
+
+vi.mock('@/stores/timeline-store', () => ({
+  useTimelineStore: {
+    getState: vi.fn(() => ({
+      clipboard: {
+        items: [
+          {
+            trackId: 'track1',
+            trackType: 'video',
+            element: { type: 'video', name: 'Clip', duration: 2, startTime: 0, trimStart: 0, trimEnd: 0, mediaId: 'asset1', muted: false, hidden: false, transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 }, opacity: 1 },
+          },
+        ],
+      },
+    })),
+  },
+}));
+
 // Mock EditorCore for query, scene, and asset tools
 vi.mock('@/core', () => {
   const mockEditor = {
@@ -175,6 +207,7 @@ vi.mock('@/core', () => {
       updateElementStartTime: vi.fn(),
       moveElement: vi.fn(),
       deleteElements: vi.fn(),
+      pasteAtTime: vi.fn(() => [{ trackId: 'track1', elementId: 'el1' }]),
       addTrack: vi.fn(() => 'new-track-id'),
       removeTrack: vi.fn(({ trackId }: { trackId: string }) => {
         const index = tracksState.findIndex((t) => t.id === trackId);
@@ -216,6 +249,8 @@ vi.mock('@/core', () => {
         { id: 'asset3', name: 'Temp Clip', type: 'video', duration: 10, ephemeral: true, file: new File([], 'temp.mp4') },
         { id: 'asset4', name: 'Test Audio', type: 'audio', duration: 8, ephemeral: false, file: new File([], 'audio.wav') },
       ]),
+      addMediaAsset: vi.fn(async () => {}),
+      removeMediaAsset: vi.fn(async () => {}),
     },
     project: {
       getActive: vi.fn(() => ({
@@ -225,9 +260,12 @@ vi.mock('@/core', () => {
           canvasSize: { width: 1920, height: 1080 },
           background: { type: 'color', color: '#000000' },
         },
+        scenes: [],
+        currentSceneId: 'scene1',
       })),
       export: vi.fn(async () => ({ success: true, buffer: new ArrayBuffer(8) })),
       updateSettings: vi.fn(async () => {}),
+      saveCurrentProject: vi.fn(async () => {}),
     },
     command: {
       execute: vi.fn(),
@@ -241,6 +279,7 @@ vi.mock('@/core', () => {
       createScene: vi.fn(async () => 'new-scene-id'),
       switchToScene: vi.fn(async () => {}),
       renameScene: vi.fn(async () => {}),
+      deleteScene: vi.fn(async () => {}),
     },
   };
 
@@ -280,16 +319,28 @@ describe('Agent Tools Integration', () => {
     if (!URL.revokeObjectURL) {
       URL.revokeObjectURL = vi.fn();
     }
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-length': '1024' }),
+        blob: async () =>
+          new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }),
+      })) as unknown as typeof fetch
+    );
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe('Tool Registry', () => {
     it('should have all expected tools registered', () => {
       const tools = getAllTools();
-      expect(tools.length).toBeGreaterThanOrEqual(48);
+      expect(tools.length).toBeGreaterThanOrEqual(60);
     });
 
     it('should categorize tools correctly', () => {
@@ -505,6 +556,36 @@ describe('Agent Tools Integration', () => {
       const tool = getToolByName('move_element');
 
       const result = await tool.execute({ elementId: 'el1', targetTrackId: 'track2', newStartTime: 1 });
+      expect(result.success).toBe(false);
+    });
+
+    it('move_elements should update start time for multiple elements', async () => {
+      const tool = getToolByName('move_elements');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { updateElementStartTime: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({
+        startTime: 2,
+        elements: [
+          { trackId: 'track1', elementId: 'el1' },
+          { trackId: 'track1', elementId: 'el2' },
+        ],
+      });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.updateElementStartTime).toHaveBeenCalledWith({
+        elements: [
+          { trackId: 'track1', elementId: 'el1' },
+          { trackId: 'track1', elementId: 'el2' },
+        ],
+        startTime: 2,
+      });
+    });
+
+    it('move_elements should fail on empty elements', async () => {
+      const tool = getToolByName('move_elements');
+      const result = await tool.execute({ startTime: 2, elements: [] });
       expect(result.success).toBe(false);
     });
 
@@ -758,6 +839,33 @@ describe('Agent Tools Integration', () => {
       expect(result.success).toBe(true);
       expect(editor.playback.toggleMute).toHaveBeenCalled();
     });
+
+    it('jump_forward should invoke jump-forward action', async () => {
+      const { invokeAction } = await import('@/lib/actions');
+      const tool = getToolByName('jump_forward');
+
+      const result = await tool.execute({ seconds: 5 });
+      expect(invokeAction).toHaveBeenCalledWith('jump-forward', { seconds: 5 });
+      expect(result.success).toBe(true);
+    });
+
+    it('jump_backward should invoke jump-backward action', async () => {
+      const { invokeAction } = await import('@/lib/actions');
+      const tool = getToolByName('jump_backward');
+
+      const result = await tool.execute({ seconds: 5 });
+      expect(invokeAction).toHaveBeenCalledWith('jump-backward', { seconds: 5 });
+      expect(result.success).toBe(true);
+    });
+
+    it('stop_playback should invoke stop-playback action', async () => {
+      const { invokeAction } = await import('@/lib/actions');
+      const tool = getToolByName('stop_playback');
+
+      const result = await tool.execute({});
+      expect(invokeAction).toHaveBeenCalledWith('stop-playback', undefined);
+      expect(result.success).toBe(true);
+    });
   });
 
   describe('Query Tools', () => {
@@ -810,6 +918,31 @@ describe('Agent Tools Integration', () => {
       expect(invokeAction).toHaveBeenCalledWith('toggle-elements-muted-selected', undefined);
       expect(result.success).toBe(true);
     });
+
+    it('paste_at_time should paste clipboard items at time', async () => {
+      const tool = getToolByName('paste_at_time');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { pasteAtTime: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ time: 3 });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.pasteAtTime).toHaveBeenCalledWith(
+        expect.objectContaining({ time: 3 })
+      );
+    });
+
+    it('paste_at_time should fail when clipboard is empty', async () => {
+      const tool = getToolByName('paste_at_time');
+      const store = await import('@/stores/timeline-store');
+      (store.useTimelineStore.getState as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        clipboard: null,
+      });
+
+      const result = await tool.execute({ time: 3 });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('Scene Tools', () => {
@@ -847,6 +980,25 @@ describe('Agent Tools Integration', () => {
       const result = await tool.execute({});
       expect(invokeAction).toHaveBeenCalledWith('toggle-bookmark', undefined);
       expect(result.success).toBe(true);
+    });
+
+    it('delete_scene should delete a scene by name', async () => {
+      const tool = getToolByName('delete_scene');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        scenes: { deleteScene: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ name: 'Scene 2' });
+      expect(result.success).toBe(true);
+      expect(editor.scenes.deleteScene).toHaveBeenCalledWith({ sceneId: 'scene2' });
+    });
+
+    it('delete_scene should fail when scene is missing', async () => {
+      const tool = getToolByName('delete_scene');
+
+      const result = await tool.execute({ name: 'Missing' });
+      expect(result.success).toBe(false);
     });
   });
 
@@ -961,6 +1113,51 @@ describe('Agent Tools Integration', () => {
       expect(result.success).toBe(false);
       expect(result.message).toContain('Incompatible track type');
     });
+
+    it('add_media_asset should add asset from url', async () => {
+      const tool = getToolByName('add_media_asset');
+      const result = await tool.execute({ url: 'https://example.com/mock.png', type: 'image' });
+      expect(result.success).toBe(true);
+    });
+
+    it('add_media_asset should fail when processing returns empty', async () => {
+      const tool = getToolByName('add_media_asset');
+      const processing = await import('@/lib/media/processing');
+      (processing.processMediaAssets as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+      const result = await tool.execute({ url: 'https://example.com/mock.png', type: 'image' });
+      expect(result.success).toBe(false);
+    });
+
+    it('add_media_asset should surface CORS/network failures', async () => {
+      const tool = getToolByName('add_media_asset');
+      const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+      fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      const result = await tool.execute({ url: 'https://example.com/mock.png', type: 'image' });
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('跨域');
+    });
+
+    it('remove_asset should remove asset', async () => {
+      const tool = getToolByName('remove_asset');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        media: { removeMediaAsset: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ assetId: 'asset2' });
+      expect(result.success).toBe(true);
+      expect(editor.media.removeMediaAsset).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'asset2' })
+      );
+    });
+
+    it('remove_asset should fail for missing asset', async () => {
+      const tool = getToolByName('remove_asset');
+      const result = await tool.execute({ assetId: 'missing' });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('Project Tools', () => {
@@ -1008,6 +1205,25 @@ describe('Agent Tools Integration', () => {
       const tool = getToolByName('update_project_settings');
       const result = await tool.execute({ fps: 23 });
       expect(result.success).toBe(false);
+    });
+
+    it('get_project_info should return active project', async () => {
+      const tool = getToolByName('get_project_info');
+      const result = await tool.execute({});
+      expect(result.success).toBe(true);
+      expect(result.data).toMatchObject({ name: 'Test Project' });
+    });
+
+    it('save_project should persist project', async () => {
+      const tool = getToolByName('save_project');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        project: { saveCurrentProject: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({});
+      expect(result.success).toBe(true);
+      expect(editor.project.saveCurrentProject).toHaveBeenCalled();
     });
   });
 

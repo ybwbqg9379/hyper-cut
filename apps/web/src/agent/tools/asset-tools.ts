@@ -8,6 +8,15 @@ import {
 } from '@/lib/timeline/element-utils';
 import { canElementGoOnTrack } from '@/lib/timeline/track-utils';
 import { TIMELINE_CONSTANTS } from '@/constants/timeline-constants';
+import { processMediaAssets } from '@/lib/media/processing';
+
+const MEDIA_TYPES = ['image', 'video', 'audio'] as const;
+const FETCH_TIMEOUT_MS = 20000;
+const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
 
 /**
  * Asset Management Tools
@@ -221,11 +230,277 @@ export const addAssetToTimelineTool: AgentTool = {
 };
 
 /**
+ * Add Media Asset
+ * Adds a media asset from a URL to the project
+ */
+export const addMediaAssetTool: AgentTool = {
+  name: 'add_media_asset',
+  description:
+    '通过URL添加媒体素材（image/video/audio）。Add a media asset from a URL.',
+  parameters: {
+    type: 'object',
+    properties: {
+      url: {
+        type: 'string',
+        description: '媒体文件URL (Media file URL)',
+      },
+      name: {
+        type: 'string',
+        description: '素材名称（可选）(Asset name, optional)',
+      },
+      type: {
+        type: 'string',
+        enum: [...MEDIA_TYPES],
+        description: '素材类型 (image/video/audio)',
+      },
+      mimeType: {
+        type: 'string',
+        description: 'MIME 类型（可选）(Optional MIME type)',
+      },
+    },
+    required: ['url', 'type'],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const activeProject = editor.project.getActive();
+
+      if (!activeProject) {
+        return {
+          success: false,
+          message: '当前没有活动项目 (No active project)',
+          data: { errorCode: 'NO_ACTIVE_PROJECT' },
+        };
+      }
+
+      const url = isNonEmptyString(params.url) ? params.url.trim() : '';
+      const type = isNonEmptyString(params.type) ? params.type.trim() : '';
+
+      if (!url) {
+        return {
+          success: false,
+          message: '缺少 url 参数 (Missing url)',
+          data: { errorCode: 'INVALID_PARAMS' },
+        };
+      }
+
+      if (!MEDIA_TYPES.includes(type as (typeof MEDIA_TYPES)[number])) {
+        return {
+          success: false,
+          message: `无效的素材类型: ${type} (Invalid media type)`,
+          data: { errorCode: 'INVALID_MEDIA_TYPE' },
+        };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      let response: Response;
+
+      try {
+        response = await fetch(url, { signal: controller.signal });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return {
+            success: false,
+            message: '下载超时 (Fetch timed out)',
+            data: { errorCode: 'FETCH_TIMEOUT' },
+          };
+        }
+        return {
+          success: false,
+          message:
+            '下载失败，可能是网络错误或跨域限制 (Fetch failed, possibly due to network/CORS)',
+          data: { errorCode: 'FETCH_FAILED' },
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          message: `下载失败: ${response.status} (Failed to fetch media)`,
+          data: { errorCode: 'FETCH_FAILED' },
+        };
+      }
+
+      const contentLength = response.headers.get('content-length');
+      if (contentLength) {
+        const length = Number(contentLength);
+        if (Number.isFinite(length) && length > MAX_MEDIA_BYTES) {
+          return {
+            success: false,
+            message: '文件过大，无法处理 (File is too large)',
+            data: { errorCode: 'FILE_TOO_LARGE', maxBytes: MAX_MEDIA_BYTES },
+          };
+        }
+      }
+
+      const blob = await response.blob();
+      if (blob.size > MAX_MEDIA_BYTES) {
+        return {
+          success: false,
+          message: '文件过大，无法处理 (File is too large)',
+          data: { errorCode: 'FILE_TOO_LARGE', maxBytes: MAX_MEDIA_BYTES },
+        };
+      }
+      const mimeTypeParam = isNonEmptyString(params.mimeType)
+        ? params.mimeType.trim()
+        : '';
+      const fallbackMimeType = `${type}/*`;
+      const mimeType = mimeTypeParam || blob.type || fallbackMimeType;
+
+      const nameParam = isNonEmptyString(params.name) ? params.name.trim() : '';
+      const urlName = (() => {
+        try {
+          const parsed = new URL(url);
+          return parsed.pathname.split('/').pop() || '';
+        } catch {
+          return '';
+        }
+      })();
+      const fileName = nameParam || urlName || `asset-${Date.now()}`;
+
+      const file = new File([blob], fileName, {
+        type: mimeType,
+        lastModified: Date.now(),
+      });
+
+      const processedAssets = await processMediaAssets({
+        files: [file],
+      });
+
+      if (processedAssets.length === 0) {
+        return {
+          success: false,
+          message: '媒体处理失败 (Media processing failed)',
+          data: { errorCode: 'PROCESSING_FAILED' },
+        };
+      }
+
+      const processed = processedAssets[0];
+      await editor.media.addMediaAsset({
+        projectId: activeProject.metadata.id,
+        asset: processed,
+      });
+
+      const assets = editor.media.getAssets();
+      const added =
+        assets.find((asset) => asset.file === processed.file) ??
+        assets.find(
+          (asset) => asset.name === processed.name && asset.type === processed.type,
+        );
+
+      if (!added) {
+        return {
+          success: true,
+          message:
+            '已添加素材，但未能解析ID，请使用 list_assets 获取 (Asset added, ID unavailable)',
+          data: {
+            assetId: null,
+            name: processed.name,
+            type: processed.type,
+            duration: processed.duration,
+          },
+        };
+      }
+
+      return {
+        success: true,
+        message: `已添加素材 "${processed.name}" (Asset added)`,
+        data: {
+          assetId: added?.id,
+          name: processed.name,
+          type: processed.type,
+          duration: processed.duration,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `添加素材失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'ADD_ASSET_FAILED' },
+      };
+    }
+  },
+};
+
+/**
+ * Remove Asset
+ * Removes a media asset from the project
+ */
+export const removeAssetTool: AgentTool = {
+  name: 'remove_asset',
+  description: '从项目中删除素材资源。Remove a media asset from the project.',
+  parameters: {
+    type: 'object',
+    properties: {
+      assetId: {
+        type: 'string',
+        description: '素材ID (Asset ID)',
+      },
+    },
+    required: ['assetId'],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const activeProject = editor.project.getActive();
+
+      if (!activeProject) {
+        return {
+          success: false,
+          message: '当前没有活动项目 (No active project)',
+          data: { errorCode: 'NO_ACTIVE_PROJECT' },
+        };
+      }
+
+      const assetId = isNonEmptyString(params.assetId) ? params.assetId.trim() : '';
+      if (!assetId) {
+        return {
+          success: false,
+          message: '缺少 assetId 参数 (Missing assetId)',
+          data: { errorCode: 'INVALID_PARAMS' },
+        };
+      }
+
+      const asset = editor.media.getAssets().find((item) => item.id === assetId);
+      if (!asset) {
+        return {
+          success: false,
+          message: `找不到素材: ${assetId} (Asset not found)`,
+          data: { errorCode: 'ASSET_NOT_FOUND' },
+        };
+      }
+
+      await editor.media.removeMediaAsset({
+        projectId: activeProject.metadata.id,
+        id: assetId,
+      });
+
+      return {
+        success: true,
+        message: `已删除素材 "${asset.name}" (Asset removed)`,
+        data: { assetId, name: asset.name, type: asset.type },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `删除素材失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'REMOVE_ASSET_FAILED' },
+      };
+    }
+  },
+};
+
+/**
  * Get all asset tools
  */
 export function getAssetTools(): AgentTool[] {
   return [
     listAssetsTool,
     addAssetToTimelineTool,
+    addMediaAssetTool,
+    removeAssetTool,
   ];
 }

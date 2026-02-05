@@ -228,6 +228,76 @@ export const renameSceneTool: AgentTool = {
 };
 
 /**
+ * Delete Scene
+ * Deletes a scene by ID, name, or index
+ */
+export const deleteSceneTool: AgentTool = {
+  name: 'delete_scene',
+  description: '删除指定场景（按ID/名称/索引）。Delete a scene by ID, name, or index.',
+  parameters: {
+    type: 'object',
+    properties: {
+      sceneId: {
+        type: 'string',
+        description: '场景ID (Scene ID)',
+      },
+      name: {
+        type: 'string',
+        description: '场景名称 (Scene name)',
+      },
+      index: {
+        type: 'number',
+        description: '场景索引 (0-based index)',
+      },
+    },
+    required: [],
+  },
+  execute: async (args: Record<string, unknown>): Promise<ToolResult> => {
+    try {
+      const sceneId = typeof args.sceneId === 'string' ? args.sceneId.trim() : '';
+      const name = typeof args.name === 'string' ? args.name.trim() : '';
+      const index = typeof args.index === 'number' ? args.index : undefined;
+
+      const editor = EditorCore.getInstance();
+      const scenes = editor.scenes.getScenes();
+
+      let targetScene = null as { id: string; name: string } | null;
+
+      if (sceneId) {
+        targetScene = scenes.find((s) => s.id === sceneId) ?? null;
+      } else if (name) {
+        targetScene =
+          scenes.find((s) => s.name.toLowerCase() === name.toLowerCase()) ??
+          null;
+      } else if (typeof index === 'number') {
+        targetScene = scenes[index] ?? null;
+      }
+
+      if (!targetScene) {
+        return {
+          success: false,
+          message: '未找到场景 (Scene not found)',
+          data: { errorCode: 'SCENE_NOT_FOUND' },
+        };
+      }
+
+      await editor.scenes.deleteScene({ sceneId: targetScene.id });
+      return {
+        success: true,
+        message: `已删除场景 "${targetScene.name}" (Scene deleted)`,
+        data: { sceneId: targetScene.id, name: targetScene.name },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `删除场景失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'DELETE_SCENE_FAILED' },
+      };
+    }
+  },
+};
+
+/**
  * Frame Step Forward
  * Moves playhead forward by one frame
  */
@@ -293,6 +363,7 @@ export function getSceneTools(): AgentTool[] {
     switchSceneTool,
     listScenesTool,
     renameSceneTool,
+    deleteSceneTool,
     frameStepForwardTool,
     frameStepBackwardTool,
   ];

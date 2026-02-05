@@ -34,6 +34,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Transform：`update_element_transform`（scale/position/rotate/opacity）
   - Audio cleanup：`remove_silence`（阈值/最小时长/窗口参数）
   - Text：`insert_text`
+- **Agent tools扩展（Upstream补齐）**：新增播放/场景/资产/项目与批量移动能力
+  - Playback：`jump_forward`、`jump_backward`、`stop_playback`
+  - Scene：`delete_scene`
+  - Asset：`add_media_asset`、`remove_asset`
+  - Project：`get_project_info`、`save_project`
+  - Timeline：`move_elements`
+  - Clipboard：`paste_at_time`
 
 ### Fixed
 
@@ -44,6 +51,8 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Cleaned up unused imports and private class members
 - **React version mismatch**: Upgraded `react` from 19.2.0 to 19.2.4 to match `react-dom` version
 - **Agent reliability**: Added tool argument parsing safeguards, request timeout, and conversation history limits
+- **Agent assets**: Added download timeout/size limits for `add_media_asset` and clarified CORS/network failures
+- **Agent tests**: Force-mocked `fetch` to prevent real network calls, added failure-path coverage for asset ingestion
 - **Agent actions**: Fail fast when action handlers are unavailable to avoid false success
 - **Env examples**: Documented Agent-related environment variables
 - **Gemini provider**: Marked unavailable until implementation is complete

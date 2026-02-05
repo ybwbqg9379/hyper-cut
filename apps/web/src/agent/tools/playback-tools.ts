@@ -104,6 +104,90 @@ export const seekBackwardTool: AgentTool = {
 };
 
 /**
+ * Jump Forward
+ * Jumps forward by specified seconds (default 5 seconds)
+ */
+export const jumpForwardTool: AgentTool = {
+  name: 'jump_forward',
+  description: '向前跳转指定秒数（默认5秒）。Jump forward by specified seconds (default 5).',
+  parameters: {
+    type: 'object',
+    properties: {
+      seconds: {
+        type: 'number',
+        description: '跳转秒数 (Number of seconds to jump forward)',
+      },
+    },
+    required: [],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const seconds = (params.seconds as number) ?? 5;
+      if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
+        return {
+          success: false,
+          message: '无效的秒数参数 (Invalid seconds parameter)',
+          data: { errorCode: 'INVALID_SECONDS' },
+        };
+      }
+      invokeActionWithCheck('jump-forward', { seconds });
+      return {
+        success: true,
+        message: `已向前跳转 ${seconds} 秒 (Jumped forward ${seconds} second(s))`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `跳转失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'JUMP_FAILED' },
+      };
+    }
+  },
+};
+
+/**
+ * Jump Backward
+ * Jumps backward by specified seconds (default 5 seconds)
+ */
+export const jumpBackwardTool: AgentTool = {
+  name: 'jump_backward',
+  description: '向后跳转指定秒数（默认5秒）。Jump backward by specified seconds (default 5).',
+  parameters: {
+    type: 'object',
+    properties: {
+      seconds: {
+        type: 'number',
+        description: '跳转秒数 (Number of seconds to jump backward)',
+      },
+    },
+    required: [],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const seconds = (params.seconds as number) ?? 5;
+      if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
+        return {
+          success: false,
+          message: '无效的秒数参数 (Invalid seconds parameter)',
+          data: { errorCode: 'INVALID_SECONDS' },
+        };
+      }
+      invokeActionWithCheck('jump-backward', { seconds });
+      return {
+        success: true,
+        message: `已向后跳转 ${seconds} 秒 (Jumped backward ${seconds} second(s))`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `跳转失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'JUMP_FAILED' },
+      };
+    }
+  },
+};
+
+/**
  * Go to Start
  * Jumps to the beginning of the timeline
  */
@@ -368,6 +452,35 @@ export const togglePlaybackMuteTool: AgentTool = {
 };
 
 /**
+ * Stop Playback
+ * Stops playback
+ */
+export const stopPlaybackTool: AgentTool = {
+  name: 'stop_playback',
+  description: '停止播放。Stop playback.',
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+  execute: async (): Promise<ToolResult> => {
+    try {
+      invokeActionWithCheck('stop-playback');
+      return {
+        success: true,
+        message: '已停止播放 (Playback stopped)',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `停止失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'STOP_FAILED' },
+      };
+    }
+  },
+};
+
+/**
  * Get all playback tools
  */
 export function getPlaybackTools(): AgentTool[] {
@@ -375,11 +488,14 @@ export function getPlaybackTools(): AgentTool[] {
     togglePlayTool,
     seekForwardTool,
     seekBackwardTool,
+    jumpForwardTool,
+    jumpBackwardTool,
     seekToTimeTool,
     goToStartTool,
     goToEndTool,
     setVolumeTool,
     togglePlaybackMuteTool,
+    stopPlaybackTool,
     undoTool,
     redoTool,
   ];

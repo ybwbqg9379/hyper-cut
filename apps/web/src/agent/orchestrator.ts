@@ -20,7 +20,8 @@ Available capabilities:
 - Audio cleanup: remove silence segments
 - Playback control: play, pause, seek to specific times, volume/mute
 - Selection control: select/clear specific elements
-- Project: update project settings, export the project to video
+- Project: update/save project settings, export the project to video, get project info
+- Assets: add/remove media assets, paste at specific time
 - Query information: get timeline info, current position, selected elements
 
 When the user asks you to do something:

@@ -1,4 +1,6 @@
 import type { AgentTool, ToolResult } from '../types';
+import { EditorCore } from '@/core';
+import { useTimelineStore } from '@/stores/timeline-store';
 import { invokeActionWithCheck } from './action-utils';
 
 /**
@@ -57,6 +59,64 @@ export const pasteCopiedTool: AgentTool = {
       return {
         success: false,
         message: `粘贴失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+  },
+};
+
+/**
+ * Paste at Time
+ * Pastes copied elements at a specified time
+ */
+export const pasteAtTimeTool: AgentTool = {
+  name: 'paste_at_time',
+  description: '在指定时间粘贴已复制的片段。Paste copied element(s) at a specific time.',
+  parameters: {
+    type: 'object',
+    properties: {
+      time: {
+        type: 'number',
+        description: '粘贴时间点（秒）(Time in seconds to paste at)',
+      },
+    },
+    required: ['time'],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const time = params.time as number;
+      if (typeof time !== 'number' || !Number.isFinite(time) || time < 0) {
+        return {
+          success: false,
+          message: '无效的时间参数 (Invalid time parameter)',
+          data: { errorCode: 'INVALID_TIME' },
+        };
+      }
+
+      const clipboard = useTimelineStore.getState().clipboard;
+      if (!clipboard || clipboard.items.length === 0) {
+        return {
+          success: false,
+          message: '剪贴板为空 (Clipboard is empty)',
+          data: { errorCode: 'EMPTY_CLIPBOARD' },
+        };
+      }
+
+      const editor = EditorCore.getInstance();
+      const pasted = editor.timeline.pasteAtTime({
+        time,
+        clipboardItems: clipboard.items,
+      });
+
+      return {
+        success: true,
+        message: `已在 ${time.toFixed(2)} 秒粘贴 ${pasted.length} 个元素 (Pasted ${pasted.length} element(s))`,
+        data: { time, pastedCount: pasted.length },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `粘贴失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'PASTE_FAILED' },
       };
     }
   },
@@ -153,6 +213,7 @@ export function getMediaTools(): AgentTool[] {
   return [
     copySelectedTool,
     pasteCopiedTool,
+    pasteAtTimeTool,
     toggleMuteSelectedTool,
     toggleVisibilitySelectedTool,
     toggleSnappingTool,

@@ -1429,6 +1429,91 @@ export const moveElementTool: AgentTool = {
 };
 
 /**
+ * Move Elements
+ * Moves multiple elements to a new start time
+ */
+export const moveElementsTool: AgentTool = {
+  name: 'move_elements',
+  description: '批量移动元素到指定时间。Move multiple elements to a new start time.',
+  parameters: {
+    type: 'object',
+    properties: {
+      elements: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            trackId: { type: 'string' },
+            elementId: { type: 'string' },
+          },
+          required: ['trackId', 'elementId'],
+        },
+        description: '元素引用列表 (Element refs)',
+      },
+      startTime: {
+        type: 'number',
+        description: '新的开始时间（秒）(New start time in seconds)',
+      },
+    },
+    required: ['elements', 'startTime'],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const startTime = params.startTime as number;
+
+      if (!isFiniteNumber(startTime) || startTime < 0) {
+        return {
+          success: false,
+          message: 'startTime 必须是非负数字 (startTime must be >= 0)',
+          data: { errorCode: 'INVALID_START_TIME' },
+        };
+      }
+
+      if (!Array.isArray(params.elements) || params.elements.length === 0) {
+        return {
+          success: false,
+          message: 'elements 不能为空 (elements cannot be empty)',
+          data: { errorCode: 'INVALID_PARAMS' },
+        };
+      }
+
+      const elements = (params.elements as Array<Record<string, unknown>>)
+        .map((entry) => ({
+          trackId: typeof entry.trackId === 'string' ? entry.trackId.trim() : '',
+          elementId: typeof entry.elementId === 'string' ? entry.elementId.trim() : '',
+        }))
+        .filter((entry) => entry.trackId && entry.elementId);
+
+      if (elements.length === 0) {
+        return {
+          success: false,
+          message: 'elements 参数无效 (Invalid elements)',
+          data: { errorCode: 'INVALID_PARAMS' },
+        };
+      }
+
+      editor.timeline.updateElementStartTime({
+        elements,
+        startTime,
+      });
+
+      return {
+        success: true,
+        message: `已移动 ${elements.length} 个元素 (Moved ${elements.length} elements)`,
+        data: { movedCount: elements.length, startTime },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `批量移动失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'MOVE_ELEMENTS_FAILED' },
+      };
+    }
+  },
+};
+
+/**
  * Trim Element
  * Updates trimStart/trimEnd for an element
  */
@@ -2444,6 +2529,7 @@ export function getTimelineTools(): AgentTool[] {
     generateCaptionsTool,
     updateTextStyleTool,
     moveElementTool,
+    moveElementsTool,
     trimElementTool,
     resizeElementTool,
     updateElementTransformTool,

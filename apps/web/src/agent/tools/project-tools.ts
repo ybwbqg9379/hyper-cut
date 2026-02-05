@@ -352,8 +352,103 @@ export const updateProjectSettingsTool: AgentTool = {
 };
 
 /**
+ * Get Project Info
+ * Returns active project information
+ */
+export const getProjectInfoTool: AgentTool = {
+  name: 'get_project_info',
+  description: '获取当前项目详情。Get information about the active project.',
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+  execute: async (): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const activeProject = editor.project.getActive();
+
+      if (!activeProject) {
+        return {
+          success: false,
+          message: '当前没有活动项目 (No active project)',
+          data: { errorCode: 'NO_ACTIVE_PROJECT' },
+        };
+      }
+
+      return {
+        success: true,
+        message: `当前项目: ${activeProject.metadata.name}`,
+        data: {
+          id: activeProject.metadata.id,
+          name: activeProject.metadata.name,
+          duration: activeProject.metadata.duration,
+          createdAt: activeProject.metadata.createdAt,
+          updatedAt: activeProject.metadata.updatedAt,
+          currentSceneId: activeProject.currentSceneId,
+          settings: activeProject.settings,
+          sceneCount: activeProject.scenes?.length ?? 0,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `获取项目失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'GET_PROJECT_FAILED' },
+      };
+    }
+  },
+};
+
+/**
+ * Save Project
+ * Persists current project state
+ */
+export const saveProjectTool: AgentTool = {
+  name: 'save_project',
+  description: '保存当前项目。Save the current project.',
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+  execute: async (): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const activeProject = editor.project.getActive();
+
+      if (!activeProject) {
+        return {
+          success: false,
+          message: '当前没有活动项目 (No active project)',
+          data: { errorCode: 'NO_ACTIVE_PROJECT' },
+        };
+      }
+
+      await editor.project.saveCurrentProject();
+      return {
+        success: true,
+        message: '已保存项目 (Project saved)',
+        data: { projectId: activeProject.metadata.id },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `保存失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'SAVE_PROJECT_FAILED' },
+      };
+    }
+  },
+};
+
+/**
  * Get all project tools
  */
 export function getProjectTools(): AgentTool[] {
-  return [exportVideoTool, updateProjectSettingsTool];
+  return [
+    exportVideoTool,
+    updateProjectSettingsTool,
+    getProjectInfoTool,
+    saveProjectTool,
+  ];
 }
