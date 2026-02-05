@@ -98,6 +98,25 @@ vi.mock('@/lib/timeline/element-utils', () => ({
   buildVideoElement: vi.fn(() => ({ type: 'video', id: 'mock-element' })),
   buildImageElement: vi.fn(() => ({ type: 'image', id: 'mock-element' })),
   buildUploadAudioElement: vi.fn(() => ({ type: 'audio', id: 'mock-element' })),
+  buildTextElement: vi.fn(() => ({
+    type: 'text',
+    name: 'Text',
+    content: 'Mock text',
+    duration: 5,
+    startTime: 0,
+    trimStart: 0,
+    trimEnd: 0,
+    fontSize: 48,
+    fontFamily: 'Arial',
+    color: '#fff',
+    backgroundColor: 'transparent',
+    textAlign: 'center',
+    fontWeight: 'normal',
+    fontStyle: 'normal',
+    textDecoration: 'none',
+    transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+    opacity: 1,
+  })),
   getElementsAtTime: vi.fn(() => [{ trackId: 'track1', elementId: 'el1' }]),
   canElementHaveAudio: vi.fn((element: { type?: string }) =>
     element.type === 'audio' || element.type === 'video'
@@ -155,6 +174,7 @@ vi.mock('@/core', () => {
       updateElementDuration: vi.fn(),
       updateElementStartTime: vi.fn(),
       moveElement: vi.fn(),
+      deleteElements: vi.fn(),
       addTrack: vi.fn(() => 'new-track-id'),
       removeTrack: vi.fn(({ trackId }: { trackId: string }) => {
         const index = tracksState.findIndex((t) => t.id === trackId);
@@ -209,6 +229,9 @@ vi.mock('@/core', () => {
       export: vi.fn(async () => ({ success: true, buffer: new ArrayBuffer(8) })),
       updateSettings: vi.fn(async () => {}),
     },
+    command: {
+      execute: vi.fn(),
+    },
     scenes: {
       getScenes: vi.fn(() => [
         { id: 'scene1', name: 'Main Scene', isMain: true, tracks: [] },
@@ -240,9 +263,16 @@ function getToolByName(name: string) {
 }
 
 describe('Agent Tools Integration', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     tracksState = buildTracksState();
+
+    // Reset getTracks mock to use fresh tracksState
+    const { EditorCore } = await import('@/core');
+    const editor = EditorCore.getInstance() as unknown as {
+      timeline: { getTracks: ReturnType<typeof vi.fn> };
+    };
+    editor.timeline.getTracks.mockImplementation(() => tracksState);
 
     if (!URL.createObjectURL) {
       URL.createObjectURL = vi.fn(() => 'blob:mock');
@@ -550,6 +580,103 @@ describe('Agent Tools Integration', () => {
 
       editor.selection.getSelectedElements.mockReturnValueOnce([]);
       const result = await tool.execute({ source: 'selection' });
+      expect(result.success).toBe(false);
+    });
+
+    it('update_element_transform should execute command for transform updates', async () => {
+      const tool = getToolByName('update_element_transform');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        command: { execute: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({
+        elementId: 'el1',
+        transform: { scale: 1.2, position: { x: 10, y: 20 }, rotate: 15 },
+        opacity: 0.8,
+      });
+      expect(result.success).toBe(true);
+      expect(editor.command.execute).toHaveBeenCalled();
+    });
+
+    it('update_element_transform should fail on unsupported element', async () => {
+      const tool = getToolByName('update_element_transform');
+
+      const result = await tool.execute({ elementId: 'el3', trackId: 'track2', opacity: 0.5 });
+      expect(result.success).toBe(false);
+    });
+
+    it('insert_text should insert a text element', async () => {
+      const tool = getToolByName('insert_text');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { insertElement: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ content: 'Hello', startTime: 2 });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.insertElement).toHaveBeenCalled();
+    });
+
+    it('insert_text should fail on invalid startTime', async () => {
+      const tool = getToolByName('insert_text');
+
+      const result = await tool.execute({ content: 'Hello', startTime: -1 });
+      expect(result.success).toBe(false);
+    });
+
+    it('remove_silence should detect and process silent segments', async () => {
+      const tool = getToolByName('remove_silence');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: {
+          splitElements: ReturnType<typeof vi.fn>;
+          getTracks: ReturnType<typeof vi.fn>;
+        };
+      };
+
+      // Mock getTracks to return audio track (tool calls getTracks multiple times)
+      const testTracks = [
+        {
+          id: 'track-audio',
+          type: 'audio',
+          muted: false,
+          elements: [
+            {
+              id: 'audio-1',
+              type: 'audio',
+              sourceType: 'upload',
+              mediaId: 'asset4',
+              startTime: 0,
+              duration: 10,
+              trimStart: 0,
+              trimEnd: 0,
+              volume: 1,
+            },
+          ],
+        },
+      ];
+      editor.timeline.getTracks.mockImplementation(() => testTracks);
+
+      const result = await tool.execute({ source: 'timeline', threshold: 0.5, minDuration: 0.00001 });
+      expect(result.success).toBe(true);
+      // Tool should detect silence and attempt to split at silence boundaries
+      expect(editor.timeline.splitElements).toHaveBeenCalled();
+      // Note: deleteElements only called if elements are fully within silence interval
+      // which depends on mock audio data; main goal is to verify silence detection works
+    });
+
+    it('remove_silence should fail with no audio source', async () => {
+      const tool = getToolByName('remove_silence');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { getTracks: ReturnType<typeof vi.fn> };
+      };
+
+      editor.timeline.getTracks.mockReturnValueOnce([
+        { id: 'track3', type: 'text', hidden: false, elements: [] },
+      ]);
+      const result = await tool.execute({ source: 'timeline' });
       expect(result.success).toBe(false);
     });
   });

@@ -4,6 +4,7 @@ export { DuplicateElementsCommand } from "./duplicate-elements";
 export { UpdateElementTrimCommand } from "./update-element-trim";
 export { UpdateElementDurationCommand } from "./update-element-duration";
 export { UpdateElementStartTimeCommand } from "./update-element-start-time";
+export { UpdateElementTransformCommand } from "./update-element-transform";
 export { SplitElementsCommand } from "./split-elements";
 export { UpdateTextElementCommand } from "./update-text-element";
 export { ToggleElementsVisibilityCommand } from "./toggle-elements-visibility";

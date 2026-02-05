@@ -30,6 +30,10 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Text：`update_text_style`
   - Timeline：`move_element`、`trim_element`、`resize_element`
   - Project：`update_project_settings`（fps/canvas/background）
+- **Agent tools扩展（Phase 3）**：新增变换、静音删除与插入文字能力
+  - Transform：`update_element_transform`（scale/position/rotate/opacity）
+  - Audio cleanup：`remove_silence`（阈值/最小时长/窗口参数）
+  - Text：`insert_text`
 
 ### Fixed
 

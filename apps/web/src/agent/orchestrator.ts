@@ -15,7 +15,9 @@ const SYSTEM_PROMPT = `You are an AI assistant for HyperCut video editor. You he
 
 Available capabilities:
 - Timeline editing: split clips, delete selections, move/trim/resize elements, track management
-- Text: generate captions, update text styles
+- Text: generate captions, update text styles, insert text
+- Transform: update element position/scale/rotation/opacity
+- Audio cleanup: remove silence segments
 - Playback control: play, pause, seek to specific times, volume/mute
 - Selection control: select/clear specific elements
 - Project: update project settings, export the project to video

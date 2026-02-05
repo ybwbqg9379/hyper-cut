@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT: Read Before Development
+
+**Before starting any feature development, you MUST read:**
+
+- [`docs/DEVELOPMENT_PITFALLS.md`](docs/DEVELOPMENT_PITFALLS.md) - Common pitfalls and solutions
+
+**After encountering and fixing a new issue, you MUST update:**
+
+- Add the pitfall and solution to `docs/DEVELOPMENT_PITFALLS.md`
+
+This prevents repeating the same mistakes and builds institutional knowledge.
+
 ## Project Overview
 
 HyperCut is a privacy-first, open-source video editor for web, desktop, and mobile. It's a monorepo built with Bun, Turbo, Next.js 16, React 19, TypeScript, and Zustand.
@@ -141,6 +153,7 @@ AI-driven video editing at `@/agent/`. Enabled via `NEXT_PUBLIC_AGENT_ENABLED=tr
 
 | File | Purpose |
 |------|---------|
+| `docs/DEVELOPMENT_PITFALLS.md` | **Must read** - Common pitfalls & solutions |
 | `apps/web/src/core/index.ts` | EditorCore singleton |
 | `apps/web/src/lib/actions/definitions.ts` | All action definitions |
 | `apps/web/src/lib/commands/` | Undo/redo commands |

@@ -3,7 +3,11 @@ import type { TextElement, TimelineElement, TimelineTrack } from '@/types/timeli
 import type { LanguageCode } from '@/types/language';
 import type { TranscriptionModelId } from '@/types/transcription';
 import { EditorCore } from '@/core';
-import { getElementsAtTime, canElementHaveAudio } from '@/lib/timeline/element-utils';
+import {
+  getElementsAtTime,
+  canElementHaveAudio,
+  buildTextElement,
+} from '@/lib/timeline/element-utils';
 import {
   canTrackBeHidden,
   canTracktHaveAudio,
@@ -21,6 +25,7 @@ import { extractTimelineAudio } from '@/lib/media/mediabunny';
 import { decodeAudioToFloat32 } from '@/lib/media/audio';
 import { buildCaptionChunks } from '@/lib/transcription/caption';
 import { transcriptionService } from '@/services/transcription/service';
+import { UpdateElementTransformCommand } from '@/lib/commands/timeline';
 import { invokeActionWithCheck } from './action-utils';
 
 /**
@@ -65,6 +70,61 @@ function resolveElementById({
   }
 
   return null;
+}
+
+function detectSilenceIntervals({
+  samples,
+  sampleRate,
+  threshold,
+  minDuration,
+  windowSeconds = 0.1,
+}: {
+  samples: Float32Array;
+  sampleRate: number;
+  threshold: number;
+  minDuration: number;
+  windowSeconds?: number;
+}): Array<{ start: number; end: number }> {
+  const intervals: Array<{ start: number; end: number }> = [];
+  if (samples.length === 0 || sampleRate <= 0) return intervals;
+
+  const windowSize = Math.max(1, Math.floor(sampleRate * windowSeconds));
+  let inSilence = false;
+  let silenceStart = 0;
+
+  for (let i = 0; i < samples.length; i += windowSize) {
+    const end = Math.min(samples.length, i + windowSize);
+    let sum = 0;
+    for (let j = i; j < end; j++) {
+      const v = samples[j];
+      sum += v * v;
+    }
+    const count = end - i;
+    const rms = count > 0 ? Math.sqrt(sum / count) : 0;
+    const currentTime = i / sampleRate;
+
+    if (rms < threshold) {
+      if (!inSilence) {
+        inSilence = true;
+        silenceStart = currentTime;
+      }
+    } else if (inSilence) {
+      const silenceEnd = currentTime;
+      if (silenceEnd - silenceStart >= minDuration) {
+        intervals.push({ start: silenceStart, end: silenceEnd });
+      }
+      inSilence = false;
+    }
+  }
+
+  if (inSilence) {
+    const silenceEnd = samples.length / sampleRate;
+    if (silenceEnd - silenceStart >= minDuration) {
+      intervals.push({ start: silenceStart, end: silenceEnd });
+    }
+  }
+
+  return intervals;
 }
 
 /**
@@ -1599,6 +1659,681 @@ export const resizeElementTool: AgentTool = {
 };
 
 /**
+ * Update Element Transform
+ * Updates transform or opacity for an element
+ */
+export const updateElementTransformTool: AgentTool = {
+  name: 'update_element_transform',
+  description:
+    '更新元素的变换与透明度（scale/position/rotate/opacity）。Update element transform/opacity.',
+  parameters: {
+    type: 'object',
+    properties: {
+      elementId: {
+        type: 'string',
+        description: '元素ID（可选，默认当前选中）(Element ID, defaults to selected)',
+      },
+      trackId: {
+        type: 'string',
+        description: '轨道ID（可选）(Optional track ID)',
+      },
+      transform: {
+        type: 'object',
+        properties: {
+          scale: { type: 'number' },
+          position: {
+            type: 'object',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+            },
+          },
+          rotate: { type: 'number' },
+        },
+        description: '变换参数 (Transform)',
+      },
+      opacity: {
+        type: 'number',
+        description: '透明度 0-1 (Opacity 0-1)',
+      },
+    },
+    required: [],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const tracks = editor.timeline.getTracks();
+      const elementIdParam = isNonEmptyString(params.elementId) ? params.elementId.trim() : '';
+      const trackIdParam = isNonEmptyString(params.trackId) ? params.trackId.trim() : '';
+
+      let resolved = null as null | { track: TimelineTrack; element: TimelineElement };
+
+      if (elementIdParam) {
+        resolved = resolveElementById({
+          tracks,
+          elementId: elementIdParam,
+          trackId: trackIdParam || undefined,
+        });
+      } else {
+        const selected = editor.selection.getSelectedElements();
+        if (selected.length === 0) {
+          return {
+            success: false,
+            message: '没有选中任何元素 (No element selected)',
+            data: { errorCode: 'NO_SELECTION' },
+          };
+        }
+        if (selected.length > 1) {
+          return {
+            success: false,
+            message: '一次只能更新一个元素 (Select a single element)',
+            data: { errorCode: 'MULTIPLE_SELECTIONS' },
+          };
+        }
+        const [selection] = selected;
+        resolved = resolveElementById({
+          tracks,
+          elementId: selection.elementId,
+          trackId: selection.trackId,
+        });
+      }
+
+      if (!resolved) {
+        return {
+          success: false,
+          message: '未找到元素 (Element not found)',
+          data: { errorCode: 'ELEMENT_NOT_FOUND' },
+        };
+      }
+
+      if (!('transform' in resolved.element) || !('opacity' in resolved.element)) {
+        return {
+          success: false,
+          message: '该元素不支持变换 (Element does not support transform)',
+          data: { errorCode: 'UNSUPPORTED_ELEMENT' },
+        };
+      }
+
+      const updates: { transform?: TextElement['transform']; opacity?: number } = {};
+
+      if (params.transform !== undefined) {
+        if (!params.transform || typeof params.transform !== 'object') {
+          return {
+            success: false,
+            message: 'transform 参数无效 (Invalid transform)',
+            data: { errorCode: 'INVALID_TRANSFORM' },
+          };
+        }
+
+        const current = resolved.element.transform;
+        const transform = params.transform as {
+          scale?: unknown;
+          position?: { x?: unknown; y?: unknown };
+          rotate?: unknown;
+        };
+
+        const nextTransform = {
+          ...current,
+          ...(transform.scale !== undefined ? { scale: transform.scale } : {}),
+          ...(transform.rotate !== undefined ? { rotate: transform.rotate } : {}),
+          position: {
+            ...current.position,
+            ...(transform.position?.x !== undefined ? { x: transform.position.x } : {}),
+            ...(transform.position?.y !== undefined ? { y: transform.position.y } : {}),
+          },
+        };
+
+        if (
+          (transform.scale !== undefined && !isFiniteNumber(nextTransform.scale)) ||
+          (transform.rotate !== undefined && !isFiniteNumber(nextTransform.rotate)) ||
+          (transform.position?.x !== undefined && !isFiniteNumber(nextTransform.position.x)) ||
+          (transform.position?.y !== undefined && !isFiniteNumber(nextTransform.position.y))
+        ) {
+          return {
+            success: false,
+            message: 'transform 数值无效 (Invalid transform values)',
+            data: { errorCode: 'INVALID_TRANSFORM' },
+          };
+        }
+
+        updates.transform = {
+          scale: nextTransform.scale as number,
+          rotate: nextTransform.rotate as number,
+          position: {
+            x: nextTransform.position.x as number,
+            y: nextTransform.position.y as number,
+          },
+        };
+      }
+
+      if (params.opacity !== undefined) {
+        if (!isFiniteNumber(params.opacity) || params.opacity < 0 || params.opacity > 1) {
+          return {
+            success: false,
+            message: 'opacity 必须在 0-1 之间 (opacity must be between 0 and 1)',
+            data: { errorCode: 'INVALID_OPACITY' },
+          };
+        }
+        updates.opacity = params.opacity;
+      }
+
+      if (updates.transform === undefined && updates.opacity === undefined) {
+        return {
+          success: false,
+          message: '没有提供可更新的字段 (No updates provided)',
+          data: { errorCode: 'NO_UPDATES' },
+        };
+      }
+
+      const command = new UpdateElementTransformCommand(
+        resolved.track.id,
+        resolved.element.id,
+        updates,
+      );
+      editor.command.execute({ command });
+
+      return {
+        success: true,
+        message: '已更新元素变换 (Transform updated)',
+        data: {
+          trackId: resolved.track.id,
+          elementId: resolved.element.id,
+          updatedTransform: updates.transform,
+          opacity: updates.opacity,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `更新变换失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'UPDATE_TRANSFORM_FAILED' },
+      };
+    }
+  },
+};
+
+/**
+ * Remove Silence
+ * Detects silence intervals and removes corresponding segments
+ */
+export const removeSilenceTool: AgentTool = {
+  name: 'remove_silence',
+  description:
+    '检测并删除静音区间（按阈值与最短时长）。Detect silence and delete silent segments.',
+  parameters: {
+    type: 'object',
+    properties: {
+      source: {
+        type: 'string',
+        enum: ['timeline', 'selection'],
+        description: '检测来源：timeline 或 selection (Source for detection)',
+      },
+      threshold: {
+        type: 'number',
+        description: '静音阈值 (Silence threshold, 0-1)',
+      },
+      minDuration: {
+        type: 'number',
+        description: '最短静音时长（秒）(Minimum silence duration in seconds)',
+      },
+      windowSeconds: {
+        type: 'number',
+        description: '分析窗口长度（秒）(Analysis window seconds)',
+      },
+    },
+    required: [],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const allTracks = editor.timeline.getTracks();
+      const mediaAssets = editor.media.getAssets();
+      const source = params.source === 'selection' ? 'selection' : 'timeline';
+
+      let tracksToUse = allTracks;
+      const allowedElements = new Set<string>();
+      let selectedRefs: Array<{ trackId: string; elementId: string }> = [];
+
+      if (source === 'selection') {
+        selectedRefs = editor.selection.getSelectedElements();
+        if (selectedRefs.length === 0) {
+          return {
+            success: false,
+            message: '没有选中任何可检测的元素 (No selected elements)',
+            data: { errorCode: 'NO_SELECTION' },
+          };
+        }
+
+        const selectionMap = new Map<string, Set<string>>();
+        for (const ref of selectedRefs) {
+          if (!selectionMap.has(ref.trackId)) {
+            selectionMap.set(ref.trackId, new Set());
+          }
+          selectionMap.get(ref.trackId)?.add(ref.elementId);
+          allowedElements.add(`${ref.trackId}:${ref.elementId}`);
+        }
+
+        tracksToUse = allTracks
+          .map((track) => {
+            const selectedIds = selectionMap.get(track.id);
+            if (!selectedIds) return null;
+            const elements = track.elements.filter((el) => selectedIds.has(el.id));
+            if (elements.length === 0) return null;
+            return { ...track, elements } as TimelineTrack;
+          })
+          .filter((track): track is TimelineTrack => track !== null);
+
+        if (tracksToUse.length === 0) {
+          return {
+            success: false,
+            message: '未找到选中元素 (Selected elements not found)',
+            data: { errorCode: 'SELECTION_NOT_FOUND' },
+          };
+        }
+      }
+
+      const hasAudioSource = tracksToUse.some((track) =>
+        track.elements.some((element) => canElementHaveAudio(element)),
+      );
+      if (!hasAudioSource) {
+        return {
+          success: false,
+          message: '没有可用音频用于检测 (No audio-capable elements)',
+          data: { errorCode: 'NO_AUDIO_SOURCE' },
+        };
+      }
+
+      const totalDuration = calculateTotalDuration({ tracks: tracksToUse });
+      if (totalDuration <= 0) {
+        return {
+          success: false,
+          message: '音频时长为 0，无法检测 (Audio duration is 0)',
+          data: { errorCode: 'EMPTY_AUDIO' },
+        };
+      }
+
+      const threshold =
+        isFiniteNumber(params.threshold) && params.threshold >= 0
+          ? params.threshold
+          : 0.02;
+      const minDuration =
+        isFiniteNumber(params.minDuration) && params.minDuration > 0
+          ? params.minDuration
+          : 0.5;
+      const windowSeconds =
+        isFiniteNumber(params.windowSeconds) && params.windowSeconds > 0
+          ? params.windowSeconds
+          : 0.1;
+
+      const audioBlob = await extractTimelineAudio({
+        tracks: tracksToUse,
+        mediaAssets,
+        totalDuration,
+      });
+      const { samples, sampleRate } = await decodeAudioToFloat32({ audioBlob });
+
+      const silenceIntervals = detectSilenceIntervals({
+        samples,
+        sampleRate,
+        threshold,
+        minDuration,
+        windowSeconds,
+      }).map((interval) => ({
+        start: Math.max(0, interval.start),
+        end: Math.min(totalDuration, interval.end),
+      }));
+
+      const filteredIntervals = silenceIntervals.filter(
+        (interval) => interval.end > interval.start,
+      );
+
+      if (filteredIntervals.length === 0) {
+        return {
+          success: true,
+          message: '未检测到静音区间 (No silence detected)',
+          data: { silenceCount: 0, intervals: [] },
+        };
+      }
+
+      const previousSelection = editor.selection.getSelectedElements();
+      let totalDeleted = 0;
+      let totalSplits = 0;
+
+      const shouldInclude = (trackId: string, elementId: string) => {
+        if (source !== 'selection') return true;
+        return allowedElements.has(`${trackId}:${elementId}`);
+      };
+
+      for (const interval of filteredIntervals) {
+        const splitAt = (splitTime: number) => {
+          const tracks = editor.timeline.getTracks();
+          const elementsToSplit: Array<{ trackId: string; elementId: string }> = [];
+
+          for (const track of tracks) {
+            for (const element of track.elements) {
+              if (!shouldInclude(track.id, element.id)) continue;
+              const elementStart = element.startTime;
+              const elementEnd = element.startTime + element.duration;
+              if (splitTime > elementStart && splitTime < elementEnd) {
+                elementsToSplit.push({ trackId: track.id, elementId: element.id });
+              }
+            }
+          }
+
+          if (elementsToSplit.length > 0) {
+            const rightSide = editor.timeline.splitElements({
+              elements: elementsToSplit,
+              splitTime,
+            });
+            totalSplits += elementsToSplit.length;
+            if (source === 'selection') {
+              for (const ref of rightSide) {
+                allowedElements.add(`${ref.trackId}:${ref.elementId}`);
+              }
+            }
+          }
+        };
+
+        splitAt(interval.start);
+        splitAt(interval.end);
+
+        const updatedTracks = editor.timeline.getTracks();
+        const elementsToDelete: Array<{ trackId: string; elementId: string }> = [];
+
+        for (const track of updatedTracks) {
+          for (const element of track.elements) {
+            if (!shouldInclude(track.id, element.id)) continue;
+            const elementStart = element.startTime;
+            const elementEnd = element.startTime + element.duration;
+            if (elementStart >= interval.start && elementEnd <= interval.end) {
+              elementsToDelete.push({ trackId: track.id, elementId: element.id });
+            }
+          }
+        }
+
+        if (elementsToDelete.length > 0) {
+          editor.timeline.deleteElements({ elements: elementsToDelete });
+          totalDeleted += elementsToDelete.length;
+        }
+      }
+
+      editor.selection.setSelectedElements({ elements: previousSelection });
+
+      return {
+        success: true,
+        message: `已删除 ${totalDeleted} 个静音片段 (Removed ${totalDeleted} silent segment(s))`,
+        data: {
+          silenceCount: filteredIntervals.length,
+          intervals: filteredIntervals,
+          deletedCount: totalDeleted,
+          splitCount: totalSplits,
+          source,
+          threshold,
+          minDuration,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `移除静音失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'REMOVE_SILENCE_FAILED' },
+      };
+    }
+  },
+};
+
+/**
+ * Insert Text
+ * Inserts a text element into a text track
+ */
+export const insertTextTool: AgentTool = {
+  name: 'insert_text',
+  description: '插入文字元素到时间线。Insert a text element into the timeline.',
+  parameters: {
+    type: 'object',
+    properties: {
+      content: {
+        type: 'string',
+        description: '文字内容 (Text content)',
+      },
+      startTime: {
+        type: 'number',
+        description: '开始时间（秒）(Start time in seconds)',
+      },
+      duration: {
+        type: 'number',
+        description: '时长（秒）(Duration in seconds)',
+      },
+      trackId: {
+        type: 'string',
+        description: '目标文本轨道ID（可选）(Target text track ID)',
+      },
+      trackIndex: {
+        type: 'number',
+        description: '新建文本轨道插入位置（可选）(Insert index for new track)',
+      },
+      name: {
+        type: 'string',
+        description: '元素名称 (Element name)',
+      },
+      fontSize: { type: 'number' },
+      fontFamily: { type: 'string' },
+      color: { type: 'string' },
+      backgroundColor: { type: 'string' },
+      textAlign: { type: 'string', enum: [...TEXT_ALIGN_VALUES] },
+      fontWeight: { type: 'string', enum: [...TEXT_WEIGHT_VALUES] },
+      fontStyle: { type: 'string', enum: [...TEXT_STYLE_VALUES] },
+      textDecoration: { type: 'string', enum: [...TEXT_DECORATION_VALUES] },
+      transform: {
+        type: 'object',
+        properties: {
+          scale: { type: 'number' },
+          position: {
+            type: 'object',
+            properties: {
+              x: { type: 'number' },
+              y: { type: 'number' },
+            },
+          },
+          rotate: { type: 'number' },
+        },
+      },
+      opacity: { type: 'number' },
+    },
+    required: [],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const tracks = editor.timeline.getTracks();
+
+      const startTime = isFiniteNumber(params.startTime)
+        ? params.startTime
+        : editor.playback.getCurrentTime();
+      if (startTime < 0) {
+        return {
+          success: false,
+          message: 'startTime 必须是非负数字 (startTime must be >= 0)',
+          data: { errorCode: 'INVALID_START_TIME' },
+        };
+      }
+
+      if (params.duration !== undefined) {
+        if (!isFiniteNumber(params.duration) || params.duration <= 0) {
+          return {
+            success: false,
+            message: 'duration 必须是正数 (duration must be > 0)',
+            data: { errorCode: 'INVALID_DURATION' },
+          };
+        }
+      }
+
+      if (params.textAlign !== undefined) {
+        if (!TEXT_ALIGN_VALUES.includes(params.textAlign as typeof TEXT_ALIGN_VALUES[number])) {
+          return {
+            success: false,
+            message: 'textAlign 无效 (Invalid textAlign)',
+            data: { errorCode: 'INVALID_TEXT_ALIGN' },
+          };
+        }
+      }
+
+      if (params.fontWeight !== undefined) {
+        if (!TEXT_WEIGHT_VALUES.includes(params.fontWeight as typeof TEXT_WEIGHT_VALUES[number])) {
+          return {
+            success: false,
+            message: 'fontWeight 无效 (Invalid fontWeight)',
+            data: { errorCode: 'INVALID_FONT_WEIGHT' },
+          };
+        }
+      }
+
+      if (params.fontStyle !== undefined) {
+        if (!TEXT_STYLE_VALUES.includes(params.fontStyle as typeof TEXT_STYLE_VALUES[number])) {
+          return {
+            success: false,
+            message: 'fontStyle 无效 (Invalid fontStyle)',
+            data: { errorCode: 'INVALID_FONT_STYLE' },
+          };
+        }
+      }
+
+      if (params.textDecoration !== undefined) {
+        if (
+          !TEXT_DECORATION_VALUES.includes(
+            params.textDecoration as typeof TEXT_DECORATION_VALUES[number],
+          )
+        ) {
+          return {
+            success: false,
+            message: 'textDecoration 无效 (Invalid textDecoration)',
+            data: { errorCode: 'INVALID_TEXT_DECORATION' },
+          };
+        }
+      }
+
+      if (params.opacity !== undefined) {
+        if (!isFiniteNumber(params.opacity) || params.opacity < 0 || params.opacity > 1) {
+          return {
+            success: false,
+            message: 'opacity 必须在 0-1 之间 (opacity must be between 0 and 1)',
+            data: { errorCode: 'INVALID_OPACITY' },
+          };
+        }
+      }
+
+      if (params.transform !== undefined) {
+        if (!params.transform || typeof params.transform !== 'object') {
+          return {
+            success: false,
+            message: 'transform 参数无效 (Invalid transform)',
+            data: { errorCode: 'INVALID_TRANSFORM' },
+          };
+        }
+        const transform = params.transform as {
+          scale?: unknown;
+          position?: { x?: unknown; y?: unknown };
+          rotate?: unknown;
+        };
+
+        if (
+          (transform.scale !== undefined && !isFiniteNumber(transform.scale)) ||
+          (transform.rotate !== undefined && !isFiniteNumber(transform.rotate)) ||
+          (transform.position?.x !== undefined && !isFiniteNumber(transform.position.x)) ||
+          (transform.position?.y !== undefined && !isFiniteNumber(transform.position.y))
+        ) {
+          return {
+            success: false,
+            message: 'transform 数值无效 (Invalid transform values)',
+            data: { errorCode: 'INVALID_TRANSFORM' },
+          };
+        }
+      }
+
+      const raw: Partial<Omit<TextElement, 'type' | 'id'>> = {
+        name: isNonEmptyString(params.name) ? params.name.trim() : undefined,
+        content: isNonEmptyString(params.content)
+          ? params.content.trim()
+          : DEFAULT_TEXT_ELEMENT.content,
+        duration: params.duration as number | undefined,
+        fontSize: params.fontSize as number | undefined,
+        fontFamily: isNonEmptyString(params.fontFamily)
+          ? params.fontFamily.trim()
+          : undefined,
+        color: isNonEmptyString(params.color) ? params.color.trim() : undefined,
+        backgroundColor: isNonEmptyString(params.backgroundColor)
+          ? params.backgroundColor.trim()
+          : undefined,
+        textAlign: params.textAlign as TextElement['textAlign'] | undefined,
+        fontWeight: params.fontWeight as TextElement['fontWeight'] | undefined,
+        fontStyle: params.fontStyle as TextElement['fontStyle'] | undefined,
+        textDecoration: params.textDecoration as TextElement['textDecoration'] | undefined,
+        transform: params.transform as TextElement['transform'] | undefined,
+        opacity: params.opacity as TextElement['opacity'] | undefined,
+      };
+
+      const explicitTrackId = isNonEmptyString(params.trackId)
+        ? params.trackId.trim()
+        : '';
+      let targetTrackId = '';
+
+      if (explicitTrackId) {
+        const targetTrack = editor.timeline.getTrackById({ trackId: explicitTrackId });
+        if (!targetTrack) {
+          return {
+            success: false,
+            message: `找不到轨道: ${explicitTrackId} (Track not found)`,
+            data: { errorCode: 'TRACK_NOT_FOUND', trackId: explicitTrackId },
+          };
+        }
+        if (targetTrack.type !== 'text') {
+          return {
+            success: false,
+            message: '目标轨道不是文本轨道 (Target track is not text)',
+            data: { errorCode: 'TRACK_NOT_TEXT', trackId: explicitTrackId },
+          };
+        }
+        targetTrackId = explicitTrackId;
+      } else {
+        const existingTextTrack = tracks.find((track) => track.type === 'text');
+        if (existingTextTrack) {
+          targetTrackId = existingTextTrack.id;
+        } else {
+          const index =
+            isFiniteNumber(params.trackIndex) && params.trackIndex >= 0
+              ? Math.floor(params.trackIndex)
+              : 0;
+          targetTrackId = editor.timeline.addTrack({ type: 'text', index });
+        }
+      }
+
+      const element = buildTextElement({ raw, startTime });
+      editor.timeline.insertElement({
+        placement: { mode: 'explicit', trackId: targetTrackId },
+        element,
+      });
+
+      return {
+        success: true,
+        message: '已插入文字元素 (Text element inserted)',
+        data: {
+          trackId: targetTrackId,
+          startTime,
+          duration: element.duration,
+          content: (element as { content?: string }).content,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `插入文字失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'INSERT_TEXT_FAILED' },
+      };
+    }
+  },
+};
+
+/**
  * Split at Time
  * Seeks to a specified time and splits selected elements there
  */
@@ -1711,5 +2446,8 @@ export function getTimelineTools(): AgentTool[] {
     moveElementTool,
     trimElementTool,
     resizeElementTool,
+    updateElementTransformTool,
+    removeSilenceTool,
+    insertTextTool,
   ];
 }
