@@ -41,6 +41,15 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Project：`get_project_info`、`save_project`
   - Timeline：`move_elements`
   - Clipboard：`paste_at_time`
+- **Agent Planning（Phase 1）**：新增“先计划后执行”的确认式工作流
+  - Orchestrator 支持规划模式：先返回工具步骤计划，再由用户确认后执行
+  - 支持步骤级编辑/移除：可修改单步参数并重排执行意图
+  - Agent 聊天面板新增计划卡片：步骤参数 JSON 编辑、确认执行、取消计划
+- **Agent Query 工具增强（Phase 1）**：新增 4 个只读分析工具
+  - `get_element_details`
+  - `get_elements_in_range`
+  - `get_track_details`
+  - `get_timeline_summary`
 
 ### Changed
 
