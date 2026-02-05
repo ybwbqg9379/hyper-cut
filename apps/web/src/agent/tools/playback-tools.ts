@@ -1,5 +1,5 @@
 import type { AgentTool, ToolResult } from '../types';
-import { invokeAction } from '@/lib/actions';
+import { invokeActionWithCheck } from './action-utils';
 
 /**
  * Playback Control Tools
@@ -20,7 +20,7 @@ export const togglePlayTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('toggle-play');
+      invokeActionWithCheck('toggle-play');
       return {
         success: true,
         message: '已切换播放状态 (Toggled play/pause)',
@@ -54,7 +54,7 @@ export const seekForwardTool: AgentTool = {
   execute: async (params): Promise<ToolResult> => {
     try {
       const seconds = (params.seconds as number) ?? 1;
-      invokeAction('seek-forward', { seconds });
+      invokeActionWithCheck('seek-forward', { seconds });
       return {
         success: true,
         message: `已向前跳转 ${seconds} 秒 (Seeked forward ${seconds} second(s))`,
@@ -88,7 +88,7 @@ export const seekBackwardTool: AgentTool = {
   execute: async (params): Promise<ToolResult> => {
     try {
       const seconds = (params.seconds as number) ?? 1;
-      invokeAction('seek-backward', { seconds });
+      invokeActionWithCheck('seek-backward', { seconds });
       return {
         success: true,
         message: `已向后跳转 ${seconds} 秒 (Seeked backward ${seconds} second(s))`,
@@ -116,7 +116,7 @@ export const goToStartTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('goto-start');
+      invokeActionWithCheck('goto-start');
       return {
         success: true,
         message: '已跳转到开头 (Jumped to start)',
@@ -144,7 +144,7 @@ export const goToEndTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('goto-end');
+      invokeActionWithCheck('goto-end');
       return {
         success: true,
         message: '已跳转到结尾 (Jumped to end)',
@@ -172,7 +172,7 @@ export const undoTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('undo');
+      invokeActionWithCheck('undo');
       return {
         success: true,
         message: '已撤销 (Undo completed)',
@@ -200,7 +200,7 @@ export const redoTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('redo');
+      invokeActionWithCheck('redo');
       return {
         success: true,
         message: '已重做 (Redo completed)',

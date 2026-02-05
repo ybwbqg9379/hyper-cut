@@ -14,6 +14,7 @@ export class LMStudioProvider implements LLMProvider {
   name = 'lm-studio';
   private baseUrl: string;
   private model: string;
+  private readonly requestTimeoutMs = 15000;
 
   constructor(
     baseUrl = 'http://localhost:1234/v1',
@@ -24,23 +25,40 @@ export class LMStudioProvider implements LLMProvider {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.model,
-        messages: params.messages,
-        tools: params.tools.map((t) => ({
-          type: 'function' as const,
-          function: {
-            name: t.name,
-            description: t.description,
-            parameters: t.parameters,
-          },
-        })),
-        temperature: params.temperature ?? 0.7,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      this.requestTimeoutMs
+    );
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.model,
+          messages: params.messages,
+          tools: params.tools.map((t) => ({
+            type: 'function' as const,
+            function: {
+              name: t.name,
+              description: t.description,
+              parameters: t.parameters,
+            },
+          })),
+          temperature: params.temperature ?? 0.7,
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('LM Studio request timed out');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error(`LM Studio API error: ${response.statusText}`);
@@ -61,11 +79,22 @@ export class LMStudioProvider implements LLMProvider {
     }
 
     const toolCalls: ToolCall[] =
-      choice.message?.tool_calls?.map((tc: OpenAIToolCall) => ({
-        id: tc.id,
-        name: tc.function.name,
-        arguments: JSON.parse(tc.function.arguments || '{}'),
-      })) ?? [];
+      choice.message?.tool_calls?.map((tc: OpenAIToolCall) => {
+        let parsedArgs: Record<string, unknown> = {};
+        if (tc.function.arguments) {
+          try {
+            parsedArgs = JSON.parse(tc.function.arguments);
+          } catch {
+            parsedArgs = {};
+          }
+        }
+
+        return {
+          id: tc.id,
+          name: tc.function.name,
+          arguments: parsedArgs,
+        };
+      }) ?? [];
 
     return {
       content: choice.message?.content ?? null,

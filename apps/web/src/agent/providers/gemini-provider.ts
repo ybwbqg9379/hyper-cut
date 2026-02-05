@@ -29,6 +29,6 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async isAvailable(): Promise<boolean> {
-    return !!this.apiKey && this.apiKey.length > 0;
+    return false;
   }
 }

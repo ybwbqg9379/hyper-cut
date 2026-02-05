@@ -1,5 +1,5 @@
 import type { AgentTool, ToolResult } from '../types';
-import { invokeAction } from '@/lib/actions';
+import { invokeActionWithCheck } from './action-utils';
 
 /**
  * Timeline Editing Tools
@@ -20,7 +20,7 @@ export const splitAtPlayheadTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('split');
+      invokeActionWithCheck('split');
       return {
         success: true,
         message: '已在播放头位置分割片段 (Split completed at playhead)',
@@ -48,7 +48,7 @@ export const deleteSelectedTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('delete-selected');
+      invokeActionWithCheck('delete-selected');
       return {
         success: true,
         message: '已删除选中的片段 (Deleted selected elements)',
@@ -76,7 +76,7 @@ export const splitLeftTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('split-left');
+      invokeActionWithCheck('split-left');
       return {
         success: true,
         message: '已分割并删除左侧部分 (Split and removed left portion)',
@@ -104,7 +104,7 @@ export const splitRightTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('split-right');
+      invokeActionWithCheck('split-right');
       return {
         success: true,
         message: '已分割并删除右侧部分 (Split and removed right portion)',
@@ -132,7 +132,7 @@ export const duplicateSelectedTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('duplicate-selected');
+      invokeActionWithCheck('duplicate-selected');
       return {
         success: true,
         message: '已复制选中的片段 (Duplicated selected elements)',
@@ -160,7 +160,7 @@ export const selectAllTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('select-all');
+      invokeActionWithCheck('select-all');
       return {
         success: true,
         message: '已选择所有片段 (Selected all elements)',

@@ -1,5 +1,5 @@
 import type { AgentTool, ToolResult } from '../types';
-import { invokeAction } from '@/lib/actions';
+import { invokeActionWithCheck } from './action-utils';
 
 /**
  * Media Management Tools
@@ -20,7 +20,7 @@ export const copySelectedTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('copy-selected');
+      invokeActionWithCheck('copy-selected');
       return {
         success: true,
         message: '已复制到剪贴板 (Copied to clipboard)',
@@ -48,7 +48,7 @@ export const pasteCopiedTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('paste-copied');
+      invokeActionWithCheck('paste-copied');
       return {
         success: true,
         message: '已粘贴片段 (Pasted elements)',
@@ -76,7 +76,7 @@ export const toggleMuteSelectedTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('toggle-elements-muted-selected');
+      invokeActionWithCheck('toggle-elements-muted-selected');
       return {
         success: true,
         message: '已切换静音状态 (Toggled mute state)',
@@ -104,7 +104,7 @@ export const toggleVisibilitySelectedTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('toggle-elements-visibility-selected');
+      invokeActionWithCheck('toggle-elements-visibility-selected');
       return {
         success: true,
         message: '已切换可见性 (Toggled visibility)',
@@ -132,7 +132,7 @@ export const toggleSnappingTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('toggle-snapping');
+      invokeActionWithCheck('toggle-snapping');
       return {
         success: true,
         message: '已切换吸附功能 (Toggled snapping)',

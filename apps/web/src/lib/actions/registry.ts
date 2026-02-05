@@ -11,6 +11,10 @@ import type {
 type ActionHandler = (arg: unknown, trigger?: TInvocationTrigger) => void;
 const boundActions: Partial<Record<TAction, ActionHandler[]>> = {};
 
+export function hasActionHandlers<A extends TAction>(action: A): boolean {
+	return (boundActions[action]?.length ?? 0) > 0;
+}
+
 export function bindAction<A extends TAction>(
 	action: A,
 	handler: TActionFunc<A>,

@@ -1,5 +1,5 @@
 import type { AgentTool, ToolResult } from '../types';
-import { invokeAction } from '@/lib/actions';
+import { invokeActionWithCheck } from './action-utils';
 import { EditorCore } from '@/core';
 
 /**
@@ -21,7 +21,7 @@ export const toggleBookmarkTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('toggle-bookmark');
+      invokeActionWithCheck('toggle-bookmark');
       return {
         success: true,
         message: '已切换书签 (Toggled bookmark)',
@@ -241,7 +241,7 @@ export const frameStepForwardTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('frame-step-forward');
+      invokeActionWithCheck('frame-step-forward');
       return {
         success: true,
         message: '已向前移动一帧 (Moved forward one frame)',
@@ -269,7 +269,7 @@ export const frameStepBackwardTool: AgentTool = {
   },
   execute: async (): Promise<ToolResult> => {
     try {
-      invokeAction('frame-step-backward');
+      invokeActionWithCheck('frame-step-backward');
       return {
         success: true,
         message: '已向后移动一帧 (Moved backward one frame)',

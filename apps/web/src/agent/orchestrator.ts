@@ -25,6 +25,8 @@ When the user asks you to do something:
 
 Always be helpful and explain what actions you're taking.`;
 
+const MAX_HISTORY_MESSAGES = 30;
+
 /**
  * AgentOrchestrator
  * Core orchestration layer that connects user input → LLM → Tools → EditorCore
@@ -46,6 +48,16 @@ export class AgentOrchestrator {
     this.tools.set(tool.name, tool);
   }
 
+  private appendHistory(message: Message): void {
+    this.conversationHistory.push(message);
+    if (this.conversationHistory.length > MAX_HISTORY_MESSAGES) {
+      this.conversationHistory.splice(
+        0,
+        this.conversationHistory.length - MAX_HISTORY_MESSAGES
+      );
+    }
+  }
+
   /**
    * Get all registered tools as definitions for the LLM
    */
@@ -62,7 +74,7 @@ export class AgentOrchestrator {
    */
   async process(userMessage: string): Promise<AgentResponse> {
     // Add user message to history
-    this.conversationHistory.push({
+    this.appendHistory({
       role: 'user',
       content: userMessage,
     });
@@ -100,7 +112,7 @@ export class AgentOrchestrator {
             executedTools.push({ name: toolCall.name, result });
 
             // Add tool result to history for context
-            this.conversationHistory.push({
+            this.appendHistory({
               role: 'tool',
               content: JSON.stringify(result),
               toolCallId: toolCall.id,
@@ -119,7 +131,7 @@ export class AgentOrchestrator {
       }
 
       // Add assistant response to history
-      this.conversationHistory.push({
+      this.appendHistory({
         role: 'assistant',
         content: responseMessage,
       });

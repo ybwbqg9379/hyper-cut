@@ -24,6 +24,10 @@ All notable changes to this project (forked from HyperCut) will be documented in
 ### Fixed
 
 - **React version mismatch**: Upgraded `react` from 19.2.0 to 19.2.4 to match `react-dom` version
+- **Agent reliability**: Added tool argument parsing safeguards, request timeout, and conversation history limits
+- **Agent actions**: Fail fast when action handlers are unavailable to avoid false success
+- **Env examples**: Documented Agent-related environment variables
+- **Gemini provider**: Marked unavailable until implementation is complete
 
 ### Changed
 

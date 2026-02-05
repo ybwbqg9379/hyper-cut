@@ -10,6 +10,7 @@ import type { AgentTool, ToolResult } from '../types';
 // Mock invokeAction to track calls without side effects
 vi.mock('@/lib/actions', () => ({
   invokeAction: vi.fn(),
+  hasActionHandlers: vi.fn(() => true),
 }));
 
 // Mock EditorCore for query and scene tools
@@ -98,16 +99,16 @@ describe('Agent Tools Integration', () => {
       expect(tool).toBeDefined();
 
       const result = await tool!.execute({});
-      expect(invokeAction).toHaveBeenCalledWith('split');
+      expect(invokeAction).toHaveBeenCalledWith('split', undefined);
       expect(result.success).toBe(true);
     });
 
     it('delete_selected should invoke delete-selected action', async () => {
       const { invokeAction } = await import('@/lib/actions');
       const tool = getAllTools().find((t) => t.name === 'delete_selected');
-      
+
       const result = await tool!.execute({});
-      expect(invokeAction).toHaveBeenCalledWith('delete-selected');
+      expect(invokeAction).toHaveBeenCalledWith('delete-selected', undefined);
       expect(result.success).toBe(true);
     });
   });
@@ -116,16 +117,16 @@ describe('Agent Tools Integration', () => {
     it('toggle_play should invoke toggle-play action', async () => {
       const { invokeAction } = await import('@/lib/actions');
       const tool = getAllTools().find((t) => t.name === 'toggle_play');
-      
+
       const result = await tool!.execute({});
-      expect(invokeAction).toHaveBeenCalledWith('toggle-play');
+      expect(invokeAction).toHaveBeenCalledWith('toggle-play', undefined);
       expect(result.success).toBe(true);
     });
 
     it('seek_forward should invoke seek-forward action with seconds', async () => {
       const { invokeAction } = await import('@/lib/actions');
       const tool = getAllTools().find((t) => t.name === 'seek_forward');
-      
+
       const result = await tool!.execute({ seconds: 5 });
       expect(invokeAction).toHaveBeenCalledWith('seek-forward', { seconds: 5 });
       expect(result.success).toBe(true);
@@ -134,9 +135,9 @@ describe('Agent Tools Integration', () => {
     it('undo should invoke undo action', async () => {
       const { invokeAction } = await import('@/lib/actions');
       const tool = getAllTools().find((t) => t.name === 'undo');
-      
+
       const result = await tool!.execute({});
-      expect(invokeAction).toHaveBeenCalledWith('undo');
+      expect(invokeAction).toHaveBeenCalledWith('undo', undefined);
       expect(result.success).toBe(true);
     });
   });
@@ -168,27 +169,27 @@ describe('Agent Tools Integration', () => {
     it('copy_selected should invoke copy-selected action', async () => {
       const { invokeAction } = await import('@/lib/actions');
       const tool = getAllTools().find((t) => t.name === 'copy_selected');
-      
+
       const result = await tool!.execute({});
-      expect(invokeAction).toHaveBeenCalledWith('copy-selected');
+      expect(invokeAction).toHaveBeenCalledWith('copy-selected', undefined);
       expect(result.success).toBe(true);
     });
 
     it('paste_copied should invoke paste-copied action', async () => {
       const { invokeAction } = await import('@/lib/actions');
       const tool = getAllTools().find((t) => t.name === 'paste_copied');
-      
+
       const result = await tool!.execute({});
-      expect(invokeAction).toHaveBeenCalledWith('paste-copied');
+      expect(invokeAction).toHaveBeenCalledWith('paste-copied', undefined);
       expect(result.success).toBe(true);
     });
 
     it('toggle_mute_selected should invoke toggle-elements-muted-selected action', async () => {
       const { invokeAction } = await import('@/lib/actions');
       const tool = getAllTools().find((t) => t.name === 'toggle_mute_selected');
-      
+
       const result = await tool!.execute({});
-      expect(invokeAction).toHaveBeenCalledWith('toggle-elements-muted-selected');
+      expect(invokeAction).toHaveBeenCalledWith('toggle-elements-muted-selected', undefined);
       expect(result.success).toBe(true);
     });
   });
@@ -224,9 +225,9 @@ describe('Agent Tools Integration', () => {
     it('toggle_bookmark should invoke toggle-bookmark action', async () => {
       const { invokeAction } = await import('@/lib/actions');
       const tool = getAllTools().find((t) => t.name === 'toggle_bookmark');
-      
+
       const result = await tool!.execute({});
-      expect(invokeAction).toHaveBeenCalledWith('toggle-bookmark');
+      expect(invokeAction).toHaveBeenCalledWith('toggle-bookmark', undefined);
       expect(result.success).toBe(true);
     });
   });
