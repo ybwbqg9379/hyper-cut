@@ -1,10 +1,10 @@
 <table width="100%">
   <tr>
     <td align="left" width="120">
-      <img src="apps/web/public/logos/opencut/1k/logo-white-black.png" alt="OpenCut Logo" width="100" />
+      <img src="apps/web/public/logos/hypercut/1k/logo-white-black.png" alt="HyperCut Logo" width="100" />
     </td>
     <td align="right">
-      <h1>OpenCut</span></h1>
+      <h1>HyperCut</span></h1>
       <h3 style="margin-top: -10px;">A free, open-source video editor for web, desktop, and mobile.</h3>
     </td>
   </tr>
@@ -22,8 +22,8 @@
 - Multi-track support
 - Real-time preview
 - No watermarks or subscriptions
-- Analytics provided by [Databuddy](https://www.databuddy.cc?utm_source=opencut), 100% Anonymized & Non-invasive.
-- Blog powered by [Marble](https://marblecms.com?utm_source=opencut), Headless CMS.
+- Analytics provided by [Databuddy](https://www.databuddy.cc?utm_source=hypercut), 100% Anonymized & Non-invasive.
+- Blog powered by [Marble](https://marblecms.com?utm_source=hypercut), Headless CMS.
 
 ## Project Structure
 
@@ -104,7 +104,7 @@ Before you begin, ensure you have the following installed on your system:
 
    ```bash
    # Database (matches docker-compose.yaml)
-   DATABASE_URL="postgresql://opencut:opencut@localhost:5432/opencut"
+   DATABASE_URL="postgresql://hypercut:hypercut@localhost:5432/hypercut"
 
    # Generate a secure secret for Better Auth
    BETTER_AUTH_SECRET="your-generated-secret-here"
@@ -160,7 +160,7 @@ See our [Contributing Guide](.github/CONTRIBUTING.md) for detailed setup instruc
 
 ## Sponsors
 
-Thanks to [Vercel](https://vercel.com?utm_source=github-opencut&utm_campaign=oss) and [fal.ai](https://fal.ai?utm_source=github-opencut&utm_campaign=oss) for their support of open-source software.
+Thanks to [Vercel](https://vercel.com?utm_source=github-hypercut&utm_campaign=oss) and [fal.ai](https://fal.ai?utm_source=github-hypercut&utm_campaign=oss) for their support of open-source software.
 
 <a href="https://vercel.com/oss">
   <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge.svg" />
@@ -172,7 +172,7 @@ Thanks to [Vercel](https://vercel.com?utm_source=github-opencut&utm_campaign=oss
 
 ---
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FOpenCut-app%2FOpenCut&project-name=opencut&repository-name=opencut)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FHyperCut-app%2FHyperCut&project-name=hypercut&repository-name=hypercut)
 
 ## License
 
@@ -180,4 +180,4 @@ Thanks to [Vercel](https://vercel.com?utm_source=github-opencut&utm_campaign=oss
 
 ---
 
-![Star History Chart](https://api.star-history.com/svg?repos=opencut-app/opencut&type=Date)
+![Star History Chart](https://api.star-history.com/svg?repos=hypercut-app/hypercut&type=Date)

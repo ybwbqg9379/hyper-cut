@@ -1,7 +1,7 @@
 {
-  "name": "@opencut/ui",
+  "name": "@hypercut/ui",
   "version": "0.0.0",
-  "description": "UI package for OpenCut",
+  "description": "UI package for HyperCut",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

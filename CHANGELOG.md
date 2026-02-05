@@ -1,12 +1,20 @@
 # Changelog
 
-All notable changes to this project (forked from OpenCut) will be documented in this file.
+All notable changes to this project (forked from HyperCut) will be documented in this file.
 
 ## [Unreleased]
 
 ### Fixed
 
 - **React version mismatch**: Upgraded `react` from 19.2.0 to 19.2.4 to match `react-dom` version
+
+### Changed
+
+- **Re-branding**: OpenCut → HyperCut
+  - Replaced all `OpenCut` / `opencut` text references with `HyperCut` / `hypercut`
+  - Renamed package namespace `@opencut/*` → `@hypercut/*`
+  - Renamed logo directory `logos/opencut/` → `logos/hypercut/`
+  - Updated site URL to `https://hypercut.app`
 
 ### Removed
 
