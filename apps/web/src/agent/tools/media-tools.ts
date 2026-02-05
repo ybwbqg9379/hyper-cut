@@ -91,8 +91,14 @@ export const pasteAtTimeTool: AgentTool = {
       }
 
       const results = invokeActionWithCheck('paste-at-time', { time });
-      const pasted = results.find((result) => Array.isArray(result));
-      const pastedCount = Array.isArray(pasted) ? pasted.length : 0;
+      const pasteResult = results.find(
+        (result): result is { kind: 'paste-at-time'; pastedCount: number } =>
+          typeof result === 'object' &&
+          result !== null &&
+          (result as { kind?: unknown }).kind === 'paste-at-time' &&
+          typeof (result as { pastedCount?: unknown }).pastedCount === 'number'
+      );
+      const pastedCount = pasteResult?.pastedCount ?? 0;
 
       return {
         success: true,

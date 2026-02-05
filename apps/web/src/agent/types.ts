@@ -96,5 +96,7 @@ export interface AgentOrchestratorOptions {
   systemPrompt?: string;
   maxHistoryMessages?: number;
   maxToolIterations?: number;
+  toolTimeoutMs?: number;
+  debug?: boolean;
   config?: Partial<AgentConfig>;
 }

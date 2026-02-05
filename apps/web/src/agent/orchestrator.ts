@@ -35,6 +35,7 @@ Always be helpful and explain what actions you're taking.`;
 
 const MAX_HISTORY_MESSAGES = 30;
 const DEFAULT_MAX_TOOL_ITERATIONS = 4;
+const DEFAULT_TOOL_TIMEOUT_MS = 30000;
 
 /**
  * AgentOrchestrator
@@ -47,6 +48,8 @@ export class AgentOrchestrator {
   private systemPrompt: string;
   private maxHistoryMessages: number;
   private maxToolIterations: number;
+  private toolTimeoutMs: number;
+  private debug: boolean;
 
   constructor(tools: AgentTool[] = [], options: AgentOrchestratorOptions = {}) {
     const config = options.config;
@@ -59,6 +62,11 @@ export class AgentOrchestrator {
       options.maxToolIterations && options.maxToolIterations > 0
         ? options.maxToolIterations
         : DEFAULT_MAX_TOOL_ITERATIONS;
+    this.toolTimeoutMs =
+      options.toolTimeoutMs && options.toolTimeoutMs > 0
+        ? options.toolTimeoutMs
+        : DEFAULT_TOOL_TIMEOUT_MS;
+    this.debug = options.debug ?? false;
     this.provider = createProvider(getConfiguredProviderType(config), config);
     for (const tool of tools) {
       this.registerTool(tool);
@@ -108,7 +116,23 @@ export class AgentOrchestrator {
     }
 
     try {
-      return await tool.execute(toolCall.arguments);
+      const toolPromise = tool.execute(toolCall.arguments);
+      if (!this.toolTimeoutMs) {
+        return await toolPromise;
+      }
+
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<ToolResult>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Tool execution timeout'));
+        }, this.toolTimeoutMs);
+      });
+
+      try {
+        return await Promise.race([toolPromise, timeoutPromise]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
     } catch (error) {
       return {
         success: false,
@@ -133,6 +157,7 @@ export class AgentOrchestrator {
    * Process a user message and return the agent's response
    */
   async process(userMessage: string): Promise<AgentResponse> {
+    const historyLengthBefore = this.conversationHistory.length;
     // Add user message to history
     this.appendHistory({
       role: 'user',
@@ -143,6 +168,10 @@ export class AgentOrchestrator {
       // Check if provider is available
       const isAvailable = await this.provider.isAvailable();
       if (!isAvailable) {
+        this.conversationHistory = this.conversationHistory.slice(
+          0,
+          historyLengthBefore
+        );
         return {
           message: `LLM provider (${this.provider.name}) is not available. Please ensure LM Studio is running.`,
           success: false,
@@ -157,16 +186,26 @@ export class AgentOrchestrator {
 
       let toolIterations = 0;
       while (true) {
+        if (this.debug) {
+          const toolNames = response.toolCalls.map((toolCall) => toolCall.name);
+          console.debug('[Agent] Iteration', {
+            iteration: toolIterations,
+            toolCalls: toolNames,
+            finishReason: response.finishReason,
+          });
+        }
         this.appendHistory({
           role: 'assistant',
-          content: response.content ?? null,
+          content: response.toolCalls.length > 0 ? null : response.content ?? null,
           toolCalls: response.toolCalls.length > 0 ? response.toolCalls : undefined,
         });
 
         if (response.toolCalls.length === 0) {
           const responseMessage =
             response.content ?? this.buildToolSummary(executedTools);
-          const isSuccess = response.finishReason !== 'error';
+          const hasToolFailure = executedTools.some((tool) => !tool.result.success);
+          const isSuccess =
+            response.finishReason !== 'error' && !hasToolFailure;
           const fallbackMessage = isSuccess
             ? '操作完成'
             : '处理失败，请重试 (Request failed, please try again)';
@@ -205,6 +244,10 @@ export class AgentOrchestrator {
         });
       }
     } catch (error) {
+      this.conversationHistory = this.conversationHistory.slice(
+        0,
+        historyLengthBefore
+      );
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred';
       return {

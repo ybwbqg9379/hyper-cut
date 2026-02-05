@@ -157,7 +157,10 @@ function mapMessageToOpenAIFormat(message: Message): OpenAICompatibleMessage {
         type: 'function',
         function: {
           name: call.name,
-          arguments: JSON.stringify(call.arguments ?? {}),
+          arguments:
+            typeof call.arguments === 'string'
+              ? call.arguments
+              : JSON.stringify(call.arguments ?? {}),
         },
       })),
     };

@@ -923,7 +923,11 @@ describe('Agent Tools Integration', () => {
       const tool = getToolByName('paste_at_time');
       const { invokeAction } = await import('@/lib/actions');
       (invokeAction as ReturnType<typeof vi.fn>).mockReturnValueOnce([
-        [{ trackId: 'track1', elementId: 'el1' }],
+        {
+          kind: 'paste-at-time',
+          pastedElements: [{ trackId: 'track1', elementId: 'el1' }],
+          pastedCount: 1,
+        },
       ]);
 
       const result = await tool.execute({ time: 3 });

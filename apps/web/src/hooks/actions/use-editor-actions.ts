@@ -276,12 +276,8 @@ export function useEditorActions() {
 	useActionHandler(
 		"paste-copied",
 		() => {
-			if (!clipboard?.items.length) return;
-
-			editor.timeline.pasteAtTime({
-				time: editor.playback.getCurrentTime(),
-				clipboardItems: clipboard.items,
-			});
+			const currentTime = editor.playback.getCurrentTime();
+			pasteFromClipboard({ time: currentTime, throwOnEmpty: false });
 		},
 		undefined,
 	);
@@ -289,20 +285,12 @@ export function useEditorActions() {
 	useActionHandler(
 		"paste-at-time",
 		(args) => {
-			// Use provided time or fall back to current playhead position
-			const time = args?.time ?? editor.playback.getCurrentTime();
+			const time = args?.time;
 			if (typeof time !== "number" || !Number.isFinite(time) || time < 0) {
 				throw new Error("无效的时间参数 (Invalid time parameter)");
 			}
 
-			if (!clipboard?.items.length) {
-				throw new Error("剪贴板为空 (Clipboard is empty)");
-			}
-
-			return editor.timeline.pasteAtTime({
-				time,
-				clipboardItems: clipboard.items,
-			});
+			return pasteFromClipboard({ time, throwOnEmpty: true });
 		},
 		undefined,
 	);
@@ -330,4 +318,36 @@ export function useEditorActions() {
 		},
 		undefined,
 	);
+
+	function pasteFromClipboard({
+		time,
+		throwOnEmpty,
+	}: {
+		time: number;
+		throwOnEmpty: boolean;
+	}):
+		| {
+				kind: "paste-at-time";
+				pastedElements: Array<{ trackId: string; elementId: string }>;
+				pastedCount: number;
+		  }
+		| undefined {
+		if (!clipboard?.items.length) {
+			if (throwOnEmpty) {
+				throw new Error("剪贴板为空 (Clipboard is empty)");
+			}
+			return undefined;
+		}
+
+		const pastedElements = editor.timeline.pasteAtTime({
+			time,
+			clipboardItems: clipboard.items,
+		});
+
+		return {
+			kind: "paste-at-time",
+			pastedElements,
+			pastedCount: pastedElements.length,
+		};
+	}
 }

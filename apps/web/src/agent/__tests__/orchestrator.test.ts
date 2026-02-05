@@ -119,6 +119,111 @@ describe('AgentOrchestrator', () => {
     expect(toolExecute).toHaveBeenCalledTimes(1);
   });
 
+  it('should mark response failed if any tool execution fails', async () => {
+    const provider = buildProvider();
+    const toolExecute = vi.fn().mockResolvedValue({
+      success: false,
+      message: 'failed',
+    });
+
+    (provider.chat as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        content: null,
+        toolCalls: [
+          { id: 'call-1', name: 'test_tool', arguments: { value: 1 } },
+        ],
+        finishReason: 'tool_calls',
+      })
+      .mockResolvedValueOnce({
+        content: '已完成',
+        toolCalls: [],
+        finishReason: 'stop',
+      });
+
+    (createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+    const tools: AgentTool[] = [
+      {
+        name: 'test_tool',
+        description: 'test tool',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+        execute: toolExecute,
+      },
+    ];
+
+    const orchestrator = new AgentOrchestrator(tools);
+
+    const result = await orchestrator.process('do it');
+
+    expect(result.success).toBe(false);
+    expect(result.toolCalls?.length).toBe(1);
+  });
+
+  it('should not call chat when provider is unavailable', async () => {
+    const provider = buildProvider();
+    (provider.isAvailable as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+    (createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+    const orchestrator = new AgentOrchestrator([]);
+    const result = await orchestrator.process('do it');
+
+    expect(result.success).toBe(false);
+    expect(provider.chat).not.toHaveBeenCalled();
+  });
+
+  it('should omit assistant content when tool calls are present', async () => {
+    const provider = buildProvider();
+    const toolExecute = vi.fn().mockResolvedValue({
+      success: true,
+      message: 'ok',
+    });
+
+    (provider.chat as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        content: 'intermediate text',
+        toolCalls: [
+          { id: 'call-1', name: 'test_tool', arguments: { value: 1 } },
+        ],
+        finishReason: 'tool_calls',
+      })
+      .mockResolvedValueOnce({
+        content: 'done',
+        toolCalls: [],
+        finishReason: 'stop',
+      });
+
+    (createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+    const tools: AgentTool[] = [
+      {
+        name: 'test_tool',
+        description: 'test tool',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+        execute: toolExecute,
+      },
+    ];
+
+    const orchestrator = new AgentOrchestrator(tools);
+
+    await orchestrator.process('do it');
+
+    const secondCall = (provider.chat as ReturnType<typeof vi.fn>).mock.calls[1];
+    const messages = secondCall?.[0]?.messages ?? [];
+    const assistantMessage = messages.find(
+      (message: { role?: string }) => message.role === 'assistant'
+    );
+
+    expect(assistantMessage?.content).toBeNull();
+  });
+
   it('should use custom system prompt', async () => {
     const provider = buildProvider();
 
