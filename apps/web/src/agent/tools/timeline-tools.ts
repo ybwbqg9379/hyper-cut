@@ -1,4 +1,6 @@
 import type { AgentTool, ToolResult } from '../types';
+import { EditorCore } from '@/core';
+import { getElementsAtTime } from '@/lib/timeline/element-utils';
 import { invokeActionWithCheck } from './action-utils';
 
 /**
@@ -175,11 +177,102 @@ export const selectAllTool: AgentTool = {
 };
 
 /**
+ * Split at Time
+ * Seeks to a specified time and splits selected elements there
+ */
+export const splitAtTimeTool: AgentTool = {
+  name: 'split_at_time',
+  description: '在指定时间点分割片段。默认优先分割当前选中片段，如未选中则分割该时间点覆盖的片段；可选 selectAll=true 分割全部片段。Split clips at a specific time (seconds).',
+  parameters: {
+    type: 'object',
+    properties: {
+      time: {
+        type: 'number',
+        description: '分割时间点（秒）(Time in seconds to split at)',
+      },
+      selectAll: {
+        type: 'boolean',
+        description: '是否分割所有片段（默认 false）(Whether to split all clips, default false)',
+      },
+    },
+    required: ['time'],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const time = params.time as number;
+      const selectAll = params.selectAll === true;
+
+      if (typeof time !== 'number' || !Number.isFinite(time) || time < 0) {
+        return {
+          success: false,
+          message: '无效的时间参数 (Invalid time parameter)',
+        };
+      }
+
+      const duration = editor.timeline.getTotalDuration();
+      if (time > duration) {
+        return {
+          success: false,
+          message: `时间 ${time}s 超出时间线总时长 ${duration.toFixed(2)}s (Time exceeds timeline duration)`,
+        };
+      }
+
+      const tracks = editor.timeline.getTracks();
+
+      const elementsToSplit = selectAll
+        ? tracks.flatMap((track) =>
+            track.elements.map((element) => ({
+              trackId: track.id,
+              elementId: element.id,
+            }))
+          )
+        : (() => {
+            const selectedElements = editor.selection.getSelectedElements();
+            if (selectedElements.length > 0) {
+              return selectedElements;
+            }
+            return getElementsAtTime({ tracks, time });
+          })();
+
+      if (elementsToSplit.length === 0) {
+        return {
+          success: true,
+          message: '没有可分割的片段 (No clips to split)',
+          data: { splitTime: time, splitCount: 0 },
+        };
+      }
+
+      // Seek to the specified time
+      editor.playback.seek({ time });
+
+      // Perform the split
+      editor.timeline.splitElements({
+        elements: elementsToSplit,
+        splitTime: time,
+      });
+
+      return {
+        success: true,
+        message: `已在 ${time.toFixed(2)} 秒处分割 (Split performed at ${time.toFixed(2)}s)`,
+        data: { splitTime: time, splitCount: elementsToSplit.length },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `分割失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+  },
+};
+
+/**
  * Get all timeline tools
  */
 export function getTimelineTools(): AgentTool[] {
   return [
     splitAtPlayheadTool,
+    splitAtTimeTool,
     deleteSelectedTool,
     splitLeftTool,
     splitRightTool,

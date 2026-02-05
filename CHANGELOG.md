@@ -9,20 +9,26 @@ All notable changes to this project (forked from HyperCut) will be documented in
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support
-  - 29 editing tools across 5 categories:
-    - Timeline (6): split, delete, duplicate, select-all
+  - 32 editing tools across 6 categories:
+    - Timeline (7): split, split-at-time, delete, duplicate, select-all
     - Playback (7): play/pause, seek, jump, undo/redo
     - Query (4): timeline info, current time, selected elements, duration
     - Media (5): copy, paste, mute, visibility, snapping
     - Scene (7): bookmark, create/switch/list/rename scene, frame stepping
+    - Asset (2): list assets, add asset to timeline
   - `AgentChatbox` UI component with provider status indicator
   - Feature-flagged integration via `NEXT_PUBLIC_AGENT_ENABLED`
   - Upstream-safe wrapper pattern (`editor-layout-with-agent.tsx`)
-  - Integration tests with Vitest (19 test cases)
+  - Integration tests with Vitest (31 test cases)
   - Vitest configuration (`vitest.config.ts`) with jsdom environment
 
 ### Fixed
 
+- **Agent code quality**: Fixed lint errors and improved test coverage
+  - Resolved TypeScript type errors in fetch mocks
+  - Eliminated non-null assertions in tests via `getToolByName()` helper
+  - Added trackId parameter tests for `add_asset_to_timeline`
+  - Cleaned up unused imports and private class members
 - **React version mismatch**: Upgraded `react` from 19.2.0 to 19.2.4 to match `react-dom` version
 - **Agent reliability**: Added tool argument parsing safeguards, request timeout, and conversation history limits
 - **Agent actions**: Fail fast when action handlers are unavailable to avoid false success

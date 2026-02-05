@@ -38,7 +38,9 @@ export class AgentOrchestrator {
 
   constructor(tools: AgentTool[] = []) {
     this.provider = createProvider(getConfiguredProviderType());
-    tools.forEach((tool) => this.registerTool(tool));
+    for (const tool of tools) {
+      this.registerTool(tool);
+    }
   }
 
   /**

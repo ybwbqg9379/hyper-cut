@@ -297,7 +297,7 @@ describe('LMStudioProvider', () => {
       const originalFetch = global.fetch;
       const abortError = new Error('Aborted');
       abortError.name = 'AbortError';
-      global.fetch = vi.fn(() => Promise.reject(abortError)) as typeof fetch;
+      global.fetch = vi.fn(() => Promise.reject(abortError)) as unknown as typeof fetch;
 
       await expect(
         provider.chat({
@@ -316,7 +316,7 @@ describe('LMStudioProvider', () => {
           ok: false,
           statusText: 'Internal Server Error',
         })
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       await expect(
         provider.chat({
@@ -334,7 +334,7 @@ describe('LMStudioProvider', () => {
       const originalFetch = global.fetch;
       global.fetch = vi.fn(() =>
         Promise.resolve({ ok: true })
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await provider.isAvailable();
       expect(result).toBe(true);
@@ -346,7 +346,7 @@ describe('LMStudioProvider', () => {
       const originalFetch = global.fetch;
       global.fetch = vi.fn(() =>
         Promise.resolve({ ok: false })
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await provider.isAvailable();
       expect(result).toBe(false);
@@ -358,7 +358,7 @@ describe('LMStudioProvider', () => {
       const originalFetch = global.fetch;
       global.fetch = vi.fn(() =>
         Promise.reject(new Error('Network error'))
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await provider.isAvailable();
       expect(result).toBe(false);

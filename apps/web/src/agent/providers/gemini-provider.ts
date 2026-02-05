@@ -11,11 +11,9 @@ import type {
  */
 export class GeminiProvider implements LLMProvider {
   name = 'gemini';
-  private apiKey: string;
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
-  }
+  // biome-ignore lint/complexity/noUselessConstructor: Placeholder for future Gemini API implementation
+  constructor(_apiKey: string) {}
 
   async chat(_params: ChatParams): Promise<ChatResponse> {
     // TODO: Implement Gemini API integration
