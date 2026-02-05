@@ -1,4 +1,5 @@
 import type {
+  Message,
   LLMProvider,
   ChatParams,
   ChatResponse,
@@ -38,7 +39,9 @@ export class LMStudioProvider implements LLMProvider {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: this.model,
-          messages: params.messages,
+          messages: params.messages.map((message) =>
+            mapMessageToOpenAIFormat(message)
+          ),
           tools: params.tools.map((t) => ({
             type: 'function' as const,
             function: {
@@ -133,5 +136,44 @@ interface OpenAIToolCall {
   function: {
     name: string;
     arguments: string;
+  };
+}
+
+interface OpenAICompatibleMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: OpenAIToolCall[];
+  tool_call_id?: string;
+  name?: string;
+}
+
+function mapMessageToOpenAIFormat(message: Message): OpenAICompatibleMessage {
+  if (message.role === 'assistant' && message.toolCalls?.length) {
+    return {
+      role: message.role,
+      content: message.content ?? null,
+      tool_calls: message.toolCalls.map((call) => ({
+        id: call.id,
+        type: 'function',
+        function: {
+          name: call.name,
+          arguments: JSON.stringify(call.arguments ?? {}),
+        },
+      })),
+    };
+  }
+
+  if (message.role === 'tool') {
+    return {
+      role: message.role,
+      content: message.content ?? null,
+      tool_call_id: message.toolCallId,
+      name: message.name,
+    };
+  }
+
+  return {
+    role: message.role,
+    content: message.content ?? null,
   };
 }

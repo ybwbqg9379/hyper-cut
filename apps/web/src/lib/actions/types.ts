@@ -8,6 +8,7 @@ export type TActionArgsMap = {
 	"seek-backward": { seconds: number } | undefined;
 	"jump-forward": { seconds: number } | undefined;
 	"jump-backward": { seconds: number } | undefined;
+	"paste-at-time": { time: number } | undefined;
 };
 
 type TKeysWithValueUndefined<T> = {
@@ -27,8 +28,8 @@ export type TArgOfAction<A extends TAction> = A extends TActionWithArgs
 	: undefined;
 
 export type TActionFunc<A extends TAction> = A extends TActionWithArgs
-	? (arg: TArgOfAction<A>, trigger?: TInvocationTrigger) => void
-	: (_?: undefined, trigger?: TInvocationTrigger) => void;
+	? (arg: TArgOfAction<A>, trigger?: TInvocationTrigger) => unknown
+	: (_?: undefined, trigger?: TInvocationTrigger) => unknown;
 
 export type TInvocationTrigger = "keypress" | "mouseclick";
 

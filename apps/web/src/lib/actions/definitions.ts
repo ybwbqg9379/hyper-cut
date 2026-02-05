@@ -100,6 +100,10 @@ export const ACTIONS = {
 		category: "editing",
 		defaultShortcuts: ["ctrl+v"],
 	},
+	"paste-at-time": {
+		description: "Paste elements at a specific time",
+		category: "editing",
+	},
 	"toggle-snapping": {
 		description: "Toggle snapping",
 		category: "editing",

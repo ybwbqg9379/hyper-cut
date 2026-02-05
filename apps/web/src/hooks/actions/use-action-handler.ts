@@ -22,10 +22,10 @@ export function useActionHandler<A extends TAction>(
 
 	const stableHandler = useCallback(
 		(...parameters: [TArgOfAction<A>, TInvocationTrigger?]) => {
-			(
+			return (
 				handlerRef.current as (
 					...handlerParameters: [TArgOfAction<A>, TInvocationTrigger?]
-				) => void
+				) => unknown
 			)(...parameters);
 		},
 		[],

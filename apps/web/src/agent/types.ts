@@ -12,6 +12,7 @@ export interface Message {
   content: string | null;
   toolCallId?: string;
   name?: string;
+  toolCalls?: ToolCall[];
 }
 
 export interface ToolDefinition {
@@ -89,4 +90,11 @@ export interface AgentConfig {
   lmStudioUrl?: string;
   geminiApiKey?: string;
   systemPrompt?: string;
+}
+
+export interface AgentOrchestratorOptions {
+  systemPrompt?: string;
+  maxHistoryMessages?: number;
+  maxToolIterations?: number;
+  config?: Partial<AgentConfig>;
 }

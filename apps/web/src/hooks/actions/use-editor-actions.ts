@@ -287,6 +287,27 @@ export function useEditorActions() {
 	);
 
 	useActionHandler(
+		"paste-at-time",
+		(args) => {
+			// Use provided time or fall back to current playhead position
+			const time = args?.time ?? editor.playback.getCurrentTime();
+			if (typeof time !== "number" || !Number.isFinite(time) || time < 0) {
+				throw new Error("无效的时间参数 (Invalid time parameter)");
+			}
+
+			if (!clipboard?.items.length) {
+				throw new Error("剪贴板为空 (Clipboard is empty)");
+			}
+
+			return editor.timeline.pasteAtTime({
+				time,
+				clipboardItems: clipboard.items,
+			});
+		},
+		undefined,
+	);
+
+	useActionHandler(
 		"toggle-snapping",
 		() => {
 			toggleSnapping();

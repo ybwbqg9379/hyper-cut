@@ -15,7 +15,9 @@ export function useAgent() {
   // Create agent with all tools
   const agent = useMemo(() => {
     const tools = getAllTools();
-    return new AgentOrchestrator(tools);
+    const systemPrompt =
+      process.env.NEXT_PUBLIC_AGENT_SYSTEM_PROMPT?.trim() || undefined;
+    return new AgentOrchestrator(tools, { systemPrompt });
   }, []);
 
   // Process a user message

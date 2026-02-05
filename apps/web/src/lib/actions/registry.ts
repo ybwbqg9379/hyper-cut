@@ -8,7 +8,7 @@ import type {
 	TInvocationTrigger,
 } from "./types";
 
-type ActionHandler = (arg: unknown, trigger?: TInvocationTrigger) => void;
+type ActionHandler = (arg: unknown, trigger?: TInvocationTrigger) => unknown;
 const boundActions: Partial<Record<TAction, ActionHandler[]>> = {};
 
 export function hasActionHandlers<A extends TAction>(action: A): boolean {
@@ -48,12 +48,12 @@ type InvokeActionFunc = {
 		action: TActionWithOptionalArgs,
 		args?: undefined,
 		trigger?: TInvocationTrigger,
-	): void;
+	): unknown[];
 	<A extends TActionWithArgs>(
 		action: A,
 		args: TActionArgsMap[A],
 		trigger?: TInvocationTrigger,
-	): void;
+	): unknown[];
 };
 
 export const invokeAction: InvokeActionFunc = <A extends TAction>(
@@ -61,5 +61,7 @@ export const invokeAction: InvokeActionFunc = <A extends TAction>(
 	args?: TArgOfAction<A>,
 	trigger?: TInvocationTrigger,
 ) => {
-	boundActions[action]?.forEach((handler) => handler(args, trigger));
+	const handlers = boundActions[action];
+	if (!handlers?.length) return [];
+	return handlers.map((handler) => handler(args, trigger));
 };

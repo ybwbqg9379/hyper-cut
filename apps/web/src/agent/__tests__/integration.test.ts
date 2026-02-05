@@ -921,23 +921,22 @@ describe('Agent Tools Integration', () => {
 
     it('paste_at_time should paste clipboard items at time', async () => {
       const tool = getToolByName('paste_at_time');
-      const { EditorCore } = await import('@/core');
-      const editor = EditorCore.getInstance() as unknown as {
-        timeline: { pasteAtTime: ReturnType<typeof vi.fn> };
-      };
+      const { invokeAction } = await import('@/lib/actions');
+      (invokeAction as ReturnType<typeof vi.fn>).mockReturnValueOnce([
+        [{ trackId: 'track1', elementId: 'el1' }],
+      ]);
 
       const result = await tool.execute({ time: 3 });
       expect(result.success).toBe(true);
-      expect(editor.timeline.pasteAtTime).toHaveBeenCalledWith(
-        expect.objectContaining({ time: 3 })
-      );
+      expect(invokeAction).toHaveBeenCalledWith('paste-at-time', { time: 3 });
+      expect(result.data).toMatchObject({ pastedCount: 1 });
     });
 
     it('paste_at_time should fail when clipboard is empty', async () => {
       const tool = getToolByName('paste_at_time');
-      const store = await import('@/stores/timeline-store');
-      (store.useTimelineStore.getState as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-        clipboard: null,
+      const { invokeAction } = await import('@/lib/actions');
+      (invokeAction as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+        throw new Error('剪贴板为空 (Clipboard is empty)');
       });
 
       const result = await tool.execute({ time: 3 });

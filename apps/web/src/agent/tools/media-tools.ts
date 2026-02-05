@@ -1,6 +1,4 @@
 import type { AgentTool, ToolResult } from '../types';
-import { EditorCore } from '@/core';
-import { useTimelineStore } from '@/stores/timeline-store';
 import { invokeActionWithCheck } from './action-utils';
 
 /**
@@ -92,25 +90,14 @@ export const pasteAtTimeTool: AgentTool = {
         };
       }
 
-      const clipboard = useTimelineStore.getState().clipboard;
-      if (!clipboard || clipboard.items.length === 0) {
-        return {
-          success: false,
-          message: '剪贴板为空 (Clipboard is empty)',
-          data: { errorCode: 'EMPTY_CLIPBOARD' },
-        };
-      }
-
-      const editor = EditorCore.getInstance();
-      const pasted = editor.timeline.pasteAtTime({
-        time,
-        clipboardItems: clipboard.items,
-      });
+      const results = invokeActionWithCheck('paste-at-time', { time });
+      const pasted = results.find((result) => Array.isArray(result));
+      const pastedCount = Array.isArray(pasted) ? pasted.length : 0;
 
       return {
         success: true,
-        message: `已在 ${time.toFixed(2)} 秒粘贴 ${pasted.length} 个元素 (Pasted ${pasted.length} element(s))`,
-        data: { time, pastedCount: pasted.length },
+        message: `已在 ${time.toFixed(2)} 秒粘贴 ${pastedCount} 个元素 (Pasted ${pastedCount} element(s))`,
+        data: { time, pastedCount },
       };
     } catch (error) {
       return {

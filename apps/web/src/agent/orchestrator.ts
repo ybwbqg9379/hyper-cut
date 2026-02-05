@@ -5,6 +5,8 @@ import type {
   Message,
   ToolDefinition,
   ToolResult,
+  ToolCall,
+  AgentOrchestratorOptions,
 } from './types';
 import { createProvider, getConfiguredProviderType } from './providers';
 
@@ -32,6 +34,7 @@ When the user asks you to do something:
 Always be helpful and explain what actions you're taking.`;
 
 const MAX_HISTORY_MESSAGES = 30;
+const DEFAULT_MAX_TOOL_ITERATIONS = 4;
 
 /**
  * AgentOrchestrator
@@ -41,9 +44,22 @@ export class AgentOrchestrator {
   private provider: LLMProvider;
   private tools: Map<string, AgentTool> = new Map();
   private conversationHistory: Message[] = [];
+  private systemPrompt: string;
+  private maxHistoryMessages: number;
+  private maxToolIterations: number;
 
-  constructor(tools: AgentTool[] = []) {
-    this.provider = createProvider(getConfiguredProviderType());
+  constructor(tools: AgentTool[] = [], options: AgentOrchestratorOptions = {}) {
+    const config = options.config;
+    this.systemPrompt = options.systemPrompt ?? config?.systemPrompt ?? SYSTEM_PROMPT;
+    this.maxHistoryMessages =
+      options.maxHistoryMessages && options.maxHistoryMessages > 0
+        ? options.maxHistoryMessages
+        : MAX_HISTORY_MESSAGES;
+    this.maxToolIterations =
+      options.maxToolIterations && options.maxToolIterations > 0
+        ? options.maxToolIterations
+        : DEFAULT_MAX_TOOL_ITERATIONS;
+    this.provider = createProvider(getConfiguredProviderType(config), config);
     for (const tool of tools) {
       this.registerTool(tool);
     }
@@ -58,11 +74,47 @@ export class AgentOrchestrator {
 
   private appendHistory(message: Message): void {
     this.conversationHistory.push(message);
-    if (this.conversationHistory.length > MAX_HISTORY_MESSAGES) {
+    if (this.conversationHistory.length > this.maxHistoryMessages) {
       this.conversationHistory.splice(
         0,
-        this.conversationHistory.length - MAX_HISTORY_MESSAGES
+        this.conversationHistory.length - this.maxHistoryMessages
       );
+    }
+  }
+
+  private buildMessages(): Message[] {
+    return [
+      { role: 'system', content: this.systemPrompt },
+      ...this.conversationHistory,
+    ];
+  }
+
+  private buildToolSummary(
+    executedTools: Array<{ name: string; result: ToolResult }>
+  ): string {
+    return executedTools
+      .map((tool) => `${tool.name}: ${tool.result.message}`)
+      .join('\n');
+  }
+
+  private async executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
+    const tool = this.tools.get(toolCall.name);
+    if (!tool) {
+      return {
+        success: false,
+        message: `未找到工具: ${toolCall.name} (Tool not found)`,
+        data: { errorCode: 'TOOL_NOT_FOUND', toolName: toolCall.name },
+      };
+    }
+
+    try {
+      return await tool.execute(toolCall.arguments);
+    } catch (error) {
+      return {
+        success: false,
+        message: `工具执行失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'TOOL_EXECUTION_FAILED', toolName: toolCall.name },
+      };
     }
   }
 
@@ -87,12 +139,6 @@ export class AgentOrchestrator {
       content: userMessage,
     });
 
-    // Build messages with system prompt
-    const messages: Message[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...this.conversationHistory,
-    ];
-
     try {
       // Check if provider is available
       const isAvailable = await this.provider.isAvailable();
@@ -103,52 +149,61 @@ export class AgentOrchestrator {
         };
       }
 
-      // Call LLM
-      const response = await this.provider.chat({
-        messages,
+      const executedTools: Array<{ name: string; result: ToolResult }> = [];
+      let response = await this.provider.chat({
+        messages: this.buildMessages(),
         tools: this.getToolDefinitions(),
       });
 
-      // Handle tool calls if any
-      const executedTools: Array<{ name: string; result: ToolResult }> = [];
-      
-      if (response.toolCalls.length > 0) {
-        for (const toolCall of response.toolCalls) {
-          const tool = this.tools.get(toolCall.name);
-          if (tool) {
-            const result = await tool.execute(toolCall.arguments);
-            executedTools.push({ name: toolCall.name, result });
+      let toolIterations = 0;
+      while (true) {
+        this.appendHistory({
+          role: 'assistant',
+          content: response.content ?? null,
+          toolCalls: response.toolCalls.length > 0 ? response.toolCalls : undefined,
+        });
 
-            // Add tool result to history for context
-            this.appendHistory({
-              role: 'tool',
-              content: JSON.stringify(result),
-              toolCallId: toolCall.id,
-              name: toolCall.name,
-            });
-          }
+        if (response.toolCalls.length === 0) {
+          const responseMessage =
+            response.content ?? this.buildToolSummary(executedTools);
+          const isSuccess = response.finishReason !== 'error';
+          const fallbackMessage = isSuccess
+            ? '操作完成'
+            : '处理失败，请重试 (Request failed, please try again)';
+
+          return {
+            message: responseMessage || fallbackMessage,
+            toolCalls: executedTools.length > 0 ? executedTools : undefined,
+            success: isSuccess,
+          };
         }
+
+        if (toolIterations >= this.maxToolIterations) {
+          return {
+            message: '工具调用次数已达上限，请重试 (Tool call limit reached)',
+            toolCalls: executedTools.length > 0 ? executedTools : undefined,
+            success: false,
+          };
+        }
+
+        for (const toolCall of response.toolCalls) {
+          const result = await this.executeToolCall(toolCall);
+          executedTools.push({ name: toolCall.name, result });
+
+          this.appendHistory({
+            role: 'tool',
+            content: JSON.stringify(result),
+            toolCallId: toolCall.id,
+            name: toolCall.name,
+          });
+        }
+
+        toolIterations += 1;
+        response = await this.provider.chat({
+          messages: this.buildMessages(),
+          tools: this.getToolDefinitions(),
+        });
       }
-
-      // Build response message
-      let responseMessage = response.content ?? '';
-      if (executedTools.length > 0 && !responseMessage) {
-        responseMessage = executedTools
-          .map((t) => `${t.name}: ${t.result.message}`)
-          .join('\n');
-      }
-
-      // Add assistant response to history
-      this.appendHistory({
-        role: 'assistant',
-        content: responseMessage,
-      });
-
-      return {
-        message: responseMessage,
-        toolCalls: executedTools.length > 0 ? executedTools : undefined,
-        success: true,
-      };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred';

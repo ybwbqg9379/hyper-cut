@@ -16,6 +16,7 @@ export type {
   AgentResponse,
   ProviderType,
   AgentConfig,
+  AgentOrchestratorOptions,
 } from './types';
 
 // Orchestrator

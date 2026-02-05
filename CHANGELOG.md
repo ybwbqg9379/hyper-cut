@@ -54,6 +54,8 @@ All notable changes to this project (forked from HyperCut) will be documented in
 - **Agent assets**: Added download timeout/size limits for `add_media_asset` and clarified CORS/network failures
 - **Agent tests**: Force-mocked `fetch` to prevent real network calls, added failure-path coverage for asset ingestion
 - **Agent actions**: Fail fast when action handlers are unavailable to avoid false success
+- **Agent orchestration**: Added multi-step tool-call loop with prompt overrides and safer tool execution handling
+- **Clipboard tooling**: Routed `paste_at_time` through action system to avoid direct store coupling
 - **Env examples**: Documented Agent-related environment variables
 - **Gemini provider**: Marked unavailable until implementation is complete
 
