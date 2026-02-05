@@ -21,6 +21,10 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Upstream-safe wrapper pattern (`editor-layout-with-agent.tsx`)
   - Integration tests with Vitest (31 test cases)
   - Vitest configuration (`vitest.config.ts`) with jsdom environment
+- **Agent tools扩展（Phase 1）**：新增播放、轨道、选择与导出能力
+  - Playback：`seek_to_time`、`set_volume`、`toggle_playback_mute`
+  - Timeline：`select_element`、`clear_selection`、`add_track`、`remove_track`、`toggle_track_mute`、`toggle_track_visibility`
+  - Project：`export_video`（支持格式/质量/音频参数并触发下载）
 
 ### Fixed
 

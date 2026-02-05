@@ -10,6 +10,7 @@ import { getQueryTools } from './query-tools';
 import { getMediaTools } from './media-tools';
 import { getSceneTools } from './scene-tools';
 import { getAssetTools } from './asset-tools';
+import { getProjectTools } from './project-tools';
 
 // Re-export individual tool getters
 export { getTimelineTools } from './timeline-tools';
@@ -18,6 +19,7 @@ export { getQueryTools } from './query-tools';
 export { getMediaTools } from './media-tools';
 export { getSceneTools } from './scene-tools';
 export { getAssetTools } from './asset-tools';
+export { getProjectTools } from './project-tools';
 
 /**
  * Get all available agent tools
@@ -30,6 +32,7 @@ export function getAllTools(): AgentTool[] {
     ...getMediaTools(),
     ...getSceneTools(),
     ...getAssetTools(),
+    ...getProjectTools(),
   ];
 }
 
@@ -44,6 +47,6 @@ export function getToolsSummary(): { category: string; count: number }[] {
     { category: 'Media', count: getMediaTools().length },
     { category: 'Scene', count: getSceneTools().length },
     { category: 'Asset', count: getAssetTools().length },
+    { category: 'Project', count: getProjectTools().length },
   ];
 }
-

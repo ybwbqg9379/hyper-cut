@@ -34,3 +34,4 @@ export { getAllTools, getToolsSummary } from './tools';
 export { getTimelineTools } from './tools/timeline-tools';
 export { getPlaybackTools } from './tools/playback-tools';
 export { getQueryTools } from './tools/query-tools';
+export { getProjectTools } from './tools/project-tools';
