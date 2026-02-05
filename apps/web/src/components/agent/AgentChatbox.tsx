@@ -14,6 +14,7 @@ import {
 } from "@/agent";
 import { useAgent } from "@/hooks/use-agent";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -60,85 +61,103 @@ interface ParsedStepOverride {
 	arguments: Record<string, unknown>;
 }
 
-function parseStepOverridesInput(source: string):
-	| {
-			ok: true;
-			stepOverrides: ParsedStepOverride[];
-	  }
-	| {
-			ok: false;
-			message: string;
-	  } {
-	if (source.length > 100000) {
-		return {
-			ok: false,
-			message: "参数过大，请将 JSON 控制在 100000 字符以内",
+type WorkflowFieldKind = "string" | "number" | "boolean" | "json";
+
+interface WorkflowFieldDraft {
+	kind: WorkflowFieldKind;
+	value: string;
+}
+
+type WorkflowStepDrafts = Record<string, Record<string, WorkflowFieldDraft>>;
+
+function buildWorkflowArgumentsDraft(
+	argumentsValue: Record<string, unknown> | undefined,
+): Record<string, WorkflowFieldDraft> {
+	const nextDraft: Record<string, WorkflowFieldDraft> = {};
+	for (const [key, value] of Object.entries(argumentsValue ?? {})) {
+		const kind = detectWorkflowFieldKind(value);
+		nextDraft[key] = {
+			kind,
+			value: serializeWorkflowFieldValue(value, kind),
 		};
 	}
+	return nextDraft;
+}
 
-	let parsed: unknown;
+function detectWorkflowFieldKind(value: unknown): WorkflowFieldKind {
+	if (typeof value === "number") return "number";
+	if (typeof value === "boolean") return "boolean";
+	if (typeof value === "string") return "string";
+	return "json";
+}
+
+function serializeWorkflowFieldValue(
+	value: unknown,
+	kind: WorkflowFieldKind,
+): string {
+	if (kind === "json") {
+		try {
+			return JSON.stringify(value, null, 2);
+		} catch {
+			return "null";
+		}
+	}
+	return String(value);
+}
+
+function parseWorkflowFieldValue(
+	draft: WorkflowFieldDraft,
+): { ok: true; value: unknown } | { ok: false; message: string } {
+	if (draft.kind === "string") {
+		return { ok: true, value: draft.value };
+	}
+
+	if (draft.kind === "number") {
+		if (draft.value.trim().length === 0) {
+			return { ok: false, message: "数字不能为空" };
+		}
+		const parsed = Number(draft.value);
+		if (!Number.isFinite(parsed)) {
+			return { ok: false, message: "请输入有效数字" };
+		}
+		return { ok: true, value: parsed };
+	}
+
+	if (draft.kind === "boolean") {
+		if (draft.value !== "true" && draft.value !== "false") {
+			return { ok: false, message: "布尔值必须为 true 或 false" };
+		}
+		return { ok: true, value: draft.value === "true" };
+	}
+
 	try {
-		parsed = JSON.parse(source);
+		return { ok: true, value: JSON.parse(draft.value) };
 	} catch (error) {
 		return {
 			ok: false,
 			message: error instanceof Error ? error.message : "JSON 解析失败",
 		};
 	}
+}
 
-	if (!Array.isArray(parsed)) {
-		return {
-			ok: false,
-			message: "stepOverrides 必须是 JSON 数组",
-		};
+function areWorkflowValuesEqual(left: unknown, right: unknown): boolean {
+	if (Object.is(left, right)) return true;
+	try {
+		return JSON.stringify(left) === JSON.stringify(right);
+	} catch {
+		return false;
 	}
+}
 
-	const stepOverrides: ParsedStepOverride[] = [];
-	for (let i = 0; i < parsed.length; i += 1) {
-		const item = parsed[i];
-		if (!item || Array.isArray(item) || typeof item !== "object") {
-			return {
-				ok: false,
-				message: `stepOverrides[${i}] 必须是对象`,
-			};
-		}
-
-		const record = item as Record<string, unknown>;
-		const hasStepId =
-			typeof record.stepId === "string" && record.stepId.trim().length > 0;
-		const hasIndex =
-			typeof record.index === "number" &&
-			Number.isFinite(record.index) &&
-			record.index >= 0;
-		if (!hasStepId && !hasIndex) {
-			return {
-				ok: false,
-				message: `stepOverrides[${i}] 需要 stepId 或 index`,
-			};
-		}
-
-		if (
-			!record.arguments ||
-			Array.isArray(record.arguments) ||
-			typeof record.arguments !== "object"
-		) {
-			return {
-				ok: false,
-				message: `stepOverrides[${i}].arguments 必须是对象`,
-			};
-		}
-
-		stepOverrides.push({
-			...(hasStepId ? { stepId: String(record.stepId).trim() } : {}),
-			...(hasIndex ? { index: Math.floor(Number(record.index)) } : {}),
-			arguments: record.arguments as Record<string, unknown>,
-		});
+function formatWorkflowValueForHint(value: unknown): string {
+	if (typeof value === "string") {
+		return value;
 	}
-
-	return {
-		ok: true,
-		stepOverrides,
-	};
+	try {
+		return JSON.stringify(value);
+	} catch {
+		return String(value);
+	}
 }
 
 /**
@@ -160,7 +179,8 @@ export function AgentChatbox() {
 		"chat" | "transcript" | "workflow"
 	>("chat");
 	const [selectedWorkflowName, setSelectedWorkflowName] = useState("");
-	const [stepOverridesSource, setStepOverridesSource] = useState("[]");
+	const [workflowStepDrafts, setWorkflowStepDrafts] =
+		useState<WorkflowStepDrafts>({});
 	const [workflowFormError, setWorkflowFormError] = useState<string | null>(
 		null,
 	);
@@ -191,6 +211,21 @@ export function AgentChatbox() {
 			setSelectedWorkflowName(workflowOptions[0].name);
 		}
 	}, [selectedWorkflowName, workflowOptions]);
+
+	useEffect(() => {
+		if (!selectedWorkflow) {
+			setWorkflowStepDrafts({});
+			return;
+		}
+
+		const nextDrafts: WorkflowStepDrafts = {};
+		for (const step of selectedWorkflow.steps) {
+			nextDrafts[step.id] = buildWorkflowArgumentsDraft(step.arguments);
+		}
+
+		setWorkflowStepDrafts(nextDrafts);
+		setWorkflowFormError(null);
+	}, [selectedWorkflow]);
 
 	// Check provider status on mount
 	useEffect(() => {
@@ -318,26 +353,104 @@ export function AgentChatbox() {
 		clearHistory();
 	};
 
+	const handleWorkflowFieldChange = ({
+		stepId,
+		fieldKey,
+		value,
+	}: {
+		stepId: string;
+		fieldKey: string;
+		value: string;
+	}) => {
+		setWorkflowStepDrafts((prev) => {
+			const stepDraft = prev[stepId];
+			if (!stepDraft || !stepDraft[fieldKey]) return prev;
+			return {
+				...prev,
+				[stepId]: {
+					...stepDraft,
+					[fieldKey]: {
+						...stepDraft[fieldKey],
+						value,
+					},
+				},
+			};
+		});
+	};
+
+	const resetWorkflowStepToDefault = (stepId: string) => {
+		if (isProcessing || pendingPlanId || !selectedWorkflow) return;
+		const targetStep = selectedWorkflow.steps.find((step) => step.id === stepId);
+		if (!targetStep) return;
+
+		setWorkflowStepDrafts((prev) => ({
+			...prev,
+			[stepId]: buildWorkflowArgumentsDraft(targetStep.arguments),
+		}));
+		setWorkflowFormError(null);
+	};
+
+	const resetAllWorkflowDraftsToDefault = () => {
+		if (isProcessing || pendingPlanId || !selectedWorkflow) return;
+
+		const nextDrafts: WorkflowStepDrafts = {};
+		for (const step of selectedWorkflow.steps) {
+			nextDrafts[step.id] = buildWorkflowArgumentsDraft(step.arguments);
+		}
+		setWorkflowStepDrafts(nextDrafts);
+		setWorkflowFormError(null);
+	};
+
 	const handleRunWorkflow = async () => {
 		if (isProcessing || pendingPlanId) return;
 		if (!selectedWorkflowName) {
 			setWorkflowFormError("请先选择一个工作流");
 			return;
 		}
-
-		const parsedOverrides = parseStepOverridesInput(stepOverridesSource);
-		if (!parsedOverrides.ok) {
-			setWorkflowFormError(parsedOverrides.message);
+		if (!selectedWorkflow) {
+			setWorkflowFormError("未找到所选工作流，请重新选择");
 			return;
 		}
 
+		const nextStepOverrides: ParsedStepOverride[] = [];
+		for (const step of selectedWorkflow.steps) {
+			const draftFields = workflowStepDrafts[step.id] ?? {};
+			const changedArguments: Record<string, unknown> = {};
+
+			for (const [fieldKey, defaultValue] of Object.entries(
+				step.arguments ?? {},
+			)) {
+				const draftField = draftFields[fieldKey];
+				if (!draftField) continue;
+
+				const parsed = parseWorkflowFieldValue(draftField);
+				if (!parsed.ok) {
+					setWorkflowFormError(
+						`步骤 ${step.toolName} 的参数 ${fieldKey} 无效：${parsed.message}`,
+					);
+					return;
+				}
+
+				if (!areWorkflowValuesEqual(parsed.value, defaultValue)) {
+					changedArguments[fieldKey] = parsed.value;
+				}
+			}
+
+			if (Object.keys(changedArguments).length > 0) {
+				nextStepOverrides.push({
+					stepId: step.id,
+					arguments: changedArguments,
+				});
+			}
+		}
+
 		setWorkflowFormError(null);
-		const hasOverrides = parsedOverrides.stepOverrides.length > 0;
+		const hasOverrides = nextStepOverrides.length > 0;
 		const userMessage: Message = {
 			id: crypto.randomUUID(),
 			role: "user",
 			content: hasOverrides
-				? `[工作流] ${selectedWorkflowName}\nstepOverrides: ${JSON.stringify(parsedOverrides.stepOverrides)}`
+				? `[工作流] ${selectedWorkflowName}\nstepOverrides: ${JSON.stringify(nextStepOverrides)}`
 				: `[工作流] ${selectedWorkflowName}`,
 			timestamp: new Date(),
 		};
@@ -345,7 +458,7 @@ export function AgentChatbox() {
 
 		const response = await runWorkflow({
 			workflowName: selectedWorkflowName,
-			...(hasOverrides ? { stepOverrides: parsedOverrides.stepOverrides } : {}),
+			...(hasOverrides ? { stepOverrides: nextStepOverrides } : {}),
 		});
 		appendAssistantResponse(response);
 	};
@@ -561,58 +674,163 @@ export function AgentChatbox() {
 
 							{selectedWorkflow ? (
 								<div className="rounded-md border border-border p-2 space-y-2">
-									<div className="text-xs font-medium">
-										{selectedWorkflow.name}
+									<div className="flex items-center justify-between gap-2">
+										<div className="text-xs font-medium">
+											{selectedWorkflow.name}
+										</div>
+										<Button
+											variant="text"
+											size="sm"
+											className="h-6 px-2 text-[11px]"
+											onClick={resetAllWorkflowDraftsToDefault}
+											disabled={workflowActionDisabled}
+										>
+											恢复全部默认参数
+										</Button>
 									</div>
 									<p className="text-xs text-muted-foreground">
 										{selectedWorkflow.description}
 									</p>
-									<div className="space-y-1">
-										{selectedWorkflow.steps.map((step, index) => (
-											<div
-												key={`${selectedWorkflow.name}-${step.id}`}
-												className="rounded-sm border border-border/60 bg-background/60 px-2 py-1"
-											>
-												<div className="text-[11px] font-mono">
-													{index + 1}. {step.toolName}
-												</div>
-												{step.summary ? (
-													<div className="text-[11px] text-muted-foreground">
-														{step.summary}
+									<div className="space-y-2">
+										{selectedWorkflow.steps.map((step, index) => {
+											const stepArguments = Object.entries(step.arguments ?? {});
+											return (
+												<div
+													key={`${selectedWorkflow.name}-${step.id}`}
+													className="rounded-sm border border-border/60 bg-background/60 px-2 py-2 space-y-2"
+												>
+													<div className="flex items-center justify-between gap-2">
+														<div className="text-[11px] font-mono">
+															{index + 1}. {step.toolName}
+														</div>
+														<Button
+															variant="text"
+															size="sm"
+															className="h-6 px-2 text-[11px]"
+															onClick={() => resetWorkflowStepToDefault(step.id)}
+															disabled={
+																workflowActionDisabled ||
+																stepArguments.length === 0
+															}
+														>
+															恢复本步骤默认
+														</Button>
 													</div>
-												) : null}
-											</div>
-										))}
+													{step.summary ? (
+														<div className="text-[11px] text-muted-foreground">
+															{step.summary}
+														</div>
+													) : null}
+
+													<div className="space-y-2">
+														{stepArguments.length === 0 ? (
+															<div className="text-[11px] text-muted-foreground">
+																此步骤无参数
+															</div>
+														) : (
+															stepArguments.map(([fieldKey, defaultValue]) => {
+																const draft =
+																	workflowStepDrafts[step.id]?.[fieldKey] ??
+																	null;
+																if (!draft) return null;
+
+																return (
+																	<div
+																		key={`${step.id}-${fieldKey}`}
+																		className="space-y-1"
+																	>
+																		<div className="flex items-center justify-between gap-2">
+																			<div className="text-[11px] font-medium">
+																				{fieldKey}
+																			</div>
+																			<div className="text-[11px] text-muted-foreground truncate">
+																				默认:{" "}
+																				{formatWorkflowValueForHint(
+																					defaultValue,
+																				)}
+																			</div>
+																		</div>
+
+																		{draft.kind === "boolean" ? (
+																			<Select
+																				value={draft.value}
+																				onValueChange={(nextValue) =>
+																					handleWorkflowFieldChange({
+																						stepId: step.id,
+																						fieldKey,
+																						value: nextValue,
+																					})
+																				}
+																				disabled={workflowActionDisabled}
+																			>
+																				<SelectTrigger className="h-8 w-full text-xs">
+																					<SelectValue />
+																				</SelectTrigger>
+																				<SelectContent>
+																					<SelectItem value="true">
+																						true
+																					</SelectItem>
+																					<SelectItem value="false">
+																						false
+																					</SelectItem>
+																				</SelectContent>
+																			</Select>
+																		) : draft.kind === "json" ? (
+																			<textarea
+																				value={draft.value}
+																				onChange={(event) =>
+																					handleWorkflowFieldChange({
+																						stepId: step.id,
+																						fieldKey,
+																						value: event.target.value,
+																					})
+																				}
+																				disabled={workflowActionDisabled}
+																				className={cn(
+																					"w-full min-h-[80px] resize-y rounded-md border border-border bg-background px-2 py-1.5",
+																					"font-mono text-xs",
+																					"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+																					"disabled:opacity-50",
+																				)}
+																			/>
+																		) : (
+																			<Input
+																				type={
+																					draft.kind === "number"
+																						? "number"
+																						: "text"
+																				}
+																				size="sm"
+																				value={draft.value}
+																				onChange={(event) =>
+																					handleWorkflowFieldChange({
+																						stepId: step.id,
+																						fieldKey,
+																						value: event.target.value,
+																					})
+																				}
+																				disabled={workflowActionDisabled}
+																			/>
+																		)}
+																	</div>
+																);
+															})
+														)}
+													</div>
+												</div>
+											);
+										})}
 									</div>
+									<p className="text-[11px] text-muted-foreground">
+										仅在你修改参数时才会自动生成
+										stepOverrides，未改动的参数不会提交。
+									</p>
 								</div>
 							) : (
 								<div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
 									暂无可用工作流
 								</div>
 							)}
-
-							<div>
-								<p className="mb-1 text-xs font-medium">
-									stepOverrides（JSON 数组，可选）
-								</p>
-								<textarea
-									value={stepOverridesSource}
-									onChange={(event) =>
-										setStepOverridesSource(event.target.value)
-									}
-									disabled={workflowActionDisabled}
-									className={cn(
-										"w-full min-h-[160px] resize-y rounded-md border border-border bg-background px-2 py-1.5",
-										"font-mono text-xs",
-										"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-										"disabled:opacity-50",
-									)}
-								/>
-								<p className="mt-1 text-[11px] text-muted-foreground">
-									示例:
-									[&#123;"stepId":"remove-silence","arguments":&#123;"threshold":0.03&#125;&#125;]
-								</p>
-							</div>
 
 							{workflowFormError ? (
 								<div className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">

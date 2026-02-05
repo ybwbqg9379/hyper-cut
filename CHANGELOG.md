@@ -63,6 +63,8 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 支持 `stepOverrides` 覆盖指定工作流步骤参数
   - Planning 模式下会将 `run_workflow` 自动展开为逐步计划，确认前可逐步审阅/编辑
   - Agent 面板新增“工作流”视图：选择工作流、编辑 `stepOverrides`、一键发送执行
+  - `stepOverrides` 编辑升级为按步骤可视化参数表单，减少手写 JSON 出错
+  - 工作流参数编辑新增“恢复本步骤默认 / 恢复全部默认参数”按钮
 
 ### Changed
 
