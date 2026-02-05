@@ -44,6 +44,9 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Fixed
 
+- **Timeline hydration error**: Fixed nested `<button>` elements causing React hydration mismatch
+  - Changed outer `<button>` in `TimelineTrackContent` to `<div>` with proper ARIA attributes
+  - Added `role="button"`, `tabIndex={0}`, and keyboard event handlers for accessibility
 - **Agent code quality**: Fixed lint errors and improved test coverage
   - Resolved TypeScript type errors in fetch mocks
   - Eliminated non-null assertions in tests via `getToolByName()` helper
