@@ -18,7 +18,8 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `AgentChatbox` UI component with provider status indicator
   - Feature-flagged integration via `NEXT_PUBLIC_AGENT_ENABLED`
   - Upstream-safe wrapper pattern (`editor-layout-with-agent.tsx`)
-  - Integration tests covering agent → action flow
+  - Integration tests with Vitest (19 test cases)
+  - Vitest configuration (`vitest.config.ts`) with jsdom environment
 
 ### Fixed
 
