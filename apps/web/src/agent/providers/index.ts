@@ -2,6 +2,12 @@ import type { AgentConfig, LLMProvider, ProviderType } from '../types';
 import { LMStudioProvider } from './lm-studio-provider';
 import { GeminiProvider } from './gemini-provider';
 
+function parseEnvNumber(envVar: string | undefined): number | undefined {
+  if (!envVar) return undefined;
+  const num = Number(envVar);
+  return Number.isNaN(num) ? undefined : num;
+}
+
 /**
  * Create an LLM provider instance based on configuration
  */
@@ -11,20 +17,37 @@ export function createProvider(
 ): LLMProvider {
   switch (type) {
     case 'lm-studio': {
-      const timeoutMs =
-        config?.lmStudioTimeoutMs ??
-        (process.env.NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS
-          ? Number(process.env.NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS)
-          : 120000);
-      return new LMStudioProvider(
-        config?.lmStudioUrl ??
-          process.env.NEXT_PUBLIC_LM_STUDIO_URL ??
-          'http://localhost:1234/v1',
-        config?.lmStudioModel ??
-          process.env.NEXT_PUBLIC_LM_STUDIO_MODEL ??
-          'qwen/qwen3-vl-8b',
-        timeoutMs
-      );
+      const lmConfig = config?.lmStudio ?? {};
+      return new LMStudioProvider({
+        url:
+          lmConfig.url ??
+          config?.lmStudioUrl ??
+          process.env.NEXT_PUBLIC_LM_STUDIO_URL,
+        model:
+          lmConfig.model ??
+          config?.lmStudioModel ??
+          process.env.NEXT_PUBLIC_LM_STUDIO_MODEL,
+        timeoutMs:
+          lmConfig.timeoutMs ??
+          config?.lmStudioTimeoutMs ??
+          parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS),
+        maxTokens:
+          lmConfig.maxTokens ??
+          parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_MAX_TOKENS),
+        temperature:
+          lmConfig.temperature ??
+          parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_TEMPERATURE),
+        topP:
+          lmConfig.topP ??
+          parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_TOP_P),
+        topK:
+          lmConfig.topK ??
+          parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_TOP_K),
+        repeatPenalty:
+          lmConfig.repeatPenalty ??
+          parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_REPEAT_PENALTY),
+        stop: lmConfig.stop,
+      });
     }
     case 'gemini':
       return new GeminiProvider(

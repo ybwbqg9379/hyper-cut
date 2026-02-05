@@ -4,7 +4,32 @@ import type {
   ChatParams,
   ChatResponse,
   ToolCall,
+  LMStudioConfig,
 } from '../types';
+
+export interface LMStudioProviderOptions {
+  url?: string;
+  model?: string;
+  timeoutMs?: number;
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  repeatPenalty?: number;
+  stop?: string[];
+}
+
+const DEFAULT_OPTIONS: Required<Omit<LMStudioProviderOptions, 'stop'>> & { stop?: string[] } = {
+  url: 'http://localhost:1234/v1',
+  model: 'qwen/qwen3-vl-8b',
+  timeoutMs: 120000,
+  maxTokens: 4096,
+  temperature: 0.7,
+  topP: 0.9,
+  topK: 40,
+  repeatPenalty: 1.1,
+  stop: undefined,
+};
 
 /**
  * LM Studio Provider
@@ -13,47 +38,62 @@ import type {
  */
 export class LMStudioProvider implements LLMProvider {
   name = 'lm-studio';
-  private baseUrl: string;
-  private model: string;
-  private readonly requestTimeoutMs: number;
+  private options: typeof DEFAULT_OPTIONS;
 
-  constructor(
-    baseUrl = 'http://localhost:1234/v1',
-    model = 'qwen/qwen3-vl-8b',
-    timeoutMs = 120000
-  ) {
-    this.baseUrl = baseUrl;
-    this.model = model;
-    this.requestTimeoutMs = timeoutMs;
+  constructor(options: LMStudioProviderOptions = {}) {
+    this.options = { ...DEFAULT_OPTIONS, ...options };
+  }
+
+  /** @deprecated Use constructor with options object instead */
+  static fromLegacyParams(
+    baseUrl?: string,
+    model?: string,
+    timeoutMs?: number
+  ): LMStudioProvider {
+    return new LMStudioProvider({
+      url: baseUrl,
+      model: model,
+      timeoutMs: timeoutMs,
+    });
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
     const controller = new AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),
-      this.requestTimeoutMs
+      this.options.timeoutMs
     );
+
+    const requestBody: Record<string, unknown> = {
+      model: this.options.model,
+      messages: params.messages.map((message) =>
+        mapMessageToOpenAIFormat(message)
+      ),
+      tools: params.tools.map((t) => ({
+        type: 'function' as const,
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        },
+      })),
+      max_tokens: this.options.maxTokens,
+      temperature: params.temperature ?? this.options.temperature,
+      top_p: this.options.topP,
+      top_k: this.options.topK,
+      repeat_penalty: this.options.repeatPenalty,
+    };
+
+    if (this.options.stop?.length) {
+      requestBody.stop = this.options.stop;
+    }
 
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/chat/completions`, {
+      response = await fetch(`${this.options.url}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: this.model,
-          messages: params.messages.map((message) =>
-            mapMessageToOpenAIFormat(message)
-          ),
-          tools: params.tools.map((t) => ({
-            type: 'function' as const,
-            function: {
-              name: t.name,
-              description: t.description,
-              parameters: t.parameters,
-            },
-          })),
-          temperature: params.temperature ?? 0.7,
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
     } catch (error) {
@@ -110,7 +150,7 @@ export class LMStudioProvider implements LLMProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/models`, {
+      const res = await fetch(`${this.options.url}/models`, {
         method: 'GET',
         signal: AbortSignal.timeout(3000),
       });

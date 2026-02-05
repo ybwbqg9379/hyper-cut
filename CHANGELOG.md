@@ -44,10 +44,17 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Changed
 
-- **Agent timeout configuration**: Increased default timeouts and made them configurable
-  - LM Studio request timeout: 15s → 120s (configurable via `NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS`)
-  - Tool execution timeout: 30s → 60s (configurable via `NEXT_PUBLIC_AGENT_TOOL_TIMEOUT_MS`)
-  - Added `lmStudioModel` and `lmStudioTimeoutMs` to `AgentConfig` interface
+- **Agent LM Studio configuration**: Full inference parameter support
+  - Configurable via `LMStudioConfig` interface or environment variables
+  - Supported parameters: `maxTokens`, `temperature`, `topP`, `topK`, `repeatPenalty`, `stop`
+  - Increased default timeouts: LLM request 15s → 120s, tool execution 30s → 60s
+  - Environment variables:
+    - `NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS` - Request timeout
+    - `NEXT_PUBLIC_LM_STUDIO_MAX_TOKENS` - Max generation tokens (default: 4096)
+    - `NEXT_PUBLIC_LM_STUDIO_TEMPERATURE` - Sampling temperature (default: 0.7)
+    - `NEXT_PUBLIC_LM_STUDIO_TOP_P` - Nucleus sampling (default: 0.9)
+    - `NEXT_PUBLIC_LM_STUDIO_TOP_K` - Top-K sampling (default: 40)
+    - `NEXT_PUBLIC_LM_STUDIO_REPEAT_PENALTY` - Repetition penalty (default: 1.1)
 
 ### Fixed
 

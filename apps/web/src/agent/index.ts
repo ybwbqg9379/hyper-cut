@@ -16,6 +16,7 @@ export type {
   AgentResponse,
   ProviderType,
   AgentConfig,
+  LMStudioConfig,
   AgentOrchestratorOptions,
 } from './types';
 

@@ -85,10 +85,26 @@ export interface AgentResponse {
 
 export type ProviderType = 'lm-studio' | 'gemini';
 
+export interface LMStudioConfig {
+  url?: string;
+  model?: string;
+  timeoutMs?: number;
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  repeatPenalty?: number;
+  stop?: string[];
+}
+
 export interface AgentConfig {
   provider: ProviderType;
+  lmStudio?: LMStudioConfig;
+  /** @deprecated Use lmStudio.url instead */
   lmStudioUrl?: string;
+  /** @deprecated Use lmStudio.model instead */
   lmStudioModel?: string;
+  /** @deprecated Use lmStudio.timeoutMs instead */
   lmStudioTimeoutMs?: number;
   geminiApiKey?: string;
   systemPrompt?: string;
