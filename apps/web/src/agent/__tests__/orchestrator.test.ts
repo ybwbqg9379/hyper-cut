@@ -401,4 +401,137 @@ describe("AgentOrchestrator", () => {
 		expect(secondResult.requiresConfirmation).toBe(true);
 		expect(provider.chat).toHaveBeenCalledTimes(1);
 	});
+
+	it("should validate required fields when updating plan step arguments", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			content: null,
+			toolCalls: [{ id: "call-1", name: "test_tool", arguments: { value: 1 } }],
+			finishReason: "tool_calls",
+		});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "test_tool",
+					description: "test tool",
+					parameters: {
+						type: "object",
+						properties: {
+							value: { type: "number" },
+						},
+						required: ["value"],
+					},
+					execute: vi.fn().mockResolvedValue({ success: true, message: "ok" }),
+				},
+			],
+			{ planningEnabled: true },
+		);
+
+		await orchestrator.process("do it");
+		const updateResult = orchestrator.updatePendingPlanStep({
+			stepId: "call-1",
+			arguments: {},
+		});
+
+		expect(updateResult.success).toBe(false);
+		expect(updateResult.message).toContain("缺少必填参数");
+	});
+
+	it("should add cancel user marker to history", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [
+					{ id: "call-1", name: "test_tool", arguments: { value: 1 } },
+				],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "ok",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "test_tool",
+					description: "test tool",
+					parameters: {
+						type: "object",
+						properties: {},
+						required: [],
+					},
+					execute: vi.fn().mockResolvedValue({ success: true, message: "ok" }),
+				},
+			],
+			{ planningEnabled: true },
+		);
+
+		await orchestrator.process("first");
+		const cancelResult = orchestrator.cancelPendingPlan();
+		expect(cancelResult.success).toBe(true);
+
+		await orchestrator.process("second");
+		const secondCallArgs = (provider.chat as ReturnType<typeof vi.fn>).mock
+			.calls[1];
+		const messages = secondCallArgs?.[0]?.messages ?? [];
+		expect(
+			messages.some(
+				(message: { role?: string; content?: string }) =>
+					message.role === "user" && message.content === "[取消执行计划]",
+			),
+		).toBe(true);
+	});
+
+	it("should prevent duplicate confirm while a plan is executing", async () => {
+		const provider = buildProvider();
+		let resolveTool:
+			| ((value: { success: boolean; message: string }) => void)
+			| null = null;
+		const toolExecute = vi.fn(
+			() =>
+				new Promise<{ success: boolean; message: string }>((resolve) => {
+					resolveTool = resolve;
+				}),
+		);
+
+		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			content: null,
+			toolCalls: [{ id: "call-1", name: "test_tool", arguments: { value: 1 } }],
+			finishReason: "tool_calls",
+		});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "test_tool",
+					description: "test tool",
+					parameters: {
+						type: "object",
+						properties: {},
+						required: [],
+					},
+					execute: toolExecute,
+				},
+			],
+			{ planningEnabled: true },
+		);
+
+		await orchestrator.process("do it");
+		const firstConfirmPromise = orchestrator.confirmPendingPlan();
+		const secondConfirmResult = await orchestrator.confirmPendingPlan();
+
+		expect(secondConfirmResult.success).toBe(false);
+		expect(secondConfirmResult.message).toContain("计划正在执行中");
+
+		resolveTool?.({ success: true, message: "ok" });
+		const firstConfirmResult = await firstConfirmPromise;
+		expect(firstConfirmResult.success).toBe(true);
+	});
 });

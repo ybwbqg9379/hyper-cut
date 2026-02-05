@@ -124,17 +124,27 @@ export function AgentChatbox() {
 	};
 
 	const handleConfirmPlan = async () => {
+		if (isProcessing) return;
 		const response = await confirmPlan();
 		appendAssistantResponse(response);
 	};
 
 	const handleCancelPlan = () => {
+		if (isProcessing) return;
 		const response = cancelPlan();
 		appendAssistantResponse(response);
 	};
 
 	const handleUpdateStep = (stepId: string) => {
+		if (isProcessing) return;
 		const source = stepDrafts[stepId] ?? "{}";
+		if (source.length > 100000) {
+			setStepErrors((prev) => ({
+				...prev,
+				[stepId]: "参数过大，请将 JSON 控制在 100000 字符以内",
+			}));
+			return;
+		}
 		let nextArguments: Record<string, unknown>;
 		try {
 			const parsed = JSON.parse(source);
@@ -157,6 +167,7 @@ export function AgentChatbox() {
 	};
 
 	const handleRemoveStep = (stepId: string) => {
+		if (isProcessing) return;
 		const response = removePlanStep(stepId);
 		appendAssistantResponse(response);
 	};
@@ -171,6 +182,7 @@ export function AgentChatbox() {
 
 	// Handle clear
 	const handleClear = () => {
+		if (isProcessing) return;
 		setMessages([]);
 		setPendingPlanId(null);
 		setStepDrafts({});
@@ -205,7 +217,7 @@ export function AgentChatbox() {
 						variant="text"
 						size="icon"
 						onClick={handleClear}
-						disabled={messages.length === 0}
+						disabled={messages.length === 0 || isProcessing}
 						title="清空对话"
 					>
 						<Trash2 className="size-4" />
@@ -241,6 +253,7 @@ export function AgentChatbox() {
 							onRemoveStep={handleRemoveStep}
 							onConfirmPlan={handleConfirmPlan}
 							onCancelPlan={handleCancelPlan}
+							controlsDisabled={isProcessing}
 						/>
 					))}
 
@@ -307,6 +320,7 @@ interface MessageBubbleProps {
 	onRemoveStep: (stepId: string) => void;
 	onConfirmPlan: () => void;
 	onCancelPlan: () => void;
+	controlsDisabled: boolean;
 }
 
 /**
@@ -323,6 +337,7 @@ function MessageBubble({
 	onRemoveStep,
 	onConfirmPlan,
 	onCancelPlan,
+	controlsDisabled,
 }: MessageBubbleProps) {
 	const isUser = message.role === "user";
 
@@ -357,6 +372,7 @@ function MessageBubble({
 											size="sm"
 											onClick={() => onRemoveStep(step.id)}
 											className="h-6 px-2 text-xs"
+											disabled={controlsDisabled}
 										>
 											<X className="size-3 mr-1" />
 											移除
@@ -373,6 +389,8 @@ function MessageBubble({
 									}
 									onChange={(e) => onStepDraftChange(step.id, e.target.value)}
 									disabled={!isActivePlan}
+									// Prevent editing while plan execution is in progress.
+									readOnly={controlsDisabled}
 									className={cn(
 										"w-full min-h-[92px] resize-y rounded-md border border-border bg-background px-2 py-1.5",
 										"font-mono text-xs",
@@ -393,6 +411,7 @@ function MessageBubble({
 										size="sm"
 										onClick={() => onUpdateStep(step.id)}
 										className="h-7 px-2 text-xs"
+										disabled={controlsDisabled}
 									>
 										<Pencil className="size-3 mr-1" />
 										更新步骤参数
@@ -407,6 +426,7 @@ function MessageBubble({
 									size="sm"
 									onClick={onConfirmPlan}
 									className="h-7 px-2 text-xs"
+									disabled={controlsDisabled}
 								>
 									<Play className="size-3 mr-1" />
 									确认执行
@@ -416,6 +436,7 @@ function MessageBubble({
 									size="sm"
 									onClick={onCancelPlan}
 									className="h-7 px-2 text-xs"
+									disabled={controlsDisabled}
 								>
 									<Ban className="size-3 mr-1" />
 									取消计划

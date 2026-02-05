@@ -61,6 +61,7 @@ export class AgentOrchestrator {
 	private planningEnabled: boolean;
 	private pendingPlanState: PendingPlanState | null = null;
 	private planSequence = 0;
+	private isExecutingPlan = false;
 
 	constructor(tools: AgentTool[] = [], options: AgentOrchestratorOptions = {}) {
 		const config = options.config;
@@ -249,6 +250,14 @@ export class AgentOrchestrator {
 	 * Process a user message and return the agent's response
 	 */
 	async process(userMessage: string): Promise<AgentResponse> {
+		if (this.planningEnabled && this.isExecutingPlan) {
+			return {
+				message: "计划正在执行中，请稍候。",
+				success: false,
+				status: "error",
+			};
+		}
+
 		if (this.planningEnabled && this.pendingPlanState) {
 			return {
 				message: "当前有待确认的计划，请先确认执行或取消后再发起新请求。",
@@ -398,6 +407,14 @@ export class AgentOrchestrator {
 		stepId: string;
 		arguments: Record<string, unknown>;
 	}): AgentResponse {
+		if (this.isExecutingPlan) {
+			return {
+				message: "计划正在执行中，暂时无法修改步骤。",
+				success: false,
+				status: "error",
+			};
+		}
+
 		if (!this.pendingPlanState) {
 			return {
 				message: "当前没有待确认的计划。",
@@ -415,6 +432,34 @@ export class AgentOrchestrator {
 				success: false,
 				status: "error",
 			};
+		}
+
+		const targetToolCall = this.pendingPlanState.toolCalls.find(
+			(toolCall) => toolCall.id === stepId,
+		);
+		if (!targetToolCall) {
+			return {
+				message: `未找到步骤: ${stepId}`,
+				success: false,
+				status: "error",
+			};
+		}
+
+		const targetTool = this.tools.get(targetToolCall.name);
+		const requiredFields = targetTool?.parameters.required ?? [];
+		for (const requiredField of requiredFields) {
+			const value = nextArguments[requiredField];
+			const missing =
+				value === undefined ||
+				value === null ||
+				(typeof value === "string" && value.trim().length === 0);
+			if (missing) {
+				return {
+					message: `步骤 ${stepId} 缺少必填参数: ${requiredField}`,
+					success: false,
+					status: "error",
+				};
+			}
 		}
 
 		this.pendingPlanState.toolCalls = this.pendingPlanState.toolCalls.map(
@@ -452,6 +497,14 @@ export class AgentOrchestrator {
 	}
 
 	removePendingPlanStep(stepId: string): AgentResponse {
+		if (this.isExecutingPlan) {
+			return {
+				message: "计划正在执行中，暂时无法移除步骤。",
+				success: false,
+				status: "error",
+			};
+		}
+
 		if (!this.pendingPlanState) {
 			return {
 				message: "当前没有待确认的计划。",
@@ -498,6 +551,14 @@ export class AgentOrchestrator {
 	}
 
 	cancelPendingPlan(): AgentResponse {
+		if (this.isExecutingPlan) {
+			return {
+				message: "计划正在执行中，无法取消。",
+				success: false,
+				status: "error",
+			};
+		}
+
 		if (!this.pendingPlanState) {
 			return {
 				message: "当前没有待确认的计划。",
@@ -507,6 +568,10 @@ export class AgentOrchestrator {
 		}
 
 		this.pendingPlanState = null;
+		this.appendHistory({
+			role: "user",
+			content: "[取消执行计划]",
+		});
 		this.appendHistory({
 			role: "assistant",
 			content: "已取消执行计划。",
@@ -519,6 +584,14 @@ export class AgentOrchestrator {
 	}
 
 	async confirmPendingPlan(): Promise<AgentResponse> {
+		if (this.isExecutingPlan) {
+			return {
+				message: "计划正在执行中，请勿重复确认。",
+				success: false,
+				status: "error",
+			};
+		}
+
 		if (!this.pendingPlanState) {
 			return {
 				message: "当前没有待确认的计划。",
@@ -529,46 +602,60 @@ export class AgentOrchestrator {
 
 		const pendingPlan = this.pendingPlanState;
 		this.pendingPlanState = null;
+		this.isExecutingPlan = true;
 
-		this.appendHistory({
-			role: "user",
-			content: "[确认执行计划]",
-		});
-
-		const executedTools: Array<{ name: string; result: ToolResult }> = [];
-		for (const toolCall of pendingPlan.toolCalls) {
-			const result = await this.executeToolCall(toolCall);
-			executedTools.push({ name: toolCall.name, result });
+		try {
 			this.appendHistory({
-				role: "tool",
-				content: JSON.stringify(result),
-				toolCallId: toolCall.id,
-				name: toolCall.name,
+				role: "user",
+				content: "[确认执行计划]",
 			});
+
+			const executedTools: Array<{ name: string; result: ToolResult }> = [];
+			for (const toolCall of pendingPlan.toolCalls) {
+				const result = await this.executeToolCall(toolCall);
+				executedTools.push({ name: toolCall.name, result });
+				this.appendHistory({
+					role: "tool",
+					content: JSON.stringify(result),
+					toolCallId: toolCall.id,
+					name: toolCall.name,
+				});
+			}
+
+			const hasToolFailure = executedTools.some((tool) => !tool.result.success);
+			const message = hasToolFailure
+				? `计划执行完成，但有步骤失败：\n${this.buildToolSummary(executedTools)}`
+				: `计划执行完成：\n${this.buildToolSummary(executedTools)}`;
+
+			this.appendHistory({
+				role: "assistant",
+				content: message,
+			});
+
+			return {
+				message,
+				toolCalls: executedTools,
+				success: !hasToolFailure,
+				status: hasToolFailure ? "error" : "completed",
+			};
+		} catch (error) {
+			return {
+				message: `计划执行失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+				success: false,
+				status: "error",
+			};
+		} finally {
+			this.isExecutingPlan = false;
 		}
-
-		const hasToolFailure = executedTools.some((tool) => !tool.result.success);
-		const message = hasToolFailure
-			? `计划执行完成，但有步骤失败：\n${this.buildToolSummary(executedTools)}`
-			: `计划执行完成：\n${this.buildToolSummary(executedTools)}`;
-
-		this.appendHistory({
-			role: "assistant",
-			content: message,
-		});
-
-		return {
-			message,
-			toolCalls: executedTools,
-			success: !hasToolFailure,
-			status: hasToolFailure ? "error" : "completed",
-		};
 	}
 
 	/**
 	 * Clear conversation history
 	 */
 	clearHistory(): void {
+		if (this.isExecutingPlan) {
+			return;
+		}
 		this.conversationHistory = [];
 		this.pendingPlanState = null;
 	}

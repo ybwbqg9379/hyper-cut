@@ -82,6 +82,8 @@ All notable changes to this project (forked from HyperCut) will be documented in
 - **Agent actions**: Fail fast when action handlers are unavailable to avoid false success
 - **Agent orchestration**: Added multi-step tool-call loop with prompt overrides and safer tool execution handling
 - **Agent orchestration**: Treat tool failures as unsuccessful responses and avoid mixed content/tool-call history
+- **Agent planning robustness**: Added execution lock, cancellation history symmetry, and required-parameter validation for editable plan steps
+- **Agent planning UI safety**: Disabled destructive controls during execution and added JSON payload size guard for step editing
 - **Agent tooling**: Added tool execution timeout guardrail
 - **Clipboard tooling**: Routed `paste_at_time` through action system to avoid direct store coupling
 - **Env examples**: Documented Agent-related environment variables
