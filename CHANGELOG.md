@@ -27,8 +27,15 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Deleted `apps/web/src/app/contributors/`
 - **RSS feed**: Removed blog RSS feed
   - Deleted `apps/web/src/app/rss.xml/`
-
-- **Navigation updates**: Cleaned up header and footer
-  - Removed Blog and Contributors links from `header.tsx`
-  - Removed Blog and Contributors links from `footer.tsx`
-  - Removed blog and contributors entries from `sitemap.ts`
+- **Sponsors page**: Removed sponsors showcase
+  - Deleted `apps/web/src/app/sponsors/`
+- **Roadmap page**: Removed OpenCut roadmap
+  - Deleted `apps/web/src/app/roadmap/`
+- **Legal pages**: Removed (will add custom versions later)
+  - Deleted `apps/web/src/app/privacy/`
+  - Deleted `apps/web/src/app/terms/`
+- **UI cleanup**:
+  - Changed homepage headline from "The open source" to "HyperCut"
+  - Removed GitHub 40k+ star counter button from header
+  - Simplified footer to only show logo + copyright
+  - Removed all navigation links (Blog, Contributors, Sponsors, Roadmap, etc.)

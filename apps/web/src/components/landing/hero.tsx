@@ -18,7 +18,7 @@ export function Hero() {
 			/>
 			<div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center">
 				<div className="inline-block text-4xl font-bold tracking-tighter md:text-[4rem]">
-					<h1>The open source</h1>
+					<h1>HyperCut</h1>
 					<Handlebars>Video editor</Handlebars>
 				</div>
 
