@@ -6,6 +6,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 HyperCut is a privacy-first, open-source video editor for web, desktop, and mobile. It's a monorepo built with Bun, Turbo, Next.js 16, React 19, TypeScript, and Zustand.
 
+## Fork 管理规范
+
+HyperCut fork 自 [OpenCut](https://github.com/OpenCut-app/OpenCut)，需要持续同步上游更新。
+
+### 核心原则
+
+1. **不修改 upstream 核心代码** - 除非绝对必要，禁止直接修改上游文件
+2. **最小侵入集成** - 必须集成时，用 wrapper/decorator 模式，单点注入
+3. **UI/CSS 与 upstream 一致** - 复用上游组件和样式，不引入新设计系统
+
+### 新功能开发流程
+
+```
+✅ 正确做法：
+src/agent/           # 独立目录，完全解耦
+src/components/agent/ # 独立组件
+src/hooks/use-agent.ts # 独立 hook
+
+❌ 错误做法：
+直接修改 src/core/index.ts
+在 upstream 组件中添加条件分支
+```
+
+### 集成模式（参考 Agent 实现）
+
+```typescript
+// 1. 创建 wrapper 组件
+export function EditorLayoutWithAgent() {
+  if (!FEATURE_ENABLED) return <OriginalLayout />;
+  return <LayoutWithFeature />;
+}
+
+// 2. 单点注入（page.tsx 仅改 1 行 import）
+import { EditorLayoutWithAgent } from "@/components/editor/editor-layout-with-agent";
+```
+
+### 我们的解耦目录
+
+| 路径 | 用途 |
+|------|------|
+| `src/agent/` | AI Agent 核心模块 |
+| `src/components/agent/` | Agent UI 组件 |
+| `.agent/workflows/` | 工作流文档 |
+
+### 同步 upstream
+
+详见 `.agent/workflows/upstream-sync.md`
+
 ## Commands
 
 ```bash
