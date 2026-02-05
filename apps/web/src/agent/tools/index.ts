@@ -13,6 +13,7 @@ import { getAssetTools } from "./asset-tools";
 import { getProjectTools } from "./project-tools";
 import { getWorkflowTools } from "./workflow-tools";
 import { getVisionTools } from "./vision-tools";
+import { getHighlightTools } from "./highlight-tools";
 
 // Re-export individual tool getters
 export { getTimelineTools } from "./timeline-tools";
@@ -24,6 +25,7 @@ export { getAssetTools } from "./asset-tools";
 export { getProjectTools } from "./project-tools";
 export { getWorkflowTools } from "./workflow-tools";
 export { getVisionTools } from "./vision-tools";
+export { getHighlightTools } from "./highlight-tools";
 
 /**
  * Get all available agent tools
@@ -38,6 +40,7 @@ export function getAllTools(): AgentTool[] {
 		...getAssetTools(),
 		...getProjectTools(),
 		...getVisionTools(),
+		...getHighlightTools(),
 		...getWorkflowTools(),
 	];
 }
@@ -55,6 +58,7 @@ export function getToolsSummary(): { category: string; count: number }[] {
 		{ category: "Asset", count: getAssetTools().length },
 		{ category: "Project", count: getProjectTools().length },
 		{ category: "Vision", count: getVisionTools().length },
+		{ category: "Highlight", count: getHighlightTools().length },
 		{ category: "Workflow", count: getWorkflowTools().length },
 	];
 }

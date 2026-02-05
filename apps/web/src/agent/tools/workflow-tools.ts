@@ -7,6 +7,7 @@ import { getSceneTools } from "./scene-tools";
 import { getAssetTools } from "./asset-tools";
 import { getProjectTools } from "./project-tools";
 import { getVisionTools } from "./vision-tools";
+import { getHighlightTools } from "./highlight-tools";
 import { listWorkflows, resolveWorkflowFromParams } from "../workflows";
 
 function buildExecutableToolMap(): Map<string, AgentTool> {
@@ -20,6 +21,7 @@ function buildExecutableToolMap(): Map<string, AgentTool> {
 		...getAssetTools(),
 		...getProjectTools(),
 		...getVisionTools(),
+		...getHighlightTools(),
 	];
 
 	for (const tool of tools) {

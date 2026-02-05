@@ -81,6 +81,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 新增 `add_sound_effect`：支持 `soundId` 直加或按搜索结果添加到时间线
   - 新增 `update_sticker_color`：支持更新贴纸 `color`
   - 扩展 `UpdateElementTransformCommand`：支持 sticker 颜色更新并保留 undo/redo 链路
+- **Long-to-Short 工作流（MVP）**：新增长视频转短视频精华链路
+  - 新增工具：`score_highlights`、`validate_highlights_visual`、`generate_highlight_plan`、`apply_highlight_cut`
+  - 新增服务：`transcript-analyzer`（语义分段 + 规则评分）、`highlight-scorer`（语义/视觉综合评分）、`segment-selector`（时长约束选段）
+  - 新增工作流：`long-to-short`（评分 → 视觉验证 → 计划生成 → 应用剪辑）
+  - 新增测试：`transcript-analyzer` / `highlight-scorer` / `segment-selector` / `highlight-tools`
 
 ### Changed
 

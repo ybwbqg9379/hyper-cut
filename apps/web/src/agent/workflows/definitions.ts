@@ -52,4 +52,42 @@ export const WORKFLOWS: Workflow[] = [
 			},
 		],
 	},
+	{
+		name: "long-to-short",
+		description:
+			"将长视频自动剪辑为短视频精华。Auto-cut long video into a short highlight reel.",
+		steps: [
+			{
+				id: "score-highlights",
+				toolName: "score_highlights",
+				arguments: {},
+				summary: "分析转录文本，为每个片段计算高光评分",
+			},
+			{
+				id: "visual-validation",
+				toolName: "validate_highlights_visual",
+				arguments: {
+					topN: 15,
+				},
+				summary: "对候选高光片段做视觉质量验证",
+			},
+			{
+				id: "generate-plan",
+				toolName: "generate_highlight_plan",
+				arguments: {
+					targetDuration: 60,
+				},
+				summary: "生成精华剪辑计划",
+			},
+			{
+				id: "apply-cut",
+				toolName: "apply_highlight_cut",
+				arguments: {
+					addCaptions: true,
+					removeSilence: true,
+				},
+				summary: "应用剪辑计划到时间线",
+			},
+		],
+	},
 ];

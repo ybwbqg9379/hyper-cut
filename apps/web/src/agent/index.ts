@@ -43,6 +43,7 @@ export { getQueryTools } from "./tools/query-tools";
 export { getProjectTools } from "./tools/project-tools";
 export { getVisionTools } from "./tools/vision-tools";
 export { getWorkflowTools } from "./tools/workflow-tools";
+export { getHighlightTools } from "./tools/highlight-tools";
 
 // Workflows
 export {

@@ -975,6 +975,7 @@ describe("Agent Tools Integration", () => {
 			expect(result.success).toBe(true);
 			expect(result.message).toContain("auto-caption-cleanup");
 			expect(result.message).toContain("selection-caption-cleanup");
+			expect(result.message).toContain("long-to-short");
 		});
 
 		it("run_workflow should execute preset steps", async () => {
@@ -1427,7 +1428,8 @@ describe("Agent Tools Integration", () => {
 				count: 2,
 			});
 			expect(
-				(result.data as { candidates: Array<{ iconName: string }> }).candidates[0],
+				(result.data as { candidates: Array<{ iconName: string }> })
+					.candidates[0],
 			).toMatchObject({
 				iconName: "mdi:star",
 			});
@@ -1500,8 +1502,11 @@ describe("Agent Tools Integration", () => {
 				count: 1,
 			});
 			expect(
-				(result.data as { candidates: Array<{ id: number; resultIndex: number }> })
-					.candidates[0],
+				(
+					result.data as {
+						candidates: Array<{ id: number; resultIndex: number }>;
+					}
+				).candidates[0],
 			).toMatchObject({
 				id: 101,
 				resultIndex: 0,
