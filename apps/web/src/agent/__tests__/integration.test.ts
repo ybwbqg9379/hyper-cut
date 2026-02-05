@@ -17,16 +17,14 @@ vi.mock('@/core', () => ({
   EditorCore: {
     getInstance: vi.fn(() => ({
       timeline: {
-        getActiveTimeline: vi.fn(() => ({
-          tracks: [
-            { id: 'track1', elements: [{ id: 'el1' }, { id: 'el2' }] },
-            { id: 'track2', elements: [{ id: 'el3' }] },
-          ],
-        })),
+        getTracks: vi.fn(() => [
+          { id: 'track1', type: 'video', elements: [{ id: 'el1' }, { id: 'el2' }] },
+          { id: 'track2', type: 'audio', elements: [{ id: 'el3' }] },
+        ]),
         getTotalDuration: vi.fn(() => 120000),
       },
       playback: {
-        getCurrentTime: vi.fn(() => 5000),
+        getCurrentTime: vi.fn(() => 5),  // Returns seconds, not milliseconds
       },
       selection: {
         getSelectedElements: vi.fn(() => [{ id: 'el1', type: 'video' }]),
@@ -150,7 +148,7 @@ describe('Agent Tools Integration', () => {
       expect(result.success).toBe(true);
       expect(result.data).toMatchObject({
         trackCount: 2,
-        elementCount: 3,
+        totalElements: 3,
       });
     });
 
@@ -160,7 +158,7 @@ describe('Agent Tools Integration', () => {
       const result = await tool!.execute({});
       expect(result.success).toBe(true);
       expect(result.data).toMatchObject({
-        currentTimeMs: 5000,
+        currentTimeSeconds: 5,
       });
     });
   });
