@@ -104,6 +104,7 @@ All notable changes to this project (forked from HyperCut) will be documented in
 - **Env examples**: Documented Agent-related environment variables
 - **Gemini provider**: Marked unavailable until implementation is complete
 - **Caption metadata stability**: `generate_captions` 与资产面板字幕生成均写入结构化 metadata，不再依赖名称前缀作为唯一判定
+- **自动保存稳定性**: 关闭/删除项目后若延迟保存触发，不再因无 active project 抛出运行时错误
 
 ### Changed
 

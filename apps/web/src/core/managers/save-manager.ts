@@ -53,8 +53,14 @@ export class SaveManager {
 
 	markDirty({ force = false }: { force?: boolean } = {}): void {
 		if (this.isPaused && !force) return;
+		if (!force && !this.editor.project.getActiveOrNull()) return;
 		this.hasPendingSave = true;
 		this.queueSave();
+	}
+
+	discardPending(): void {
+		this.hasPendingSave = false;
+		this.clearTimer();
 	}
 
 	async flush(): Promise<void> {
@@ -80,10 +86,16 @@ export class SaveManager {
 		if (this.isSaving) return;
 		if (!this.hasPendingSave) return;
 
-		const activeProject = this.editor.project.getActive();
-		if (!activeProject) return;
 		if (this.editor.project.getIsLoading()) return;
 		if (this.editor.project.getMigrationState().isMigrating) return;
+		const activeProject = this.editor.project.getActiveOrNull();
+		if (!activeProject) {
+			// Pending save can be left behind by timers when a project was just closed.
+			// Drop it silently because there is no active target to persist.
+			this.hasPendingSave = false;
+			this.clearTimer();
+			return;
+		}
 
 		this.isSaving = true;
 		this.hasPendingSave = false;
