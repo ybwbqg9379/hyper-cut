@@ -83,6 +83,26 @@ const buildTracksState = () => [
 			},
 		],
 	},
+	{
+		id: "track4",
+		type: "sticker",
+		hidden: false,
+		elements: [
+			{
+				id: "sticker1",
+				type: "sticker",
+				name: "star",
+				iconName: "mdi:star",
+				startTime: 1,
+				duration: 4,
+				trimStart: 0,
+				trimEnd: 0,
+				transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+				opacity: 1,
+				color: "#ffffff",
+			},
+		],
+	},
 ];
 
 let tracksState = buildTracksState();
@@ -98,6 +118,44 @@ vi.mock("@/lib/timeline/element-utils", () => ({
 	buildVideoElement: vi.fn(() => ({ type: "video", id: "mock-element" })),
 	buildImageElement: vi.fn(() => ({ type: "image", id: "mock-element" })),
 	buildUploadAudioElement: vi.fn(() => ({ type: "audio", id: "mock-element" })),
+	buildStickerElement: vi.fn(({ iconName }: { iconName: string }) => ({
+		type: "sticker",
+		iconName,
+		name: iconName,
+		duration: 5,
+		startTime: 0,
+		trimStart: 0,
+		trimEnd: 0,
+		transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+		opacity: 1,
+	})),
+	buildLibraryAudioElement: vi.fn(
+		({
+			sourceUrl,
+			name,
+			duration,
+			startTime,
+			buffer,
+		}: {
+			sourceUrl: string;
+			name: string;
+			duration: number;
+			startTime: number;
+			buffer?: AudioBuffer;
+		}) => ({
+			type: "audio",
+			sourceType: "library",
+			sourceUrl,
+			name,
+			duration,
+			startTime,
+			trimStart: 0,
+			trimEnd: 0,
+			volume: 1,
+			muted: false,
+			buffer,
+		}),
+	),
 	buildTextElement: vi.fn(() => ({
 		type: "text",
 		name: "Text",
@@ -122,6 +180,16 @@ vi.mock("@/lib/timeline/element-utils", () => ({
 		(element: { type?: string }) =>
 			element.type === "audio" || element.type === "video",
 	),
+}));
+
+vi.mock("@/lib/iconify-api", () => ({
+	searchIcons: vi.fn(async () => ({
+		icons: ["mdi:star", "mdi:heart"],
+		total: 2,
+		limit: 20,
+		start: 0,
+		collections: {},
+	})),
 }));
 
 // Mock constants
@@ -794,6 +862,32 @@ describe("Agent Tools Integration", () => {
 			expect(result.success).toBe(false);
 		});
 
+		it("update_sticker_color should execute command for sticker updates", async () => {
+			const tool = getToolByName("update_sticker_color");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				command: { execute: ReturnType<typeof vi.fn> };
+			};
+
+			const result = await tool.execute({
+				elementId: "sticker1",
+				trackId: "track4",
+				color: "#ff5500",
+			});
+			expect(result.success).toBe(true);
+			expect(editor.command.execute).toHaveBeenCalled();
+		});
+
+		it("update_sticker_color should fail on non-sticker element", async () => {
+			const tool = getToolByName("update_sticker_color");
+			const result = await tool.execute({
+				elementId: "el1",
+				trackId: "track1",
+				color: "#ff5500",
+			});
+			expect(result.success).toBe(false);
+		});
+
 		it("insert_text should insert a text element", async () => {
 			const tool = getToolByName("insert_text");
 			const { EditorCore } = await import("@/core");
@@ -1017,8 +1111,8 @@ describe("Agent Tools Integration", () => {
 			const result = await tool.execute({});
 			expect(result.success).toBe(true);
 			expect(result.data).toMatchObject({
-				trackCount: 3,
-				totalElements: 4,
+				trackCount: 4,
+				totalElements: 5,
 			});
 		});
 
@@ -1075,8 +1169,8 @@ describe("Agent Tools Integration", () => {
 			const result = await tool.execute({});
 			expect(result.success).toBe(true);
 			expect(result.data).toMatchObject({
-				trackCount: 3,
-				totalElements: 4,
+				trackCount: 4,
+				totalElements: 5,
 			});
 		});
 	});
@@ -1323,6 +1417,280 @@ describe("Agent Tools Integration", () => {
 			expect(result.message).toContain("Incompatible track type");
 		});
 
+		it("search_sticker should return sticker candidates without insertion", async () => {
+			const tool = getToolByName("search_sticker");
+			const result = await tool.execute({ query: "star" });
+
+			expect(result.success).toBe(true);
+			expect(result.data).toMatchObject({
+				query: "star",
+				count: 2,
+			});
+			expect(
+				(result.data as { candidates: Array<{ iconName: string }> }).candidates[0],
+			).toMatchObject({
+				iconName: "mdi:star",
+			});
+		});
+
+		it("search_sticker should fail when query is missing", async () => {
+			const tool = getToolByName("search_sticker");
+			const result = await tool.execute({});
+			expect(result.success).toBe(false);
+		});
+
+		it("add_sticker should search and insert sticker element", async () => {
+			const tool = getToolByName("add_sticker");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: { insertElement: ReturnType<typeof vi.fn> };
+			};
+
+			const result = await tool.execute({ query: "star" });
+			expect(result.success).toBe(true);
+			expect(result.data).toMatchObject({
+				iconName: "mdi:star",
+			});
+			expect(editor.timeline.insertElement).toHaveBeenCalledWith(
+				expect.objectContaining({
+					placement: { mode: "explicit", trackId: "track4" },
+					element: expect.objectContaining({ type: "sticker" }),
+				}),
+			);
+		});
+
+		it("search_sound_effect should return sound candidates without insertion", async () => {
+			const tool = getToolByName("search_sound_effect");
+			const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+			fetchMock.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => ({
+					count: 1,
+					results: [
+						{
+							id: 101,
+							name: "Whoosh",
+							description: "",
+							url: "https://freesound.org/s/101",
+							previewUrl: "https://cdn.freesound.org/previews/101.mp3",
+							duration: 2.4,
+							filesize: 1234,
+							type: "mp3",
+							channels: 2,
+							bitrate: 128,
+							bitdepth: 16,
+							samplerate: 44100,
+							username: "tester",
+							tags: ["whoosh"],
+							license: "cc0",
+							created: "2025-01-01",
+							downloads: 10,
+							rating: 4.5,
+							ratingCount: 8,
+						},
+					],
+				}),
+			});
+
+			const result = await tool.execute({ query: "whoosh" });
+			expect(result.success).toBe(true);
+			expect(result.data).toMatchObject({
+				query: "whoosh",
+				count: 1,
+			});
+			expect(
+				(result.data as { candidates: Array<{ id: number; resultIndex: number }> })
+					.candidates[0],
+			).toMatchObject({
+				id: 101,
+				resultIndex: 0,
+			});
+		});
+
+		it("search_sound_effect should fail when query is missing", async () => {
+			const tool = getToolByName("search_sound_effect");
+			const result = await tool.execute({});
+			expect(result.success).toBe(false);
+		});
+
+		it("add_sound_effect should search and insert audio element", async () => {
+			const tool = getToolByName("add_sound_effect");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: { insertElement: ReturnType<typeof vi.fn> };
+			};
+			const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+			fetchMock
+				.mockResolvedValueOnce({
+					ok: true,
+					status: 200,
+					json: async () => ({
+						count: 1,
+						results: [
+							{
+								id: 101,
+								name: "Whoosh",
+								description: "",
+								url: "https://freesound.org/s/101",
+								previewUrl: "https://cdn.freesound.org/previews/101.mp3",
+								duration: 2.4,
+								filesize: 1234,
+								type: "mp3",
+								channels: 2,
+								bitrate: 128,
+								bitdepth: 16,
+								samplerate: 44100,
+								username: "tester",
+								tags: ["whoosh"],
+								license: "cc0",
+								created: "2025-01-01",
+								downloads: 10,
+								rating: 4.5,
+								ratingCount: 8,
+							},
+						],
+					}),
+				})
+				.mockResolvedValueOnce({
+					ok: true,
+					status: 200,
+					arrayBuffer: async () => new ArrayBuffer(16),
+				});
+			class MockAudioContext {
+				decodeAudioData = vi.fn(async () => ({ sampleRate: 44100 }));
+				close = vi.fn(async () => {});
+			}
+			vi.stubGlobal("AudioContext", MockAudioContext);
+
+			const result = await tool.execute({ query: "whoosh" });
+			expect(result.success).toBe(true);
+			expect(result.data).toMatchObject({
+				soundId: 101,
+				soundName: "Whoosh",
+			});
+			expect(editor.timeline.insertElement).toHaveBeenCalledWith(
+				expect.objectContaining({
+					placement: { mode: "explicit", trackId: "track2" },
+					element: expect.objectContaining({
+						type: "audio",
+						sourceType: "library",
+					}),
+				}),
+			);
+		});
+
+		it("add_sound_effect should insert audio by soundId", async () => {
+			const tool = getToolByName("add_sound_effect");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: { insertElement: ReturnType<typeof vi.fn> };
+			};
+			const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+			fetchMock
+				.mockResolvedValueOnce({
+					ok: true,
+					status: 200,
+					json: async () => ({
+						result: {
+							id: 202,
+							name: "Impact",
+							description: "",
+							url: "https://freesound.org/s/202",
+							previewUrl: "https://cdn.freesound.org/previews/202.mp3",
+							duration: 1.8,
+							filesize: 1234,
+							type: "mp3",
+							channels: 2,
+							bitrate: 128,
+							bitdepth: 16,
+							samplerate: 44100,
+							username: "tester",
+							tags: ["impact"],
+							license: "cc0",
+							created: "2025-01-01",
+							downloads: 10,
+							rating: 4.5,
+							ratingCount: 8,
+						},
+					}),
+				})
+				.mockResolvedValueOnce({
+					ok: true,
+					status: 200,
+					arrayBuffer: async () => new ArrayBuffer(16),
+				});
+			class MockAudioContext {
+				decodeAudioData = vi.fn(async () => ({ sampleRate: 44100 }));
+				close = vi.fn(async () => {});
+			}
+			vi.stubGlobal("AudioContext", MockAudioContext);
+
+			const result = await tool.execute({ soundId: 202 });
+			expect(result.success).toBe(true);
+			expect(result.data).toMatchObject({
+				source: "soundId",
+				soundId: 202,
+				soundName: "Impact",
+			});
+			expect(editor.timeline.insertElement).toHaveBeenCalledWith(
+				expect.objectContaining({
+					placement: { mode: "explicit", trackId: "track2" },
+					element: expect.objectContaining({
+						type: "audio",
+						sourceType: "library",
+					}),
+				}),
+			);
+		});
+
+		it("add_sound_effect should fail when result index is out of range", async () => {
+			const tool = getToolByName("add_sound_effect");
+			const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+			fetchMock.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => ({
+					count: 1,
+					results: [
+						{
+							id: 101,
+							name: "Whoosh",
+							description: "",
+							url: "https://freesound.org/s/101",
+							previewUrl: "https://cdn.freesound.org/previews/101.mp3",
+							duration: 2.4,
+							filesize: 1234,
+							type: "mp3",
+							channels: 2,
+							bitrate: 128,
+							bitdepth: 16,
+							samplerate: 44100,
+							username: "tester",
+							tags: ["whoosh"],
+							license: "cc0",
+							created: "2025-01-01",
+							downloads: 10,
+							rating: 4.5,
+							ratingCount: 8,
+						},
+					],
+				}),
+			});
+
+			const result = await tool.execute({
+				query: "whoosh",
+				resultIndex: 5,
+			});
+			expect(result.success).toBe(false);
+		});
+
+		it("add_sound_effect should fail when soundId and query are both missing", async () => {
+			const tool = getToolByName("add_sound_effect");
+			const result = await tool.execute({});
+			expect(result.success).toBe(false);
+		});
+
 		it("add_media_asset should add asset from url", async () => {
 			const tool = getToolByName("add_media_asset");
 			const result = await tool.execute({
@@ -1500,6 +1868,7 @@ describe("Agent Tools Integration", () => {
 					{ trackId: "track1", elementId: "el2" },
 					{ trackId: "track2", elementId: "el3" },
 					{ trackId: "track3", elementId: "text1" },
+					{ trackId: "track4", elementId: "sticker1" },
 				],
 				splitTime: 30,
 			});

@@ -1945,6 +1945,120 @@ export const updateElementTransformTool: AgentTool = {
 };
 
 /**
+ * Update Sticker Color
+ * Updates the color field of a sticker element
+ */
+export const updateStickerColorTool: AgentTool = {
+  name: 'update_sticker_color',
+  description: '更新贴纸颜色。Update sticker color.',
+  parameters: {
+    type: 'object',
+    properties: {
+      elementId: {
+        type: 'string',
+        description: '贴纸元素ID（可选，默认当前选中）(Sticker element ID, defaults to selected)',
+      },
+      trackId: {
+        type: 'string',
+        description: '轨道ID（可选）(Optional track ID)',
+      },
+      color: {
+        type: 'string',
+        description: '贴纸颜色字符串，例如 #ff0000 或 rgb(...) (Sticker color)',
+      },
+    },
+    required: ['color'],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const tracks = editor.timeline.getTracks();
+      const elementIdParam = isNonEmptyString(params.elementId) ? params.elementId.trim() : '';
+      const trackIdParam = isNonEmptyString(params.trackId) ? params.trackId.trim() : '';
+      const color = isNonEmptyString(params.color) ? params.color.trim() : '';
+
+      if (!color) {
+        return {
+          success: false,
+          message: 'color 必须是非空字符串 (color must be a non-empty string)',
+          data: { errorCode: 'INVALID_COLOR' },
+        };
+      }
+
+      let resolved = null as null | { track: TimelineTrack; element: TimelineElement };
+      if (elementIdParam) {
+        resolved = resolveElementById({
+          tracks,
+          elementId: elementIdParam,
+          trackId: trackIdParam || undefined,
+        });
+      } else {
+        const selected = editor.selection.getSelectedElements();
+        if (selected.length === 0) {
+          return {
+            success: false,
+            message: '没有选中任何元素 (No element selected)',
+            data: { errorCode: 'NO_SELECTION' },
+          };
+        }
+        if (selected.length > 1) {
+          return {
+            success: false,
+            message: '一次只能更新一个元素 (Select a single element)',
+            data: { errorCode: 'MULTIPLE_SELECTIONS' },
+          };
+        }
+        const [selection] = selected;
+        resolved = resolveElementById({
+          tracks,
+          elementId: selection.elementId,
+          trackId: selection.trackId,
+        });
+      }
+
+      if (!resolved) {
+        return {
+          success: false,
+          message: '未找到元素 (Element not found)',
+          data: { errorCode: 'ELEMENT_NOT_FOUND' },
+        };
+      }
+
+      if (resolved.element.type !== 'sticker') {
+        return {
+          success: false,
+          message: '该元素不是贴纸 (Element is not a sticker)',
+          data: { errorCode: 'UNSUPPORTED_ELEMENT' },
+        };
+      }
+
+      const command = new UpdateElementTransformCommand(
+        resolved.track.id,
+        resolved.element.id,
+        { color },
+      );
+      editor.command.execute({ command });
+
+      return {
+        success: true,
+        message: '已更新贴纸颜色 (Sticker color updated)',
+        data: {
+          trackId: resolved.track.id,
+          elementId: resolved.element.id,
+          color,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `更新贴纸颜色失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'UPDATE_STICKER_COLOR_FAILED' },
+      };
+    }
+  },
+};
+
+/**
  * Remove Silence
  * Detects silence intervals and removes corresponding segments
  */
@@ -2540,6 +2654,7 @@ export function getTimelineTools(): AgentTool[] {
     trimElementTool,
     resizeElementTool,
     updateElementTransformTool,
+    updateStickerColorTool,
     removeSilenceTool,
     insertTextTool,
   ];

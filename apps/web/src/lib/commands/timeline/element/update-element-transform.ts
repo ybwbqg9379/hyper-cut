@@ -8,7 +8,7 @@ export class UpdateElementTransformCommand extends Command {
 	constructor(
 		private trackId: string,
 		private elementId: string,
-		private updates: { transform?: Transform; opacity?: number },
+		private updates: { transform?: Transform; opacity?: number; color?: string },
 	) {
 		super();
 	}
@@ -34,6 +34,9 @@ export class UpdateElementTransformCommand extends Command {
 						: {}),
 					...(this.updates.opacity !== undefined
 						? { opacity: this.updates.opacity }
+						: {}),
+					...(element.type === "sticker" && this.updates.color !== undefined
+						? { color: this.updates.color }
 						: {}),
 				};
 			});

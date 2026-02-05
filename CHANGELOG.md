@@ -74,6 +74,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `analyze_frames` / `suggest_edits` 已接入 word-level 上下文窗口，优先使用词级时间戳拼接转录文本
   - 支持场景检测结果缓存与帧分析缓存，`analyze_frames` 可复用 `detect_scenes` 的关键帧
   - `run_workflow` 执行映射已接入 Vision 工具类别
+- **Agent 资产与贴纸能力补齐（Upstream 对齐）**
+  - 新增 `search_sticker`：仅搜索 Iconify 贴纸候选，不直接插入
+  - 新增 `add_sticker`：支持 Iconify 搜索并将贴纸插入时间线
+  - 新增 `search_sound_effect`：仅搜索 Freesound 音效候选，不直接插入
+  - 新增 `add_sound_effect`：支持 `soundId` 直加或按搜索结果添加到时间线
+  - 新增 `update_sticker_color`：支持更新贴纸 `color`
+  - 扩展 `UpdateElementTransformCommand`：支持 sticker 颜色更新并保留 undo/redo 链路
 
 ### Changed
 

@@ -27,6 +27,7 @@ Available capabilities:
 - Selection control: select/clear specific elements
 - Project: update/save project settings, export the project to video, get project info
 - Assets: add/remove media assets, paste at specific time
+- Sticker/SFX: search and add stickers or sound effects, update sticker color
 - Query information: get timeline info, current position, selected elements
 - Vision understanding: detect scenes, analyze frames, suggest edit points
 - Workflow automation: run predefined workflows for multi-step edits

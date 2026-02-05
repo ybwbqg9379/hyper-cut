@@ -1,21 +1,30 @@
 import type { AgentTool, ToolResult } from '../types';
 import type { CreateTimelineElement } from '@/types/timeline';
+import type { SoundEffect } from '@/types/sounds';
 import { EditorCore } from '@/core';
 import {
   buildVideoElement,
   buildImageElement,
   buildUploadAudioElement,
+  buildStickerElement,
+  buildLibraryAudioElement,
 } from '@/lib/timeline/element-utils';
 import { canElementGoOnTrack } from '@/lib/timeline/track-utils';
 import { TIMELINE_CONSTANTS } from '@/constants/timeline-constants';
 import { processMediaAssets } from '@/lib/media/processing';
+import { searchIcons } from '@/lib/iconify-api';
 
 const MEDIA_TYPES = ['image', 'video', 'audio'] as const;
 const FETCH_TIMEOUT_MS = 20000;
 const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
+const SOUND_SEARCH_PAGE_SIZE = 20;
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 /**
@@ -224,6 +233,624 @@ export const addAssetToTimelineTool: AgentTool = {
       return {
         success: false,
         message: `添加素材失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+  },
+};
+
+/**
+ * Add Sticker
+ * Searches Iconify and inserts a sticker element into the timeline
+ */
+export const searchStickerTool: AgentTool = {
+  name: 'search_sticker',
+  description:
+    '仅搜索贴纸，不插入时间线。返回候选 iconName 列表供后续确认。Search Iconify stickers without adding to timeline.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: '贴纸搜索关键词 (Sticker search query)',
+      },
+      limit: {
+        type: 'number',
+        description: '返回数量，1-100，默认 20 (Result limit)',
+      },
+      prefixes: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '可选图标前缀过滤，如 ["mdi","tabler"] (Optional Iconify prefixes)',
+      },
+    },
+    required: ['query'],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const query = isNonEmptyString(params.query) ? params.query.trim() : '';
+      if (!query) {
+        return {
+          success: false,
+          message: '缺少 query 参数 (Missing query)',
+          data: { errorCode: 'INVALID_PARAMS' },
+        };
+      }
+
+      const limitValue = params.limit === undefined ? 20 : Number(params.limit);
+      if (!Number.isInteger(limitValue) || limitValue < 1 || limitValue > 100) {
+        return {
+          success: false,
+          message: 'limit 必须是 1-100 的整数 (limit must be an integer between 1 and 100)',
+          data: { errorCode: 'INVALID_LIMIT' },
+        };
+      }
+
+      const prefixes = Array.isArray(params.prefixes)
+        ? params.prefixes
+            .map((value) => (typeof value === 'string' ? value.trim() : ''))
+            .filter(Boolean)
+        : undefined;
+
+      const result = await searchIcons(query, limitValue, prefixes);
+      const candidates = result.icons.map((iconName) => {
+        const [prefix, name] = iconName.split(':');
+        return {
+          iconName,
+          prefix,
+          name,
+          collectionName: prefix ? result.collections[prefix]?.name : undefined,
+        };
+      });
+
+      return {
+        success: true,
+        message:
+          candidates.length > 0
+            ? `找到 ${candidates.length} 个贴纸候选（总计 ${result.total}）(Found sticker candidates)`
+            : `未找到与 "${query}" 相关的贴纸 (No sticker found for query)`,
+        data: {
+          query,
+          count: candidates.length,
+          total: result.total,
+          limit: result.limit,
+          start: result.start,
+          candidates,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `搜索贴纸失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'SEARCH_STICKER_FAILED' },
+      };
+    }
+  },
+};
+
+/**
+ * Add Sticker
+ * Searches Iconify and inserts a sticker element into the timeline
+ */
+export const addStickerTool: AgentTool = {
+  name: 'add_sticker',
+  description:
+    '搜索并添加贴纸到时间线。可传 iconName 直接添加，或传 query 自动选取首个结果。Search Iconify and add a sticker to timeline.',
+  parameters: {
+    type: 'object',
+    properties: {
+      iconName: {
+        type: 'string',
+        description: 'Iconify 图标名，例如 mdi:star (Optional explicit icon name)',
+      },
+      query: {
+        type: 'string',
+        description: '搜索关键词（未提供 iconName 时必填）(Search query if iconName is not provided)',
+      },
+      startTime: {
+        type: 'number',
+        description: '开始时间（秒），默认为当前播放头位置 (Start time in seconds)',
+      },
+      trackId: {
+        type: 'string',
+        description: '目标贴纸轨道ID（可选）(Optional sticker track ID)',
+      },
+      color: {
+        type: 'string',
+        description: '贴纸颜色（可选）(Optional sticker color)',
+      },
+    },
+    required: [],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const explicitIconName = isNonEmptyString(params.iconName)
+        ? params.iconName.trim()
+        : '';
+      const query = isNonEmptyString(params.query) ? params.query.trim() : '';
+
+      if (!explicitIconName && !query) {
+        return {
+          success: false,
+          message: '请提供 iconName 或 query (Missing iconName/query)',
+          data: { errorCode: 'INVALID_PARAMS' },
+        };
+      }
+
+      let iconName = explicitIconName;
+      let matchCount = 0;
+      if (!iconName) {
+        const searchResult = await searchIcons(query, 20);
+        if (searchResult.icons.length === 0) {
+          return {
+            success: false,
+            message: `未找到与 "${query}" 相关的贴纸 (No sticker found for query)`,
+            data: { errorCode: 'STICKER_NOT_FOUND', query },
+          };
+        }
+        iconName = searchResult.icons[0];
+        matchCount = searchResult.total;
+      }
+
+      const startTime =
+        typeof params.startTime === 'number'
+          ? params.startTime
+          : editor.playback.getCurrentTime();
+      if (!isFiniteNumber(startTime) || startTime < 0) {
+        return {
+          success: false,
+          message: '无效的开始时间 (Invalid start time)',
+          data: { errorCode: 'INVALID_START_TIME' },
+        };
+      }
+
+      const requestedTrackId =
+        typeof params.trackId === 'string' ? params.trackId.trim() : '';
+      let trackId = requestedTrackId;
+      if (requestedTrackId) {
+        const track = editor.timeline.getTrackById({ trackId: requestedTrackId });
+        if (!track) {
+          return {
+            success: false,
+            message: `找不到轨道: ${requestedTrackId} (Track not found)`,
+            data: { errorCode: 'TRACK_NOT_FOUND', trackId: requestedTrackId },
+          };
+        }
+
+        if (!canElementGoOnTrack({ elementType: 'sticker', trackType: track.type })) {
+          return {
+            success: false,
+            message: `目标轨道不是贴纸轨道: ${requestedTrackId} (Track is not sticker-compatible)`,
+            data: { errorCode: 'INCOMPATIBLE_TRACK', trackId: requestedTrackId },
+          };
+        }
+      } else {
+        const existingStickerTrack = editor.timeline
+          .getTracks()
+          .find((track) => track.type === 'sticker');
+        trackId = existingStickerTrack
+          ? existingStickerTrack.id
+          : editor.timeline.addTrack({ type: 'sticker' });
+      }
+
+      const element = buildStickerElement({
+        iconName,
+        startTime,
+      });
+
+      const color = isNonEmptyString(params.color) ? params.color.trim() : '';
+      if (color) {
+        element.color = color;
+      }
+
+      editor.timeline.insertElement({
+        placement: { mode: 'explicit', trackId },
+        element,
+      });
+
+      return {
+        success: true,
+        message: `已添加贴纸 "${iconName}" 到 ${startTime.toFixed(2)} 秒 (Sticker added)`,
+        data: {
+          iconName,
+          query: query || undefined,
+          matchCount: query ? matchCount : undefined,
+          startTime,
+          trackId,
+          color: color || undefined,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `添加贴纸失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'ADD_STICKER_FAILED' },
+      };
+    }
+  },
+};
+
+/**
+ * Add Sound Effect
+ * Searches Freesound and inserts the chosen sound effect into the timeline
+ */
+export const searchSoundEffectTool: AgentTool = {
+  name: 'search_sound_effect',
+  description:
+    '仅搜索音效，不插入时间线。返回候选与 resultIndex 供后续 add_sound_effect 确认。Search Freesound effects without adding to timeline.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: '音效搜索关键词 (Sound effect search query)',
+      },
+      commercialOnly: {
+        type: 'boolean',
+        description: '仅商业可用许可（默认 true）(Commercial-use only)',
+      },
+      minRating: {
+        type: 'number',
+        description: '最低评分 0-5（默认 3）(Minimum rating)',
+      },
+    },
+    required: ['query'],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const query = isNonEmptyString(params.query) ? params.query.trim() : '';
+      if (!query) {
+        return {
+          success: false,
+          message: '缺少 query 参数 (Missing query)',
+          data: { errorCode: 'INVALID_PARAMS' },
+        };
+      }
+
+      const commercialOnly =
+        typeof params.commercialOnly === 'boolean' ? params.commercialOnly : true;
+      const minRating =
+        typeof params.minRating === 'number' && Number.isFinite(params.minRating)
+          ? params.minRating
+          : 3;
+      if (minRating < 0 || minRating > 5) {
+        return {
+          success: false,
+          message: 'minRating 必须在 0-5 之间 (minRating must be between 0 and 5)',
+          data: { errorCode: 'INVALID_MIN_RATING' },
+        };
+      }
+
+      const searchParams = new URLSearchParams({
+        q: query,
+        type: 'effects',
+        page: '1',
+        page_size: SOUND_SEARCH_PAGE_SIZE.toString(),
+        commercial_only: commercialOnly ? 'true' : 'false',
+        min_rating: minRating.toString(),
+      });
+
+      const response = await fetch(`/api/sounds/search?${searchParams.toString()}`);
+      if (!response.ok) {
+        return {
+          success: false,
+          message: `搜索音效失败: ${response.status} (Sound search failed)`,
+          data: { errorCode: 'SOUND_SEARCH_FAILED', status: response.status },
+        };
+      }
+
+      const payload = (await response.json()) as {
+        results?: SoundEffect[];
+        count?: number;
+      };
+      const results = Array.isArray(payload.results) ? payload.results : [];
+      const candidates = results.map((sound, index) => ({
+        resultIndex: index,
+        id: sound.id,
+        name: sound.name,
+        duration: sound.duration,
+        previewUrl: sound.previewUrl,
+        username: sound.username,
+        license: sound.license,
+        rating: sound.rating,
+        downloads: sound.downloads,
+        tags: sound.tags.slice(0, 8),
+      }));
+
+      return {
+        success: true,
+        message:
+          candidates.length > 0
+            ? `找到 ${candidates.length} 个音效候选（总计 ${payload.count ?? candidates.length}）(Found sound effect candidates)`
+            : `未找到与 "${query}" 相关的音效 (No sound effects found)`,
+        data: {
+          query,
+          count: candidates.length,
+          total: payload.count ?? candidates.length,
+          pageSize: SOUND_SEARCH_PAGE_SIZE,
+          candidates,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `搜索音效失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'SEARCH_SOUND_EFFECT_FAILED' },
+      };
+    }
+  },
+};
+
+/**
+ * Add Sound Effect
+ * Searches Freesound and inserts the chosen sound effect into the timeline
+ */
+export const addSoundEffectTool: AgentTool = {
+  name: 'add_sound_effect',
+  description:
+    '添加 Freesound 音效到时间线。可用 soundId 直接添加，或 query + resultIndex 选择结果。Add a Freesound effect by soundId or query.',
+  parameters: {
+    type: 'object',
+    properties: {
+      soundId: {
+        type: 'number',
+        description: '音效 ID（优先）(Sound ID, preferred)',
+      },
+      query: {
+        type: 'string',
+        description: '音效搜索关键词（未提供 soundId 时使用）(Query when soundId is not provided)',
+      },
+      resultIndex: {
+        type: 'number',
+        description: '选择第几个搜索结果（从 0 开始，默认 0，仅 query 模式）(Result index for query mode)',
+      },
+      startTime: {
+        type: 'number',
+        description: '开始时间（秒），默认为当前播放头位置 (Start time in seconds)',
+      },
+      trackId: {
+        type: 'string',
+        description: '目标音频轨道ID（可选）(Optional target audio track ID)',
+      },
+      commercialOnly: {
+        type: 'boolean',
+        description: '仅商业可用许可（默认 true）(Commercial-use only)',
+      },
+      minRating: {
+        type: 'number',
+        description: '最低评分 0-5（默认 3）(Minimum rating)',
+      },
+    },
+    required: [],
+  },
+  execute: async (params): Promise<ToolResult> => {
+    try {
+      const editor = EditorCore.getInstance();
+      const soundId =
+        params.soundId === undefined ? undefined : Number(params.soundId);
+      const hasSoundId =
+        soundId !== undefined && Number.isInteger(soundId) && soundId > 0;
+      const query = isNonEmptyString(params.query) ? params.query.trim() : '';
+      const hasQuery = query.length > 0;
+
+      if (!hasSoundId && !hasQuery) {
+        return {
+          success: false,
+          message: '请提供 soundId 或 query (Missing soundId/query)',
+          data: { errorCode: 'INVALID_PARAMS' },
+        };
+      }
+      if (soundId !== undefined && !hasSoundId) {
+        return {
+          success: false,
+          message: 'soundId 必须是正整数 (soundId must be a positive integer)',
+          data: { errorCode: 'INVALID_SOUND_ID' },
+        };
+      }
+
+      const resultIndex =
+        params.resultIndex === undefined ? 0 : Number(params.resultIndex);
+      if (!Number.isInteger(resultIndex) || resultIndex < 0) {
+        return {
+          success: false,
+          message: 'resultIndex 必须是非负整数 (resultIndex must be a non-negative integer)',
+          data: { errorCode: 'INVALID_RESULT_INDEX' },
+        };
+      }
+
+      const commercialOnly =
+        typeof params.commercialOnly === 'boolean' ? params.commercialOnly : true;
+      const minRating =
+        typeof params.minRating === 'number' && Number.isFinite(params.minRating)
+          ? params.minRating
+          : 3;
+      if (minRating < 0 || minRating > 5) {
+        return {
+          success: false,
+          message: 'minRating 必须在 0-5 之间 (minRating must be between 0 and 5)',
+          data: { errorCode: 'INVALID_MIN_RATING' },
+        };
+      }
+
+      let sound: SoundEffect | null = null;
+      let totalMatches: number | undefined;
+      if (hasSoundId) {
+        const detailResponse = await fetch(`/api/sounds/${soundId}`);
+        if (!detailResponse.ok) {
+          return {
+            success: false,
+            message: `获取音效详情失败: ${detailResponse.status} (Failed to fetch sound by ID)`,
+            data: { errorCode: 'SOUND_DETAIL_FAILED', status: detailResponse.status, soundId },
+          };
+        }
+        const payload = (await detailResponse.json()) as { result?: SoundEffect };
+        sound = payload.result ?? null;
+        totalMatches = sound ? 1 : 0;
+      } else {
+        const searchParams = new URLSearchParams({
+          q: query,
+          type: 'effects',
+          page: '1',
+          page_size: SOUND_SEARCH_PAGE_SIZE.toString(),
+          commercial_only: commercialOnly ? 'true' : 'false',
+          min_rating: minRating.toString(),
+        });
+
+        const searchResponse = await fetch(`/api/sounds/search?${searchParams.toString()}`);
+        if (!searchResponse.ok) {
+          return {
+            success: false,
+            message: `搜索音效失败: ${searchResponse.status} (Sound search failed)`,
+            data: { errorCode: 'SOUND_SEARCH_FAILED', status: searchResponse.status },
+          };
+        }
+
+        const payload = (await searchResponse.json()) as {
+          results?: SoundEffect[];
+          count?: number;
+        };
+        const results = Array.isArray(payload.results) ? payload.results : [];
+        if (results.length === 0) {
+          return {
+            success: false,
+            message: `未找到与 "${query}" 相关的音效 (No sound effects found)`,
+            data: { errorCode: 'SOUND_NOT_FOUND', query },
+          };
+        }
+
+        if (resultIndex >= results.length) {
+          return {
+            success: false,
+            message: `resultIndex 超出范围，当前仅 ${results.length} 条结果 (resultIndex out of range)`,
+            data: { errorCode: 'RESULT_INDEX_OUT_OF_RANGE', resultCount: results.length },
+          };
+        }
+
+        sound = results[resultIndex] ?? null;
+        totalMatches = payload.count;
+      }
+
+      if (!sound) {
+        return {
+          success: false,
+          message: '未找到目标音效 (Target sound not found)',
+          data: { errorCode: 'SOUND_NOT_FOUND', soundId, query: hasQuery ? query : undefined },
+        };
+      }
+      const previewUrl = isNonEmptyString(sound.previewUrl) ? sound.previewUrl.trim() : '';
+      if (!previewUrl) {
+        return {
+          success: false,
+          message: `选中的音效没有可用预览地址: ${sound.name} (No preview URL available)`,
+          data: { errorCode: 'SOUND_PREVIEW_UNAVAILABLE', soundId: sound.id },
+        };
+      }
+
+      const startTime =
+        typeof params.startTime === 'number'
+          ? params.startTime
+          : editor.playback.getCurrentTime();
+      if (!isFiniteNumber(startTime) || startTime < 0) {
+        return {
+          success: false,
+          message: '无效的开始时间 (Invalid start time)',
+          data: { errorCode: 'INVALID_START_TIME' },
+        };
+      }
+
+      const audioResponse = await fetch(previewUrl);
+      if (!audioResponse.ok) {
+        return {
+          success: false,
+          message: `下载音效失败: ${audioResponse.status} (Failed to download sound preview)`,
+          data: { errorCode: 'SOUND_DOWNLOAD_FAILED', status: audioResponse.status },
+        };
+      }
+
+      const arrayBuffer = await audioResponse.arrayBuffer();
+      let buffer: AudioBuffer | undefined;
+      if (typeof AudioContext !== 'undefined') {
+        const audioContext = new AudioContext();
+        try {
+          buffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+        } catch {
+          buffer = undefined;
+        } finally {
+          if (typeof audioContext.close === 'function') {
+            await audioContext.close();
+          }
+        }
+      }
+
+      const requestedTrackId =
+        typeof params.trackId === 'string' ? params.trackId.trim() : '';
+      let trackId = requestedTrackId;
+      if (requestedTrackId) {
+        const track = editor.timeline.getTrackById({ trackId: requestedTrackId });
+        if (!track) {
+          return {
+            success: false,
+            message: `找不到轨道: ${requestedTrackId} (Track not found)`,
+            data: { errorCode: 'TRACK_NOT_FOUND', trackId: requestedTrackId },
+          };
+        }
+
+        if (!canElementGoOnTrack({ elementType: 'audio', trackType: track.type })) {
+          return {
+            success: false,
+            message: `目标轨道不是音频轨道: ${requestedTrackId} (Track is not audio-compatible)`,
+            data: { errorCode: 'INCOMPATIBLE_TRACK', trackId: requestedTrackId },
+          };
+        }
+      } else {
+        const existingAudioTrack = editor.timeline
+          .getTracks()
+          .find((track) => track.type === 'audio');
+        trackId = existingAudioTrack
+          ? existingAudioTrack.id
+          : editor.timeline.addTrack({ type: 'audio' });
+      }
+
+      const duration =
+        typeof sound.duration === 'number' && Number.isFinite(sound.duration) && sound.duration > 0
+          ? sound.duration
+          : TIMELINE_CONSTANTS.DEFAULT_ELEMENT_DURATION;
+
+      const element = buildLibraryAudioElement({
+        sourceUrl: previewUrl,
+        name: sound.name,
+        duration,
+        startTime,
+        buffer,
+      });
+
+      editor.timeline.insertElement({
+        placement: { mode: 'explicit', trackId },
+        element,
+      });
+
+      return {
+        success: true,
+        message: `已添加音效 "${sound.name}" 到 ${startTime.toFixed(2)} 秒 (Sound effect added)`,
+        data: {
+          source: hasSoundId ? 'soundId' : 'query',
+          soundIdInput: hasSoundId ? soundId : undefined,
+          query: hasQuery ? query : undefined,
+          resultIndex: hasSoundId ? undefined : resultIndex,
+          totalMatches,
+          soundId: sound.id,
+          soundName: sound.name,
+          duration,
+          previewUrl,
+          startTime,
+          trackId,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `添加音效失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        data: { errorCode: 'ADD_SOUND_EFFECT_FAILED' },
       };
     }
   },
@@ -500,6 +1127,10 @@ export function getAssetTools(): AgentTool[] {
   return [
     listAssetsTool,
     addAssetToTimelineTool,
+    searchStickerTool,
+    addStickerTool,
+    searchSoundEffectTool,
+    addSoundEffectTool,
     addMediaAssetTool,
     removeAssetTool,
   ];
