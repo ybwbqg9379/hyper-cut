@@ -1,11 +1,28 @@
 "use client";
 
-import { useState, useRef, useEffect, type KeyboardEvent } from "react";
-import type { AgentExecutionPlan, AgentResponse } from "@/agent";
+import {
+	useState,
+	useRef,
+	useEffect,
+	useMemo,
+	type KeyboardEvent,
+} from "react";
+import {
+	listWorkflows as getPresetWorkflows,
+	type AgentExecutionPlan,
+	type AgentResponse,
+} from "@/agent";
 import { useAgent } from "@/hooks/use-agent";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { cn } from "@/utils/ui";
 import {
@@ -21,6 +38,7 @@ import {
 	Play,
 	MessagesSquare,
 	ScrollText,
+	GitBranch,
 } from "lucide-react";
 
 interface Message {
@@ -34,6 +52,93 @@ interface Message {
 	}>;
 	plan?: AgentExecutionPlan;
 	requiresConfirmation?: boolean;
+}
+
+interface ParsedStepOverride {
+	stepId?: string;
+	index?: number;
+	arguments: Record<string, unknown>;
+}
+
+function parseStepOverridesInput(source: string):
+	| {
+			ok: true;
+			stepOverrides: ParsedStepOverride[];
+	  }
+	| {
+			ok: false;
+			message: string;
+	  } {
+	if (source.length > 100000) {
+		return {
+			ok: false,
+			message: "参数过大，请将 JSON 控制在 100000 字符以内",
+		};
+	}
+
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(source);
+	} catch (error) {
+		return {
+			ok: false,
+			message: error instanceof Error ? error.message : "JSON 解析失败",
+		};
+	}
+
+	if (!Array.isArray(parsed)) {
+		return {
+			ok: false,
+			message: "stepOverrides 必须是 JSON 数组",
+		};
+	}
+
+	const stepOverrides: ParsedStepOverride[] = [];
+	for (let i = 0; i < parsed.length; i += 1) {
+		const item = parsed[i];
+		if (!item || Array.isArray(item) || typeof item !== "object") {
+			return {
+				ok: false,
+				message: `stepOverrides[${i}] 必须是对象`,
+			};
+		}
+
+		const record = item as Record<string, unknown>;
+		const hasStepId =
+			typeof record.stepId === "string" && record.stepId.trim().length > 0;
+		const hasIndex =
+			typeof record.index === "number" &&
+			Number.isFinite(record.index) &&
+			record.index >= 0;
+		if (!hasStepId && !hasIndex) {
+			return {
+				ok: false,
+				message: `stepOverrides[${i}] 需要 stepId 或 index`,
+			};
+		}
+
+		if (
+			!record.arguments ||
+			Array.isArray(record.arguments) ||
+			typeof record.arguments !== "object"
+		) {
+			return {
+				ok: false,
+				message: `stepOverrides[${i}].arguments 必须是对象`,
+			};
+		}
+
+		stepOverrides.push({
+			...(hasStepId ? { stepId: String(record.stepId).trim() } : {}),
+			...(hasIndex ? { index: Math.floor(Number(record.index)) } : {}),
+			arguments: record.arguments as Record<string, unknown>,
+		});
+	}
+
+	return {
+		ok: true,
+		stepOverrides,
+	};
 }
 
 /**
@@ -51,7 +156,14 @@ export function AgentChatbox() {
 	const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
 	const [stepDrafts, setStepDrafts] = useState<Record<string, string>>({});
 	const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
-	const [activeView, setActiveView] = useState<"chat" | "transcript">("chat");
+	const [activeView, setActiveView] = useState<
+		"chat" | "transcript" | "workflow"
+	>("chat");
+	const [selectedWorkflowName, setSelectedWorkflowName] = useState("");
+	const [stepOverridesSource, setStepOverridesSource] = useState("[]");
+	const [workflowFormError, setWorkflowFormError] = useState<string | null>(
+		null,
+	);
 
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -62,11 +174,23 @@ export function AgentChatbox() {
 		cancelPlan,
 		updatePlanStep,
 		removePlanStep,
+		runWorkflow,
 		clearHistory,
 		checkProvider,
 		isProcessing,
 		error,
 	} = useAgent();
+	const workflowOptions = useMemo(() => getPresetWorkflows(), []);
+	const selectedWorkflow =
+		workflowOptions.find(
+			(workflow) => workflow.name === selectedWorkflowName,
+		) ?? null;
+
+	useEffect(() => {
+		if (!selectedWorkflowName && workflowOptions.length > 0) {
+			setSelectedWorkflowName(workflowOptions[0].name);
+		}
+	}, [selectedWorkflowName, workflowOptions]);
 
 	// Check provider status on mount
 	useEffect(() => {
@@ -194,8 +318,41 @@ export function AgentChatbox() {
 		clearHistory();
 	};
 
+	const handleRunWorkflow = async () => {
+		if (isProcessing || pendingPlanId) return;
+		if (!selectedWorkflowName) {
+			setWorkflowFormError("请先选择一个工作流");
+			return;
+		}
+
+		const parsedOverrides = parseStepOverridesInput(stepOverridesSource);
+		if (!parsedOverrides.ok) {
+			setWorkflowFormError(parsedOverrides.message);
+			return;
+		}
+
+		setWorkflowFormError(null);
+		const hasOverrides = parsedOverrides.stepOverrides.length > 0;
+		const userMessage: Message = {
+			id: crypto.randomUUID(),
+			role: "user",
+			content: hasOverrides
+				? `[工作流] ${selectedWorkflowName}\nstepOverrides: ${JSON.stringify(parsedOverrides.stepOverrides)}`
+				: `[工作流] ${selectedWorkflowName}`,
+			timestamp: new Date(),
+		};
+		setMessages((prev) => [...prev, userMessage]);
+
+		const response = await runWorkflow({
+			workflowName: selectedWorkflowName,
+			...(hasOverrides ? { stepOverrides: parsedOverrides.stepOverrides } : {}),
+		});
+		appendAssistantResponse(response);
+	};
+
 	const inputDisabled =
 		activeView !== "chat" || isProcessing || Boolean(pendingPlanId);
+	const workflowActionDisabled = isProcessing || Boolean(pendingPlanId);
 
 	return (
 		<div className="flex flex-col h-full bg-panel">
@@ -235,6 +392,21 @@ export function AgentChatbox() {
 							>
 								<ScrollText className="size-3 mr-1" />
 								转录
+							</Button>
+							<Button
+								variant="text"
+								size="sm"
+								className={cn(
+									"h-6 px-2 text-xs",
+									activeView === "workflow"
+										? "bg-accent text-foreground"
+										: "text-muted-foreground",
+								)}
+								onClick={() => setActiveView("workflow")}
+								title="工作流管理视图"
+							>
+								<GitBranch className="size-3 mr-1" />
+								工作流
 							</Button>
 						</div>
 						{providerStatus && (
@@ -348,9 +520,117 @@ export function AgentChatbox() {
 						</div>
 					</div>
 				</>
-			) : (
+			) : activeView === "transcript" ? (
 				<div className="flex-1 min-h-0">
 					<TranscriptPanel />
+				</div>
+			) : (
+				<div className="flex-1 min-h-0 flex flex-col">
+					<div className="px-3 py-2 border-b border-border">
+						<p className="text-xs font-medium">工作流管理</p>
+						<p className="text-xs text-muted-foreground">
+							选择预置工作流，按需编辑 stepOverrides 后发送到 run_workflow
+						</p>
+					</div>
+
+					<ScrollArea className="flex-1 min-h-0">
+						<div className="p-3 space-y-3">
+							<div>
+								<p className="mb-1 text-xs font-medium">选择工作流</p>
+								<Select
+									value={selectedWorkflowName}
+									onValueChange={setSelectedWorkflowName}
+									disabled={workflowActionDisabled}
+								>
+									<SelectTrigger className="h-8 w-full text-xs">
+										<SelectValue placeholder="请选择工作流" />
+									</SelectTrigger>
+									<SelectContent>
+										{workflowOptions.map((workflow) => (
+											<SelectItem
+												key={workflow.name}
+												value={workflow.name}
+												className="text-xs"
+											>
+												{workflow.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+
+							{selectedWorkflow ? (
+								<div className="rounded-md border border-border p-2 space-y-2">
+									<div className="text-xs font-medium">
+										{selectedWorkflow.name}
+									</div>
+									<p className="text-xs text-muted-foreground">
+										{selectedWorkflow.description}
+									</p>
+									<div className="space-y-1">
+										{selectedWorkflow.steps.map((step, index) => (
+											<div
+												key={`${selectedWorkflow.name}-${step.id}`}
+												className="rounded-sm border border-border/60 bg-background/60 px-2 py-1"
+											>
+												<div className="text-[11px] font-mono">
+													{index + 1}. {step.toolName}
+												</div>
+												{step.summary ? (
+													<div className="text-[11px] text-muted-foreground">
+														{step.summary}
+													</div>
+												) : null}
+											</div>
+										))}
+									</div>
+								</div>
+							) : (
+								<div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+									暂无可用工作流
+								</div>
+							)}
+
+							<div>
+								<p className="mb-1 text-xs font-medium">
+									stepOverrides（JSON 数组，可选）
+								</p>
+								<textarea
+									value={stepOverridesSource}
+									onChange={(event) =>
+										setStepOverridesSource(event.target.value)
+									}
+									disabled={workflowActionDisabled}
+									className={cn(
+										"w-full min-h-[160px] resize-y rounded-md border border-border bg-background px-2 py-1.5",
+										"font-mono text-xs",
+										"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+										"disabled:opacity-50",
+									)}
+								/>
+								<p className="mt-1 text-[11px] text-muted-foreground">
+									示例:
+									[&#123;"stepId":"remove-silence","arguments":&#123;"threshold":0.03&#125;&#125;]
+								</p>
+							</div>
+
+							{workflowFormError ? (
+								<div className="rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+									{workflowFormError}
+								</div>
+							) : null}
+						</div>
+					</ScrollArea>
+
+					<div className="border-t border-border p-3">
+						<Button
+							onClick={handleRunWorkflow}
+							disabled={!selectedWorkflowName || workflowActionDisabled}
+							className="w-full"
+						>
+							发送到 run_workflow
+						</Button>
+					</div>
 				</div>
 			)}
 		</div>

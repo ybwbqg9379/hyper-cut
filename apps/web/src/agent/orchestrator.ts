@@ -206,6 +206,16 @@ export class AgentOrchestrator {
 		return [intro, ...stepLines].join("\n");
 	}
 
+	private buildPendingPlanBlockedResponse(): AgentResponse {
+		return {
+			message: "当前有待确认的计划，请先确认执行或取消后再发起新请求。",
+			success: false,
+			status: "planned",
+			requiresConfirmation: true,
+			plan: this.pendingPlanState?.plan,
+		};
+	}
+
 	private buildFinalResponse({
 		response,
 		executedTools,
@@ -293,13 +303,7 @@ export class AgentOrchestrator {
 		}
 
 		if (this.planningEnabled && this.pendingPlanState) {
-			return {
-				message: "当前有待确认的计划，请先确认执行或取消后再发起新请求。",
-				success: false,
-				status: "planned",
-				requiresConfirmation: true,
-				plan: this.pendingPlanState.plan,
-			};
+			return this.buildPendingPlanBlockedResponse();
 		}
 
 		const historyLengthBefore = this.conversationHistory.length;
@@ -428,6 +432,102 @@ export class AgentOrchestrator {
 				status: "error",
 			};
 		}
+	}
+
+	async runWorkflow({
+		workflowName,
+		stepOverrides,
+	}: {
+		workflowName: string;
+		stepOverrides?: Array<{
+			stepId?: string;
+			index?: number;
+			arguments: Record<string, unknown>;
+		}>;
+	}): Promise<AgentResponse> {
+		if (this.planningEnabled && this.isExecutingPlan) {
+			return {
+				message: "计划正在执行中，请稍候。",
+				success: false,
+				status: "error",
+			};
+		}
+
+		if (this.planningEnabled && this.pendingPlanState) {
+			return this.buildPendingPlanBlockedResponse();
+		}
+
+		const normalizedName = workflowName.trim();
+		if (!normalizedName) {
+			return {
+				message: "workflowName 不能为空",
+				success: false,
+				status: "error",
+			};
+		}
+
+		const argumentsPayload: Record<string, unknown> = {
+			workflowName: normalizedName,
+		};
+		if (stepOverrides && stepOverrides.length > 0) {
+			argumentsPayload.stepOverrides = stepOverrides;
+		}
+
+		this.appendHistory({
+			role: "user",
+			content: `[运行工作流] ${normalizedName}`,
+		});
+
+		const workflowCall: ToolCall = {
+			id: `workflow-${Date.now()}`,
+			name: "run_workflow",
+			arguments: argumentsPayload,
+		};
+
+		if (this.planningEnabled) {
+			const planToolCalls = this.expandToolCallsForPlanning([workflowCall]);
+			const pendingPlan = this.buildExecutionPlan(
+				`[运行工作流] ${normalizedName}`,
+				planToolCalls,
+			);
+			this.pendingPlanState = pendingPlan;
+
+			const planMessage = this.formatPlanMessage(
+				pendingPlan.plan,
+				`已根据工作流 ${normalizedName} 生成执行计划，请确认后执行：`,
+			);
+			this.appendHistory({
+				role: "assistant",
+				content: planMessage,
+			});
+
+			return {
+				message: planMessage,
+				success: true,
+				status: "planned",
+				requiresConfirmation: true,
+				plan: pendingPlan.plan,
+			};
+		}
+
+		const toolResult = await this.executeToolCall(workflowCall);
+		this.appendHistory({
+			role: "tool",
+			content: JSON.stringify(toolResult),
+			toolCallId: workflowCall.id,
+			name: workflowCall.name,
+		});
+		this.appendHistory({
+			role: "assistant",
+			content: toolResult.message,
+		});
+
+		return {
+			message: toolResult.message,
+			toolCalls: [{ name: workflowCall.name, result: toolResult }],
+			success: toolResult.success,
+			status: toolResult.success ? "completed" : "error",
+		};
 	}
 
 	getPendingPlan(): AgentExecutionPlan | null {

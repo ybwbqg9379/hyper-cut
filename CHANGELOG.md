@@ -62,6 +62,7 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 新增预置工作流：`auto-caption-cleanup`、`selection-caption-cleanup`
   - 支持 `stepOverrides` 覆盖指定工作流步骤参数
   - Planning 模式下会将 `run_workflow` 自动展开为逐步计划，确认前可逐步审阅/编辑
+  - Agent 面板新增“工作流”视图：选择工作流、编辑 `stepOverrides`、一键发送执行
 
 ### Changed
 

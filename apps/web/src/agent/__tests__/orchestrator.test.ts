@@ -383,6 +383,75 @@ describe("AgentOrchestrator", () => {
 		expect(removeSilenceExecute).toHaveBeenCalledTimes(1);
 	});
 
+	it("runWorkflow should create a pending plan when planning is enabled", async () => {
+		const provider = buildProvider();
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const generateCaptionsExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "captions ok" });
+		const removeSilenceExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "silence ok" });
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "generate_captions",
+					description: "Generate captions",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: generateCaptionsExecute,
+				},
+				{
+					name: "remove_silence",
+					description: "Remove silence",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: removeSilenceExecute,
+				},
+			],
+			{ planningEnabled: true },
+		);
+
+		const result = await orchestrator.runWorkflow({
+			workflowName: "auto-caption-cleanup",
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.status).toBe("planned");
+		expect(result.requiresConfirmation).toBe(true);
+		expect(result.plan?.steps.length).toBe(2);
+	});
+
+	it("runWorkflow should execute run_workflow tool when planning is disabled", async () => {
+		const provider = buildProvider();
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const runWorkflowExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "workflow ok" });
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "run_workflow",
+					description: "Run workflow",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: runWorkflowExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.runWorkflow({
+			workflowName: "auto-caption-cleanup",
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.status).toBe("completed");
+		expect(runWorkflowExecute).toHaveBeenCalledWith({
+			workflowName: "auto-caption-cleanup",
+		});
+	});
+
 	it("should execute pending plan after confirmation", async () => {
 		const provider = buildProvider();
 		const toolExecute = vi.fn().mockResolvedValue({

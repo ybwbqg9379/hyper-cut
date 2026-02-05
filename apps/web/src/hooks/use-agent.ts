@@ -107,6 +107,43 @@ export function useAgent() {
 		[agent],
 	);
 
+	const runWorkflow = useCallback(
+		async ({
+			workflowName,
+			stepOverrides,
+		}: {
+			workflowName: string;
+			stepOverrides?: Array<{
+				stepId?: string;
+				index?: number;
+				arguments: Record<string, unknown>;
+			}>;
+		}): Promise<AgentResponse> => {
+			setIsProcessing(true);
+			setError(null);
+			try {
+				const response = await agent.runWorkflow({
+					workflowName,
+					stepOverrides,
+				});
+				setLastResponse(response);
+				return response;
+			} catch (err) {
+				const errorMessage =
+					err instanceof Error ? err.message : "Unknown error";
+				setError(errorMessage);
+				return {
+					message: errorMessage,
+					success: false,
+					status: "error",
+				};
+			} finally {
+				setIsProcessing(false);
+			}
+		},
+		[agent],
+	);
+
 	// Clear conversation history
 	const clearHistory = useCallback(() => {
 		agent.clearHistory();
@@ -125,6 +162,7 @@ export function useAgent() {
 		cancelPlan,
 		updatePlanStep,
 		removePlanStep,
+		runWorkflow,
 		clearHistory,
 		checkProvider,
 		isProcessing,
