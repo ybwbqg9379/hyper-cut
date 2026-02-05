@@ -6,22 +6,22 @@ import type {
 	VisualScores,
 	ScoringWeights,
 	TranscriptChunk,
+	LLMScoringResult,
 } from "../tools/highlight-types";
-
-const DEFAULT_BLOCK_SECONDS = 300;
-const MAX_BLOCK_SPAN_SECONDS = 480;
-const DEFAULT_VISION_CONCURRENCY = 3;
-const DEFAULT_TEMPERATURE = 0.2;
+import { clamp } from "../utils/math";
+import { mapWithConcurrency } from "../utils/concurrency";
+import {
+	DEFAULT_HIGHLIGHT_BLOCK_SECONDS,
+	DEFAULT_HIGHLIGHT_MAX_BLOCK_SPAN_SECONDS,
+	DEFAULT_HIGHLIGHT_MODEL_TEMPERATURE,
+	DEFAULT_HIGHLIGHT_VISION_CONCURRENCY,
+} from "../constants/highlight";
 
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
 	rule: 0.4,
 	semantic: 0.4,
 	visual: 0.2,
 };
-
-function clamp(value: number, min: number, max: number): number {
-	return Math.max(min, Math.min(max, value));
-}
 
 function cleanJsonMarkdown(content: string): string {
 	const trimmed = content.trim();
@@ -57,33 +57,6 @@ function safeParseJson(content: string): unknown {
 function average(values: number[]): number {
 	if (values.length === 0) return 0;
 	return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-async function mapWithConcurrency<T, R>({
-	items,
-	worker,
-	limit,
-}: {
-	items: T[];
-	worker: (item: T, index: number) => Promise<R>;
-	limit: number;
-}): Promise<R[]> {
-	if (items.length === 0) return [];
-	const results = new Array<R>(items.length);
-	let cursor = 0;
-
-	async function consume(): Promise<void> {
-		while (cursor < items.length) {
-			const index = cursor;
-			cursor += 1;
-			results[index] = await worker(items[index], index);
-		}
-	}
-
-	await Promise.all(
-		Array.from({ length: Math.min(limit, items.length) }, () => consume()),
-	);
-	return results;
 }
 
 function normalizeRuleScore(ruleScores: RuleScores): number {
@@ -142,8 +115,8 @@ function buildBlocks(chunks: TranscriptChunk[]): LLMBlock[] {
 		const nextSpeechSeconds = currentSpeechSeconds + chunkDuration;
 		if (
 			current.length > 0 &&
-			(nextSpeechSeconds > DEFAULT_BLOCK_SECONDS ||
-				span > MAX_BLOCK_SPAN_SECONDS)
+			(nextSpeechSeconds > DEFAULT_HIGHLIGHT_BLOCK_SECONDS ||
+				span > DEFAULT_HIGHLIGHT_MAX_BLOCK_SPAN_SECONDS)
 		) {
 			blocks.push({ chunks: current });
 			current = [chunk];
@@ -284,11 +257,20 @@ export class HighlightScorerService {
 	async scoreWithLLM(
 		chunks: TranscriptChunk[],
 		provider: LMStudioProvider,
-	): Promise<Map<number, SemanticScores>> {
+	): Promise<LLMScoringResult> {
 		const result = new Map<number, SemanticScores>();
-		if (chunks.length === 0) return result;
+		const diagnostics = {
+			totalBlocks: 0,
+			failedBlocks: 0,
+			failedSamples: [] as string[],
+			allFailed: false,
+		};
+		if (chunks.length === 0) {
+			return { scores: result, diagnostics };
+		}
 
 		const blocks = buildBlocks(chunks);
+		diagnostics.totalBlocks = blocks.length;
 		for (const block of blocks) {
 			const prompt = buildSemanticPrompt(block.chunks);
 			try {
@@ -304,25 +286,38 @@ export class HighlightScorerService {
 						},
 					],
 					tools: [],
-					temperature: DEFAULT_TEMPERATURE,
+					temperature: DEFAULT_HIGHLIGHT_MODEL_TEMPERATURE,
 				});
 
 				const content =
 					typeof response.content === "string" ? response.content : "";
 				const parsedScores = parseSemanticScores(content);
 				if (!parsedScores || parsedScores.length === 0) {
+					diagnostics.failedBlocks += 1;
+					if (diagnostics.failedSamples.length < 3) {
+						diagnostics.failedSamples.push("Empty or invalid JSON response");
+					}
 					continue;
 				}
 
 				for (const item of parsedScores) {
 					result.set(item.index, item.scores);
 				}
-			} catch {
+			} catch (error) {
 				// ignore block-level failure and continue scoring remaining blocks
+				diagnostics.failedBlocks += 1;
+				if (diagnostics.failedSamples.length < 3) {
+					diagnostics.failedSamples.push(
+						error instanceof Error ? error.message : "Unknown error",
+					);
+				}
 			}
 		}
 
-		return result;
+		diagnostics.allFailed =
+			diagnostics.totalBlocks > 0 &&
+			diagnostics.failedBlocks >= diagnostics.totalBlocks;
+		return { scores: result, diagnostics };
 	}
 
 	async scoreWithVision(
@@ -342,7 +337,7 @@ export class HighlightScorerService {
 		const prompt = buildVisualPrompt();
 		const evaluated = await mapWithConcurrency({
 			items: targets,
-			limit: DEFAULT_VISION_CONCURRENCY,
+			limit: DEFAULT_HIGHLIGHT_VISION_CONCURRENCY,
 			worker: async (candidate) => {
 				if (!candidate.thumbnailDataUrl) {
 					return {
@@ -376,7 +371,7 @@ export class HighlightScorerService {
 							},
 						],
 						tools: [],
-						temperature: DEFAULT_TEMPERATURE,
+						temperature: DEFAULT_HIGHLIGHT_MODEL_TEMPERATURE,
 					});
 
 					const content =
@@ -424,19 +419,25 @@ export class HighlightScorerService {
 			? normalizeVisualScore(visualScores)
 			: null;
 
-		let score = 0;
-		if (semanticNormalized !== null && visualNormalized !== null) {
-			score =
-				ruleNormalized * weights.rule +
-				semanticNormalized * weights.semantic +
-				visualNormalized * weights.visual;
-		} else if (semanticNormalized !== null) {
-			score = ruleNormalized * 0.5 + semanticNormalized * 0.5;
-		} else if (visualNormalized !== null) {
-			score = ruleNormalized * 0.7 + visualNormalized * 0.3;
-		} else {
-			score = ruleNormalized;
+		const normalizedWeights = {
+			rule: weights.rule,
+			semantic: semanticNormalized !== null ? weights.semantic : 0,
+			visual: visualNormalized !== null ? weights.visual : 0,
+		};
+
+		const totalWeight =
+			normalizedWeights.rule +
+			normalizedWeights.semantic +
+			normalizedWeights.visual;
+		if (totalWeight <= 0) {
+			return Number((clamp(ruleNormalized, 0, 1) * 100).toFixed(2));
 		}
+
+		const score =
+			(ruleNormalized * normalizedWeights.rule +
+				(semanticNormalized ?? 0) * normalizedWeights.semantic +
+				(visualNormalized ?? 0) * normalizedWeights.visual) /
+			totalWeight;
 
 		return Number((clamp(score, 0, 1) * 100).toFixed(2));
 	}

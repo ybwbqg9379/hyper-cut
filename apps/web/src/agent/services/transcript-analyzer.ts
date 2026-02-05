@@ -4,10 +4,13 @@ import type {
 	TranscriptWord,
 	RuleScores,
 } from "../tools/highlight-types";
+import { clamp } from "../utils/math";
+import {
+	DEFAULT_HIGHLIGHT_SEGMENT_MAX_SECONDS,
+	DEFAULT_HIGHLIGHT_SEGMENT_MIN_SECONDS,
+} from "../constants/highlight";
 
 const MIN_SEGMENT_SECONDS = 2;
-const DEFAULT_MIN_SECONDS = 8;
-const DEFAULT_MAX_SECONDS = 30;
 
 const EN_FILLER_WORDS = new Set([
 	"um",
@@ -60,10 +63,6 @@ const ZH_ENGAGEMENT_WORDS = [
 	"千万",
 ];
 
-function clamp(value: number, min: number, max: number): number {
-	return Math.max(min, Math.min(max, value));
-}
-
 function splitWords(text: string): string[] {
 	return text
 		.trim()
@@ -102,11 +101,11 @@ function normalizeRange({
 	const min =
 		typeof minSeconds === "number" && Number.isFinite(minSeconds)
 			? clamp(minSeconds, MIN_SEGMENT_SECONDS, 120)
-			: DEFAULT_MIN_SECONDS;
+			: DEFAULT_HIGHLIGHT_SEGMENT_MIN_SECONDS;
 	const max =
 		typeof maxSeconds === "number" && Number.isFinite(maxSeconds)
 			? clamp(maxSeconds, min + 1, 180)
-			: DEFAULT_MAX_SECONDS;
+			: DEFAULT_HIGHLIGHT_SEGMENT_MAX_SECONDS;
 
 	return { minSeconds: min, maxSeconds: max };
 }

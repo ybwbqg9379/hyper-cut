@@ -45,11 +45,12 @@ describe("HighlightScorerService", () => {
 				'[{"index":0,"importance":8,"emotionalIntensity":7,"hookPotential":9,"standalone":6},{"index":1,"importance":7,"emotionalIntensity":6,"hookPotential":7,"standalone":8}]',
 		});
 
-		const map = await service.scoreWithLLM(chunks, provider);
+		const result = await service.scoreWithLLM(chunks, provider);
 
-		expect(map.size).toBe(2);
-		expect(map.get(0)?.hookPotential).toBe(9);
-		expect(map.get(1)?.standalone).toBe(8);
+		expect(result.scores.size).toBe(2);
+		expect(result.scores.get(0)?.hookPotential).toBe(9);
+		expect(result.scores.get(1)?.standalone).toBe(8);
+		expect(result.diagnostics.failedBlocks).toBe(0);
 	});
 
 	it("should parse visual scores for candidates with thumbnail", async () => {
@@ -136,7 +137,7 @@ describe("HighlightScorerService", () => {
 		expect(score).toBeLessThanOrEqual(100);
 	});
 
-	it("should use fixed 0.7/0.3 fallback for visual-only scoring", () => {
+	it("should respect provided weights for visual-only scoring", () => {
 		const score = service.computeCombinedScore(
 			{
 				speakingRate: 1,
@@ -149,6 +150,11 @@ describe("HighlightScorerService", () => {
 				frameQuality: 1,
 				visualInterest: 0,
 				hasValidFrame: true,
+			},
+			{
+				rule: 0.7,
+				semantic: 0,
+				visual: 0.3,
 			},
 		);
 

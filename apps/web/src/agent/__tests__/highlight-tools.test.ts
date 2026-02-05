@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { getHighlightTools } from "../tools/highlight-tools";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+	__resetHighlightToolCachesForTests,
+	getHighlightTools,
+} from "../tools/highlight-tools";
 
 function findTool(name: string) {
 	const tool = getHighlightTools().find((candidate) => candidate.name === name);
@@ -10,6 +13,10 @@ function findTool(name: string) {
 }
 
 describe("Highlight tools", () => {
+	beforeEach(() => {
+		__resetHighlightToolCachesForTests();
+	});
+
 	it("should expose all long-to-short tools", () => {
 		const names = getHighlightTools().map((tool) => tool.name);
 		expect(names).toEqual([

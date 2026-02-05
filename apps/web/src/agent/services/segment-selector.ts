@@ -3,10 +3,7 @@ import type {
 	ScoredSegment,
 	SelectedSegment,
 } from "../tools/highlight-types";
-
-function clamp(value: number, min: number, max: number): number {
-	return Math.max(min, Math.min(max, value));
-}
+import { clamp } from "../utils/math";
 
 function overlaps(left: ScoredSegment, right: ScoredSegment): boolean {
 	return (

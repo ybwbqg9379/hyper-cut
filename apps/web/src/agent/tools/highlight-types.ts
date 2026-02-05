@@ -82,3 +82,15 @@ export interface ScoringWeights {
 	semantic: number;
 	visual: number;
 }
+
+export interface LLMScoringDiagnostics {
+	totalBlocks: number;
+	failedBlocks: number;
+	failedSamples: string[];
+	allFailed: boolean;
+}
+
+export interface LLMScoringResult {
+	scores: Map<number, SemanticScores>;
+	diagnostics: LLMScoringDiagnostics;
+}

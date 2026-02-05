@@ -9,6 +9,7 @@ import { getProjectTools } from "./project-tools";
 import { getVisionTools } from "./vision-tools";
 import { getHighlightTools } from "./highlight-tools";
 import { listWorkflows, resolveWorkflowFromParams } from "../workflows";
+import { toBooleanOrDefault, toNonEmptyString } from "../utils/values";
 
 function buildExecutableToolMap(): Map<string, AgentTool> {
 	const toolMap = new Map<string, AgentTool>();
@@ -32,16 +33,6 @@ function buildExecutableToolMap(): Map<string, AgentTool> {
 }
 
 const workflowReservedTools = new Set(["run_workflow", "list_workflows"]);
-
-function toBoolean(value: unknown, fallback = false): boolean {
-	return typeof value === "boolean" ? value : fallback;
-}
-
-function toNonEmptyString(value: unknown): string | null {
-	if (typeof value !== "string") return null;
-	const trimmed = value.trim();
-	return trimmed.length > 0 ? trimmed : null;
-}
 
 export const listWorkflowsTool: AgentTool = {
 	name: "list_workflows",
@@ -127,7 +118,10 @@ export const runWorkflowTool: AgentTool = {
 			};
 		}
 
-		const confirmRequiredSteps = toBoolean(params.confirmRequiredSteps, false);
+		const confirmRequiredSteps = toBooleanOrDefault(
+			params.confirmRequiredSteps,
+			false,
+		);
 		const startFromStepId = toNonEmptyString(params.startFromStepId);
 		const executableTools = buildExecutableToolMap();
 		const steps = resolved.resolved.steps;
