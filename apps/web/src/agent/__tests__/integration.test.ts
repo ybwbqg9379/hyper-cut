@@ -6,6 +6,87 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getAllTools, getToolsSummary } from '../tools';
 
+const buildTracksState = () => [
+  {
+    id: 'track1',
+    type: 'video',
+    isMain: true,
+    muted: false,
+    hidden: false,
+    elements: [
+      {
+        id: 'el1',
+        type: 'video',
+        startTime: 0,
+        duration: 10,
+        trimStart: 0,
+        trimEnd: 0,
+        mediaId: 'asset1',
+        transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+        opacity: 1,
+      },
+      {
+        id: 'el2',
+        type: 'image',
+        startTime: 12,
+        duration: 5,
+        trimStart: 0,
+        trimEnd: 0,
+        mediaId: 'asset2',
+        transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+        opacity: 1,
+      },
+    ],
+  },
+  {
+    id: 'track2',
+    type: 'audio',
+    muted: false,
+    elements: [
+      {
+        id: 'el3',
+        type: 'audio',
+        sourceType: 'upload',
+        mediaId: 'asset4',
+        startTime: 0,
+        duration: 8,
+        trimStart: 0,
+        trimEnd: 0,
+        volume: 1,
+      },
+    ],
+  },
+  {
+    id: 'track3',
+    type: 'text',
+    hidden: false,
+    elements: [
+      {
+        id: 'text1',
+        type: 'text',
+        name: 'Title',
+        content: 'Hello',
+        fontSize: 48,
+        fontFamily: 'Arial',
+        color: '#fff',
+        backgroundColor: 'transparent',
+        textAlign: 'center',
+        fontWeight: 'normal',
+        fontStyle: 'normal',
+        textDecoration: 'none',
+        startTime: 0,
+        duration: 4,
+        trimStart: 0,
+        trimEnd: 0,
+        transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+        opacity: 1,
+      },
+    ],
+  },
+];
+
+let tracksState = buildTracksState();
+
 // Mock invokeAction to track calls without side effects
 vi.mock('@/lib/actions', () => ({
   invokeAction: vi.fn(),
@@ -18,6 +99,9 @@ vi.mock('@/lib/timeline/element-utils', () => ({
   buildImageElement: vi.fn(() => ({ type: 'image', id: 'mock-element' })),
   buildUploadAudioElement: vi.fn(() => ({ type: 'audio', id: 'mock-element' })),
   getElementsAtTime: vi.fn(() => [{ trackId: 'track1', elementId: 'el1' }]),
+  canElementHaveAudio: vi.fn((element: { type?: string }) =>
+    element.type === 'audio' || element.type === 'video'
+  ),
 }));
 
 // Mock constants
@@ -25,37 +109,105 @@ vi.mock('@/constants/timeline-constants', () => ({
   TIMELINE_CONSTANTS: { DEFAULT_ELEMENT_DURATION: 5 },
 }));
 
+vi.mock('@/lib/media/mediabunny', () => ({
+  extractTimelineAudio: vi.fn(async () => new Blob([new Uint8Array([1, 2, 3])])),
+}));
+
+vi.mock('@/lib/media/audio', () => ({
+  decodeAudioToFloat32: vi.fn(async () => ({
+    samples: new Float32Array([0.1, -0.1, 0.2]),
+    sampleRate: 44100,
+  })),
+}));
+
+vi.mock('@/lib/transcription/caption', () => ({
+  buildCaptionChunks: vi.fn(() => [
+    { text: 'Hello world', startTime: 0, duration: 1.5 },
+    { text: 'Second line', startTime: 1.5, duration: 1.2 },
+  ]),
+}));
+
+vi.mock('@/services/transcription/service', () => ({
+  transcriptionService: {
+    transcribe: vi.fn(async () => ({
+      text: 'Hello world Second line',
+      segments: [
+        { text: 'Hello world', start: 0, end: 1.5 },
+        { text: 'Second line', start: 1.5, end: 2.7 },
+      ],
+      language: 'en',
+    })),
+    cancel: vi.fn(),
+  },
+}));
+
 // Mock EditorCore for query, scene, and asset tools
 vi.mock('@/core', () => {
   const mockEditor = {
     timeline: {
-      getTracks: vi.fn(() => [
-        { id: 'track1', type: 'video', elements: [{ id: 'el1' }, { id: 'el2' }] },
-        { id: 'track2', type: 'audio', elements: [{ id: 'el3' }] },
-      ]),
+      getTracks: vi.fn(() => tracksState),
       // Returns seconds (timeline uses seconds for all time values)
       getTotalDuration: vi.fn(() => 120),
       insertElement: vi.fn(),
       splitElements: vi.fn(),
+      updateTextElement: vi.fn(),
+      updateElementTrim: vi.fn(),
+      updateElementDuration: vi.fn(),
+      updateElementStartTime: vi.fn(),
+      moveElement: vi.fn(),
+      addTrack: vi.fn(() => 'new-track-id'),
+      removeTrack: vi.fn(({ trackId }: { trackId: string }) => {
+        const index = tracksState.findIndex((t) => t.id === trackId);
+        if (index >= 0) tracksState.splice(index, 1);
+      }),
+      toggleTrackMute: vi.fn(({ trackId }: { trackId: string }) => {
+        const track = tracksState.find((t) => t.id === trackId);
+        if (track && 'muted' in track) {
+          track.muted = !track.muted;
+        }
+      }),
+      toggleTrackVisibility: vi.fn(({ trackId }: { trackId: string }) => {
+        const track = tracksState.find((t) => t.id === trackId);
+        if (track && 'hidden' in track) {
+          track.hidden = !track.hidden;
+        }
+      }),
       getTrackById: vi.fn(({ trackId }: { trackId: string }) => {
-        if (trackId === 'track1') return { id: 'track1', type: 'video' };
-        if (trackId === 'track2') return { id: 'track2', type: 'audio' };
-        return null;
+        return tracksState.find((track) => track.id === trackId) ?? null;
       }),
     },
     playback: {
-      getCurrentTime: vi.fn(() => 5),  // Returns seconds, not milliseconds
+      getCurrentTime: vi.fn(() => 5), // Returns seconds, not milliseconds
       seek: vi.fn(),
+      setVolume: vi.fn(),
+      toggleMute: vi.fn(),
+      getVolume: vi.fn(() => 0.8),
+      isMuted: vi.fn(() => false),
     },
     selection: {
       getSelectedElements: vi.fn(() => [{ trackId: 'track1', elementId: 'el1' }]),
+      setSelectedElements: vi.fn(),
+      clearSelection: vi.fn(),
     },
     media: {
       getAssets: vi.fn(() => [
-        { id: 'asset1', name: 'Test Video', type: 'video', duration: 60, ephemeral: false },
-        { id: 'asset2', name: 'Test Image', type: 'image', duration: 5, ephemeral: false },
-        { id: 'asset3', name: 'Temp Clip', type: 'video', duration: 10, ephemeral: true },
+        { id: 'asset1', name: 'Test Video', type: 'video', duration: 60, ephemeral: false, file: new File([], 'video.mp4') },
+        { id: 'asset2', name: 'Test Image', type: 'image', duration: 5, ephemeral: false, file: new File([], 'image.png') },
+        { id: 'asset3', name: 'Temp Clip', type: 'video', duration: 10, ephemeral: true, file: new File([], 'temp.mp4') },
+        { id: 'asset4', name: 'Test Audio', type: 'audio', duration: 8, ephemeral: false, file: new File([], 'audio.wav') },
       ]),
+    },
+    project: {
+      getActive: vi.fn(() => ({
+        metadata: { name: 'Test Project', id: 'project-1', duration: 10, createdAt: new Date(), updatedAt: new Date() },
+        settings: {
+          fps: 30,
+          canvasSize: { width: 1920, height: 1080 },
+          background: { type: 'color', color: '#000000' },
+        },
+      })),
+      export: vi.fn(async () => ({ success: true, buffer: new ArrayBuffer(8) })),
+      updateSettings: vi.fn(async () => {}),
     },
     scenes: {
       getScenes: vi.fn(() => [
@@ -90,6 +242,14 @@ function getToolByName(name: string) {
 describe('Agent Tools Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tracksState = buildTracksState();
+
+    if (!URL.createObjectURL) {
+      URL.createObjectURL = vi.fn(() => 'blob:mock');
+    }
+    if (!URL.revokeObjectURL) {
+      URL.revokeObjectURL = vi.fn();
+    }
   });
 
   afterEach(() => {
@@ -99,7 +259,7 @@ describe('Agent Tools Integration', () => {
   describe('Tool Registry', () => {
     it('should have all expected tools registered', () => {
       const tools = getAllTools();
-      expect(tools.length).toBeGreaterThanOrEqual(32);
+      expect(tools.length).toBeGreaterThanOrEqual(48);
     });
 
     it('should categorize tools correctly', () => {
@@ -112,6 +272,7 @@ describe('Agent Tools Integration', () => {
           expect.objectContaining({ category: 'Media' }),
           expect.objectContaining({ category: 'Scene' }),
           expect.objectContaining({ category: 'Asset' }),
+          expect.objectContaining({ category: 'Project' }),
         ])
       );
     });
@@ -153,6 +314,244 @@ describe('Agent Tools Integration', () => {
       expect(invokeAction).toHaveBeenCalledWith('delete-selected', undefined);
       expect(result.success).toBe(true);
     });
+
+    it('select_element should select by elementId', async () => {
+      const tool = getToolByName('select_element');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        selection: { setSelectedElements: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ elementId: 'el1' });
+      expect(result.success).toBe(true);
+      expect(editor.selection.setSelectedElements).toHaveBeenCalledWith({
+        elements: [{ trackId: 'track1', elementId: 'el1' }],
+      });
+    });
+
+    it('select_element should fail for missing element', async () => {
+      const tool = getToolByName('select_element');
+
+      const result = await tool.execute({ elementId: 'missing' });
+      expect(result.success).toBe(false);
+    });
+
+    it('clear_selection should clear current selection', async () => {
+      const tool = getToolByName('clear_selection');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        selection: { clearSelection: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({});
+      expect(result.success).toBe(true);
+      expect(editor.selection.clearSelection).toHaveBeenCalled();
+    });
+
+    it('add_track should add a new track', async () => {
+      const tool = getToolByName('add_track');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { addTrack: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ type: 'audio' });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.addTrack).toHaveBeenCalledWith({ type: 'audio', index: undefined });
+    });
+
+    it('add_track should fail on invalid type', async () => {
+      const tool = getToolByName('add_track');
+
+      const result = await tool.execute({ type: 'invalid' });
+      expect(result.success).toBe(false);
+    });
+
+    it('remove_track should remove a non-main track', async () => {
+      const tool = getToolByName('remove_track');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { removeTrack: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ trackId: 'track2' });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.removeTrack).toHaveBeenCalledWith({ trackId: 'track2' });
+    });
+
+    it('remove_track should fail for main track', async () => {
+      const tool = getToolByName('remove_track');
+
+      const result = await tool.execute({ trackId: 'track1' });
+      expect(result.success).toBe(false);
+    });
+
+    it('toggle_track_mute should toggle audio track mute', async () => {
+      const tool = getToolByName('toggle_track_mute');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { toggleTrackMute: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ trackId: 'track2' });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.toggleTrackMute).toHaveBeenCalledWith({ trackId: 'track2' });
+    });
+
+    it('toggle_track_mute should fail on non-audio track', async () => {
+      const tool = getToolByName('toggle_track_mute');
+
+      const result = await tool.execute({ trackId: 'track3' });
+      expect(result.success).toBe(false);
+    });
+
+    it('toggle_track_visibility should toggle track visibility', async () => {
+      const tool = getToolByName('toggle_track_visibility');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { toggleTrackVisibility: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ trackId: 'track1' });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.toggleTrackVisibility).toHaveBeenCalledWith({ trackId: 'track1' });
+    });
+
+    it('toggle_track_visibility should fail on audio track', async () => {
+      const tool = getToolByName('toggle_track_visibility');
+
+      const result = await tool.execute({ trackId: 'track2' });
+      expect(result.success).toBe(false);
+    });
+
+    it('update_text_style should update selected text element', async () => {
+      const tool = getToolByName('update_text_style');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        selection: { getSelectedElements: ReturnType<typeof vi.fn> };
+        timeline: { updateTextElement: ReturnType<typeof vi.fn> };
+      };
+
+      editor.selection.getSelectedElements.mockReturnValueOnce([
+        { trackId: 'track3', elementId: 'text1' },
+      ]);
+
+      const result = await tool.execute({ content: 'Updated' });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.updateTextElement).toHaveBeenCalledWith({
+        trackId: 'track3',
+        elementId: 'text1',
+        updates: expect.objectContaining({ content: 'Updated' }),
+      });
+    });
+
+    it('update_text_style should fail on non-text element', async () => {
+      const tool = getToolByName('update_text_style');
+
+      const result = await tool.execute({ elementId: 'el1', trackId: 'track1', content: 'X' });
+      expect(result.success).toBe(false);
+    });
+
+    it('move_element should move selected element', async () => {
+      const tool = getToolByName('move_element');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { moveElement: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ newStartTime: 5 });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.moveElement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          elementId: 'el1',
+          sourceTrackId: 'track1',
+          targetTrackId: 'track1',
+          newStartTime: 5,
+        })
+      );
+    });
+
+    it('move_element should fail on incompatible track', async () => {
+      const tool = getToolByName('move_element');
+
+      const result = await tool.execute({ elementId: 'el1', targetTrackId: 'track2', newStartTime: 1 });
+      expect(result.success).toBe(false);
+    });
+
+    it('trim_element should update trim values', async () => {
+      const tool = getToolByName('trim_element');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { updateElementTrim: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ elementId: 'el1', trimStart: 1, trimEnd: 0 });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.updateElementTrim).toHaveBeenCalledWith({
+        elementId: 'el1',
+        trimStart: 1,
+        trimEnd: 0,
+      });
+    });
+
+    it('trim_element should fail on invalid trimStart', async () => {
+      const tool = getToolByName('trim_element');
+
+      const result = await tool.execute({ elementId: 'el1', trimStart: -1 });
+      expect(result.success).toBe(false);
+    });
+
+    it('resize_element should update duration', async () => {
+      const tool = getToolByName('resize_element');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        timeline: { updateElementDuration: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ elementId: 'el1', duration: 6 });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.updateElementDuration).toHaveBeenCalledWith({
+        trackId: 'track1',
+        elementId: 'el1',
+        duration: 6,
+      });
+    });
+
+    it('resize_element should fail on invalid duration', async () => {
+      const tool = getToolByName('resize_element');
+
+      const result = await tool.execute({ elementId: 'el1', duration: -2 });
+      expect(result.success).toBe(false);
+    });
+
+    it('generate_captions should insert caption elements', async () => {
+      const tool = getToolByName('generate_captions');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        selection: { getSelectedElements: ReturnType<typeof vi.fn> };
+        timeline: { insertElement: ReturnType<typeof vi.fn> };
+      };
+
+      editor.selection.getSelectedElements.mockReturnValueOnce([
+        { trackId: 'track2', elementId: 'el3' },
+      ]);
+
+      const result = await tool.execute({ source: 'selection' });
+      expect(result.success).toBe(true);
+      expect(editor.timeline.insertElement).toHaveBeenCalledTimes(2);
+    });
+
+    it('generate_captions should fail without selection', async () => {
+      const tool = getToolByName('generate_captions');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        selection: { getSelectedElements: ReturnType<typeof vi.fn> };
+      };
+
+      editor.selection.getSelectedElements.mockReturnValueOnce([]);
+      const result = await tool.execute({ source: 'selection' });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('Playback Tools', () => {
@@ -182,6 +581,56 @@ describe('Agent Tools Integration', () => {
       expect(invokeAction).toHaveBeenCalledWith('undo', undefined);
       expect(result.success).toBe(true);
     });
+
+    it('seek_to_time should seek to specified time', async () => {
+      const tool = getToolByName('seek_to_time');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        playback: { seek: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ time: 10 });
+      expect(result.success).toBe(true);
+      expect(editor.playback.seek).toHaveBeenCalledWith({ time: 10 });
+    });
+
+    it('seek_to_time should fail on invalid time', async () => {
+      const tool = getToolByName('seek_to_time');
+
+      const result = await tool.execute({ time: -1 });
+      expect(result.success).toBe(false);
+    });
+
+    it('set_volume should update playback volume', async () => {
+      const tool = getToolByName('set_volume');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        playback: { setVolume: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({ volume: 0.5 });
+      expect(result.success).toBe(true);
+      expect(editor.playback.setVolume).toHaveBeenCalledWith({ volume: 0.5 });
+    });
+
+    it('set_volume should fail on invalid volume', async () => {
+      const tool = getToolByName('set_volume');
+
+      const result = await tool.execute({ volume: 'loud' });
+      expect(result.success).toBe(false);
+    });
+
+    it('toggle_playback_mute should toggle mute', async () => {
+      const tool = getToolByName('toggle_playback_mute');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        playback: { toggleMute: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({});
+      expect(result.success).toBe(true);
+      expect(editor.playback.toggleMute).toHaveBeenCalled();
+    });
   });
 
   describe('Query Tools', () => {
@@ -191,8 +640,8 @@ describe('Agent Tools Integration', () => {
       const result = await tool.execute({});
       expect(result.success).toBe(true);
       expect(result.data).toMatchObject({
-        trackCount: 2,
-        totalElements: 3,
+        trackCount: 3,
+        totalElements: 4,
       });
     });
 
@@ -297,9 +746,9 @@ describe('Agent Tools Integration', () => {
       const result = await tool.execute({});
       expect(result.success).toBe(true);
       expect(result.data).toMatchObject({
-        count: 2,
+        count: 3,
       });
-      expect((result.data as { assets: unknown[] }).assets).toHaveLength(2);
+      expect((result.data as { assets: unknown[] }).assets).toHaveLength(3);
     });
 
     it('add_asset_to_timeline should insert element into timeline', async () => {
@@ -387,6 +836,54 @@ describe('Agent Tools Integration', () => {
     });
   });
 
+  describe('Project Tools', () => {
+    it('export_video should export and trigger download', async () => {
+      const tool = getToolByName('export_video');
+      const result = await tool.execute({ format: 'mp4', quality: 'high' });
+      expect(result.success).toBe(true);
+    });
+
+    it('export_video should fail without active project', async () => {
+      const tool = getToolByName('export_video');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        project: { getActive: ReturnType<typeof vi.fn> };
+      };
+
+      editor.project.getActive.mockReturnValueOnce(null);
+      const result = await tool.execute({});
+      expect(result.success).toBe(false);
+    });
+
+    it('update_project_settings should update settings', async () => {
+      const tool = getToolByName('update_project_settings');
+      const { EditorCore } = await import('@/core');
+      const editor = EditorCore.getInstance() as unknown as {
+        project: { updateSettings: ReturnType<typeof vi.fn> };
+      };
+
+      const result = await tool.execute({
+        fps: 30,
+        canvasPreset: '1920x1080',
+        background: { type: 'color', color: '#ffffff' },
+      });
+      expect(result.success).toBe(true);
+      expect(editor.project.updateSettings).toHaveBeenCalledWith({
+        settings: expect.objectContaining({
+          fps: 30,
+          canvasSize: { width: 1920, height: 1080 },
+          background: { type: 'color', color: '#ffffff' },
+        }),
+      });
+    });
+
+    it('update_project_settings should fail on invalid fps', async () => {
+      const tool = getToolByName('update_project_settings');
+      const result = await tool.execute({ fps: 23 });
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('Split at Time', () => {
     it('split_at_time should seek and split', async () => {
       const tool = getToolByName('split_at_time');
@@ -439,6 +936,7 @@ describe('Agent Tools Integration', () => {
           { trackId: 'track1', elementId: 'el1' },
           { trackId: 'track1', elementId: 'el2' },
           { trackId: 'track2', elementId: 'el3' },
+          { trackId: 'track3', elementId: 'text1' },
         ],
         splitTime: 30,
       });

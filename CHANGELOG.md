@@ -25,6 +25,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Playback：`seek_to_time`、`set_volume`、`toggle_playback_mute`
   - Timeline：`select_element`、`clear_selection`、`add_track`、`remove_track`、`toggle_track_mute`、`toggle_track_visibility`
   - Project：`export_video`（支持格式/质量/音频参数并触发下载）
+- **Agent tools扩展（Phase 2）**：新增转录、文本与时间线编辑能力
+  - Transcription：`generate_captions`（支持模型/语言/字幕分块参数）
+  - Text：`update_text_style`
+  - Timeline：`move_element`、`trim_element`、`resize_element`
+  - Project：`update_project_settings`（fps/canvas/background）
 
 ### Fixed
 
