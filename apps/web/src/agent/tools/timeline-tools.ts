@@ -1,6 +1,5 @@
 import type { AgentTool, ToolResult } from '../types';
 import { invokeAction } from '@/lib/actions';
-import { EditorCore } from '@/core';
 
 /**
  * Timeline Editing Tools

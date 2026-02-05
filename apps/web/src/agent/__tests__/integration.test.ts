@@ -21,7 +21,8 @@ vi.mock('@/core', () => ({
           { id: 'track1', type: 'video', elements: [{ id: 'el1' }, { id: 'el2' }] },
           { id: 'track2', type: 'audio', elements: [{ id: 'el3' }] },
         ]),
-        getTotalDuration: vi.fn(() => 120000),
+        // Returns seconds (timeline uses seconds for all time values)
+        getTotalDuration: vi.fn(() => 120),
       },
       playback: {
         getCurrentTime: vi.fn(() => 5),  // Returns seconds, not milliseconds

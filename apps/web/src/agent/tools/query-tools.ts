@@ -67,6 +67,7 @@ export const getTotalDurationTool: AgentTool = {
   execute: async (): Promise<ToolResult> => {
     try {
       const editor = EditorCore.getInstance();
+      // Duration is in seconds (timeline standard unit)
       const duration = editor.timeline.getTotalDuration();
       
       // Format duration as mm:ss.ms
