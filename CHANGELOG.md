@@ -4,6 +4,16 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ## [Unreleased]
 
+### Added
+
+- **Agentic Video Editing**: AI-driven video editing via natural language commands
+  - New `src/agent/` module with LLM orchestration layer
+  - LM Studio provider (MVP) with Qwen3 VL 8B model support
+  - 17 editing tools: timeline manipulation, playback control, state queries
+  - `AgentChatbox` UI component with provider status indicator
+  - Feature-flagged integration via `NEXT_PUBLIC_AGENT_ENABLED`
+  - Upstream-safe wrapper pattern (`editor-layout-with-agent.tsx`)
+
 ### Fixed
 
 - **React version mismatch**: Upgraded `react` from 19.2.0 to 19.2.4 to match `react-dom` version
