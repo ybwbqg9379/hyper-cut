@@ -39,3 +39,16 @@ export { getTimelineTools } from "./tools/timeline-tools";
 export { getPlaybackTools } from "./tools/playback-tools";
 export { getQueryTools } from "./tools/query-tools";
 export { getProjectTools } from "./tools/project-tools";
+export { getWorkflowTools } from "./tools/workflow-tools";
+
+// Workflows
+export {
+	listWorkflows,
+	getWorkflowByName,
+	resolveWorkflowFromParams,
+} from "./workflows";
+export type {
+	Workflow,
+	WorkflowStep,
+	WorkflowStepOverride,
+} from "./workflows/types";

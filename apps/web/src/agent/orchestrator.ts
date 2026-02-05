@@ -11,6 +11,7 @@ import type {
 	AgentOrchestratorOptions,
 } from "./types";
 import { createProvider, getConfiguredProviderType } from "./providers";
+import { resolveWorkflowFromParams } from "./workflows";
 
 /**
  * System prompt for the video editing agent
@@ -27,6 +28,7 @@ Available capabilities:
 - Project: update/save project settings, export the project to video, get project info
 - Assets: add/remove media assets, paste at specific time
 - Query information: get timeline info, current position, selected elements
+- Workflow automation: run predefined workflows for multi-step edits
 
 When the user asks you to do something:
 1. Understand their intent
@@ -162,6 +164,38 @@ export class AgentOrchestrator {
 			},
 			toolCalls: normalizedCalls,
 		};
+	}
+
+	private expandToolCallsForPlanning(toolCalls: ToolCall[]): ToolCall[] {
+		const expandedToolCalls: ToolCall[] = [];
+
+		for (const toolCall of toolCalls) {
+			if (toolCall.name !== "run_workflow") {
+				expandedToolCalls.push(toolCall);
+				continue;
+			}
+
+			const resolvedWorkflow = resolveWorkflowFromParams(
+				toolCall.arguments ?? {},
+			);
+			if (
+				!resolvedWorkflow.ok ||
+				resolvedWorkflow.resolved.steps.length === 0
+			) {
+				expandedToolCalls.push(toolCall);
+				continue;
+			}
+
+			for (const [index, step] of resolvedWorkflow.resolved.steps.entries()) {
+				expandedToolCalls.push({
+					id: `${toolCall.id || "workflow"}-step-${index + 1}`,
+					name: step.toolName,
+					arguments: step.arguments,
+				});
+			}
+		}
+
+		return expandedToolCalls;
 	}
 
 	private formatPlanMessage(plan: AgentExecutionPlan, prefix?: string): string {
@@ -317,10 +351,10 @@ export class AgentOrchestrator {
 			}
 
 			if (this.planningEnabled) {
-				const pendingPlan = this.buildExecutionPlan(
-					userMessage,
+				const planToolCalls = this.expandToolCallsForPlanning(
 					response.toolCalls,
 				);
+				const pendingPlan = this.buildExecutionPlan(userMessage, planToolCalls);
 				this.pendingPlanState = pendingPlan;
 				return {
 					message: this.formatPlanMessage(pendingPlan.plan),

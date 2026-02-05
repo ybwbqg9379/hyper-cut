@@ -285,6 +285,104 @@ describe("AgentOrchestrator", () => {
 		expect(toolExecute).not.toHaveBeenCalled();
 	});
 
+	it("should expand run_workflow into concrete plan steps", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			content: null,
+			toolCalls: [
+				{
+					id: "call-workflow-1",
+					name: "run_workflow",
+					arguments: { workflowName: "auto-caption-cleanup" },
+				},
+			],
+			finishReason: "tool_calls",
+		});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const generateCaptionsExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "captions ok" });
+		const removeSilenceExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "silence ok" });
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "generate_captions",
+					description: "Generate captions",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: generateCaptionsExecute,
+				},
+				{
+					name: "remove_silence",
+					description: "Remove silence",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: removeSilenceExecute,
+				},
+			],
+			{ planningEnabled: true },
+		);
+
+		const result = await orchestrator.process("run workflow");
+
+		expect(result.success).toBe(true);
+		expect(result.status).toBe("planned");
+		expect(result.plan?.steps.map((step) => step.toolName)).toEqual([
+			"generate_captions",
+			"remove_silence",
+		]);
+	});
+
+	it("should execute expanded workflow steps after confirmation", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			content: null,
+			toolCalls: [
+				{
+					id: "call-workflow-1",
+					name: "run_workflow",
+					arguments: { workflowName: "auto-caption-cleanup" },
+				},
+			],
+			finishReason: "tool_calls",
+		});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const generateCaptionsExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "captions ok" });
+		const removeSilenceExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "silence ok" });
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "generate_captions",
+					description: "Generate captions",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: generateCaptionsExecute,
+				},
+				{
+					name: "remove_silence",
+					description: "Remove silence",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: removeSilenceExecute,
+				},
+			],
+			{ planningEnabled: true },
+		);
+
+		await orchestrator.process("run workflow");
+		const confirmResult = await orchestrator.confirmPendingPlan();
+
+		expect(confirmResult.success).toBe(true);
+		expect(generateCaptionsExecute).toHaveBeenCalledTimes(1);
+		expect(removeSilenceExecute).toHaveBeenCalledTimes(1);
+	});
+
 	it("should execute pending plan after confirmation", async () => {
 		const provider = buildProvider();
 		const toolExecute = vi.fn().mockResolvedValue({

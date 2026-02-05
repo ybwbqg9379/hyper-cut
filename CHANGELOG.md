@@ -57,6 +57,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 支持从转录面板直接删除对应字幕片段
   - 支持逐条编辑字幕文本并一键同步写回时间线元素
   - 转录面板优先使用字幕 metadata 识别 caption（兼容旧 `Caption *` 命名）
+- **工作流引擎（Phase 2）**：新增可复用工作流与 `run_workflow` 执行工具
+  - 新增 `list_workflows` / `run_workflow` 两个 Agent 工具
+  - 新增预置工作流：`auto-caption-cleanup`、`selection-caption-cleanup`
+  - 支持 `stepOverrides` 覆盖指定工作流步骤参数
+  - Planning 模式下会将 `run_workflow` 自动展开为逐步计划，确认前可逐步审阅/编辑
 
 ### Changed
 

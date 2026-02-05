@@ -412,6 +412,7 @@ describe("Agent Tools Integration", () => {
 					expect.objectContaining({ category: "Scene" }),
 					expect.objectContaining({ category: "Asset" }),
 					expect.objectContaining({ category: "Project" }),
+					expect.objectContaining({ category: "Workflow" }),
 				]),
 			);
 		});
@@ -863,6 +864,35 @@ describe("Agent Tools Integration", () => {
 			]);
 			const result = await tool.execute({ source: "timeline" });
 			expect(result.success).toBe(false);
+		});
+	});
+
+	describe("Workflow Tools", () => {
+		it("list_workflows should return preset workflows", async () => {
+			const tool = getToolByName("list_workflows");
+			const result = await tool.execute({});
+
+			expect(result.success).toBe(true);
+			expect(result.message).toContain("auto-caption-cleanup");
+			expect(result.message).toContain("selection-caption-cleanup");
+		});
+
+		it("run_workflow should execute preset steps", async () => {
+			const tool = getToolByName("run_workflow");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: {
+					insertElement: ReturnType<typeof vi.fn>;
+				};
+			};
+
+			const result = await tool.execute({
+				workflowName: "auto-caption-cleanup",
+			});
+
+			expect(result.success).toBe(true);
+			expect(result.message).toContain("执行完成");
+			expect(editor.timeline.insertElement).toHaveBeenCalled();
 		});
 	});
 
