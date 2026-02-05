@@ -57,6 +57,7 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 支持从转录面板直接删除对应字幕片段
   - 支持逐条编辑字幕文本并一键同步写回时间线元素
   - 转录面板优先使用字幕 metadata 识别 caption（兼容旧 `Caption *` 命名）
+  - 新增可选“词级视图”：展示 word-level token，hover 显示时间戳，点击词可跳转并联动对应字幕段
 - **工作流引擎（Phase 2）**：新增可复用工作流与 `run_workflow` 执行工具
   - 新增 `list_workflows` / `run_workflow` 两个 Agent 工具
   - 新增预置工作流：`auto-caption-cleanup`、`selection-caption-cleanup`
@@ -69,6 +70,8 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Provider：`Message.content` 扩展为多模态 `ContentPart[]`，`lm-studio-provider` 支持 OpenAI 兼容 `image_url` 内容块
   - 新增工具：`detect_scenes`、`analyze_frames`、`suggest_edits`
   - 新增服务：`frame-extractor`（VideoCache 帧采样 + JPEG/base64 编码）与 `scene-detector`（Canvas 像素差分）
+  - 转录链路升级为 `segments + words`：Whisper worker 优先请求 `return_timestamps: "word"`，失败回退到 segment 模式
+  - `analyze_frames` / `suggest_edits` 已接入 word-level 上下文窗口，优先使用词级时间戳拼接转录文本
   - 支持场景检测结果缓存与帧分析缓存，`analyze_frames` 可复用 `detect_scenes` 的关键帧
   - `run_workflow` 执行映射已接入 Vision 工具类别
 

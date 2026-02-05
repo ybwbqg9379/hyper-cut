@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { invokeAction, hasActionHandlers } from "@/lib/actions";
 import type { TextElement } from "@/types/timeline";
+import type { TranscriptionWord } from "@/types/transcription";
 import {
 	createCaptionMetadata,
 	isCaptionTextElement,
 } from "@/lib/transcription/caption-metadata";
+import { transcriptionService } from "@/services/transcription/service";
 import { cn } from "@/utils/ui";
 import { Check, Trash2 } from "lucide-react";
 
@@ -28,6 +30,13 @@ interface SegmentRange {
 	segment: CaptionSegment;
 	start: number;
 	end: number;
+}
+
+interface WordItem {
+	text: string;
+	startTime: number;
+	endTime: number;
+	source: "whisper" | "estimated";
 }
 
 const MAX_SEGMENT_TEXT_LENGTH = 5000;
@@ -52,12 +61,84 @@ function buildRanges(segments: CaptionSegment[]): SegmentRange[] {
 	return ranges;
 }
 
+function splitCaptionTextToTokens(text: string): string[] {
+	const normalized = text.replace(/\s+/g, " ").trim();
+	if (!normalized) return [];
+	return normalized.split(" ").filter(Boolean);
+}
+
+function estimateWordsFromSegments(segments: CaptionSegment[]): WordItem[] {
+	const words: WordItem[] = [];
+
+	for (const segment of segments) {
+		const tokens = splitCaptionTextToTokens(segment.content);
+		if (tokens.length === 0) continue;
+
+		if (tokens.length === 1) {
+			words.push({
+				text: tokens[0],
+				startTime: segment.startTime,
+				endTime: segment.endTime,
+				source: "estimated",
+			});
+			continue;
+		}
+
+		const duration = Math.max(0, segment.endTime - segment.startTime);
+		const tokenDuration = duration > 0 ? duration / tokens.length : 0;
+
+		for (let index = 0; index < tokens.length; index++) {
+			const tokenStart = segment.startTime + tokenDuration * index;
+			const tokenEnd =
+				index === tokens.length - 1
+					? segment.endTime
+					: segment.startTime + tokenDuration * (index + 1);
+
+			words.push({
+				text: tokens[index],
+				startTime: tokenStart,
+				endTime: Math.max(tokenStart, tokenEnd),
+				source: "estimated",
+			});
+		}
+	}
+
+	return words;
+}
+
+function normalizeWhisperWords({
+	words,
+	timelineDuration,
+}: {
+	words: TranscriptionWord[];
+	timelineDuration: number;
+}): WordItem[] {
+	return words
+		.filter(
+			(word) =>
+				Number.isFinite(word.start) &&
+				Number.isFinite(word.end) &&
+				typeof word.text === "string" &&
+				word.text.trim().length > 0,
+		)
+		.filter((word) => word.start <= timelineDuration + 0.5)
+		.map((word) => ({
+			text: word.text.trim(),
+			startTime: Math.max(0, word.start),
+			endTime: Math.max(word.start, word.end),
+			source: "whisper" as const,
+		}))
+		.sort((left, right) => left.startTime - right.startTime);
+}
+
 export function TranscriptPanel() {
 	const editor = useEditor();
 	const tracks = editor.timeline.getTracks();
+	const timelineDuration = editor.timeline.getTotalDuration();
 	const selectedElements = editor.selection.getSelectedElements();
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
 	const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
+	const [showWordLevel, setShowWordLevel] = useState(false);
 
 	const segments = useMemo<CaptionSegment[]>(() => {
 		const items: CaptionSegment[] = [];
@@ -87,6 +168,21 @@ export function TranscriptPanel() {
 		[segments],
 	);
 	const ranges = useMemo(() => buildRanges(segments), [segments]);
+	const wordItems = useMemo<WordItem[]>(() => {
+		const lastResult = transcriptionService.getLastResult();
+		const whisperWords = normalizeWhisperWords({
+			words: lastResult?.words ?? [],
+			timelineDuration,
+		});
+		if (whisperWords.length > 0) {
+			return whisperWords;
+		}
+		return estimateWordsFromSegments(segments);
+	}, [segments, timelineDuration]);
+	const hasRealWordLevel = useMemo(
+		() => wordItems.some((word) => word.source === "whisper"),
+		[wordItems],
+	);
 
 	useEffect(() => {
 		setDrafts((prev) => {
@@ -135,6 +231,23 @@ export function TranscriptPanel() {
 		}
 		editor.timeline.deleteElements({
 			elements: [{ trackId: segment.trackId, elementId: segment.elementId }],
+		});
+	};
+
+	const focusWord = (word: WordItem) => {
+		editor.playback.seek({ time: word.startTime });
+		const relatedSegment = segments.find(
+			(segment) =>
+				word.startTime >= segment.startTime && word.startTime <= segment.endTime,
+		);
+		if (!relatedSegment) return;
+		editor.selection.setSelectedElements({
+			elements: [
+				{
+					trackId: relatedSegment.trackId,
+					elementId: relatedSegment.elementId,
+				},
+			],
 		});
 	};
 
@@ -211,10 +324,23 @@ export function TranscriptPanel() {
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="px-3 py-2 border-b border-border">
-				<p className="text-xs font-medium">转录面板</p>
-				<p className="text-xs text-muted-foreground">
-					点击文字跳转时间线，拖选文本范围联动选中片段；下方支持逐条编辑并同步到时间线
-				</p>
+				<div className="flex items-start justify-between gap-2">
+					<div>
+						<p className="text-xs font-medium">转录面板</p>
+						<p className="text-xs text-muted-foreground">
+							点击文字跳转时间线，拖选文本范围联动选中片段；下方支持逐条编辑并同步到时间线
+						</p>
+					</div>
+					<Button
+						variant="outline"
+						size="sm"
+						className="h-6 shrink-0 px-2 text-[11px]"
+						onClick={() => setShowWordLevel((value) => !value)}
+						disabled={wordItems.length === 0}
+					>
+						{showWordLevel ? "隐藏词级" : "显示词级"}
+					</Button>
+				</div>
 			</div>
 
 			<div className="p-3 border-b border-border">
@@ -230,6 +356,36 @@ export function TranscriptPanel() {
 						"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
 					)}
 				/>
+				{showWordLevel && (
+					<div className="mt-2 rounded-md border border-border bg-muted/20 p-2">
+						<div className="mb-1 text-[11px] text-muted-foreground">
+							词级时间戳
+							{hasRealWordLevel
+								? "（来源：Whisper）"
+								: "（来源：基于字幕段估算）"}
+							，hover 可查看起止时间
+						</div>
+						{wordItems.length === 0 ? (
+							<div className="text-[11px] text-muted-foreground">
+								暂无词级数据，请先执行一次转录。
+							</div>
+						) : (
+							<div className="flex flex-wrap gap-1">
+								{wordItems.map((word, index) => (
+									<button
+										key={`${word.startTime}-${word.endTime}-${word.text}-${index}`}
+										type="button"
+										className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] hover:bg-accent"
+										title={`${formatTime(word.startTime)} - ${formatTime(word.endTime)}`}
+										onClick={() => focusWord(word)}
+									>
+										{word.text}
+									</button>
+								))}
+							</div>
+						)}
+					</div>
+				)}
 			</div>
 
 			<ScrollArea className="flex-1 min-h-0">

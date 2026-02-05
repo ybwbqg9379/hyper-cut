@@ -157,6 +157,12 @@ vi.mock("@/services/transcription/service", () => ({
 				{ text: "Hello world", start: 0, end: 1.5 },
 				{ text: "Second line", start: 1.5, end: 2.7 },
 			],
+			words: [
+				{ text: "Hello", start: 0, end: 0.7 },
+				{ text: "world", start: 0.7, end: 1.5 },
+				{ text: "Second", start: 1.5, end: 2.1 },
+				{ text: "line", start: 2.1, end: 2.7 },
+			],
 			language: "en",
 		})),
 		cancel: vi.fn(),

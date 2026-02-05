@@ -1,7 +1,10 @@
 import type { MediaAsset } from '@/types/assets';
 import type { TimelineElement, TimelineTrack } from '@/types/timeline';
-import { hasMediaId } from '@/lib/timeline/element-utils';
+import { canElementHaveAudio, hasMediaId } from '@/lib/timeline/element-utils';
 import { EditorCore } from '@/core';
+import { extractTimelineAudio } from '@/lib/media/mediabunny';
+import { decodeAudioToFloat32 } from '@/lib/media/audio';
+import { transcriptionService } from '@/services/transcription/service';
 import type { AgentTool, ContentPart, ToolResult } from '../types';
 import { LMStudioProvider } from '../providers/lm-studio-provider';
 import { frameExtractorService, type EncodedVideoFrame } from '../services/frame-extractor';
@@ -20,6 +23,18 @@ interface TranscriptSegment {
   startTime: number;
   endTime: number;
   text: string;
+}
+
+interface TranscriptWord {
+  startTime: number;
+  endTime: number;
+  text: string;
+}
+
+interface TranscriptContext {
+  segments: TranscriptSegment[];
+  words: TranscriptWord[];
+  source: 'whisper' | 'captions' | 'mixed' | 'none';
 }
 
 interface FrameAnalysisResult {
@@ -58,8 +73,15 @@ interface FrameAnalysisCacheEntry {
   updatedAt: string;
 }
 
+interface TranscriptContextCacheEntry {
+  cacheKey: string;
+  context: TranscriptContext;
+  updatedAt: string;
+}
+
 const sceneCache = new Map<string, SceneCacheEntry>();
 const frameAnalysisCache = new Map<string, FrameAnalysisCacheEntry>();
+const transcriptContextCache = new Map<string, TranscriptContextCacheEntry>();
 
 function parseEnvNumber(envVar: string | undefined): number | undefined {
   if (!envVar) return undefined;
@@ -187,7 +209,11 @@ function toTimestamps(value: unknown): number[] | null {
   return timestamps.length > 0 ? timestamps : null;
 }
 
-function collectTranscriptSegments({ tracks }: { tracks: TimelineTrack[] }): TranscriptSegment[] {
+function collectCaptionSegmentsFromTimeline({
+  tracks,
+}: {
+  tracks: TimelineTrack[];
+}): TranscriptSegment[] {
   const segments = tracks
     .flatMap((track) =>
       track.type === 'text'
@@ -206,30 +232,299 @@ function collectTranscriptSegments({ tracks }: { tracks: TimelineTrack[] }): Tra
   return segments;
 }
 
+function splitTranscriptTokens(text: string): string[] {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+  return normalized.split(' ').filter(Boolean);
+}
+
+function buildWordsFromSegments(segments: TranscriptSegment[]): TranscriptWord[] {
+  const words: TranscriptWord[] = [];
+  for (const segment of segments) {
+    const tokens = splitTranscriptTokens(segment.text);
+    if (tokens.length === 0) continue;
+
+    if (tokens.length === 1) {
+      words.push({
+        text: tokens[0],
+        startTime: segment.startTime,
+        endTime: segment.endTime,
+      });
+      continue;
+    }
+
+    const duration = Math.max(0, segment.endTime - segment.startTime);
+    const tokenDuration = duration > 0 ? duration / tokens.length : 0;
+    for (let i = 0; i < tokens.length; i++) {
+      const tokenStart = segment.startTime + tokenDuration * i;
+      const tokenEnd = i === tokens.length - 1 ? segment.endTime : segment.startTime + tokenDuration * (i + 1);
+      words.push({
+        text: tokens[i],
+        startTime: tokenStart,
+        endTime: Math.max(tokenStart, tokenEnd),
+      });
+    }
+  }
+  return words;
+}
+
+function buildTranscriptCacheKey({
+  projectId,
+  tracks,
+}: {
+  projectId: string;
+  tracks: TimelineTrack[];
+}): string {
+  const fingerprint = tracks
+    .map((track) => {
+      const elementFingerprint = track.elements
+        .map((element) => {
+          if (element.type === 'text' && element.metadata?.kind === 'caption') {
+            return `${element.id}:${element.startTime.toFixed(2)}:${element.duration.toFixed(2)}:${element.content}`;
+          }
+          return `${element.id}:${element.type}:${element.startTime.toFixed(2)}:${element.duration.toFixed(2)}`;
+        })
+        .join('|');
+      return `${track.id}:${track.type}:${elementFingerprint}`;
+    })
+    .join('||');
+  return `${projectId}:${fingerprint}`;
+}
+
+async function buildWhisperTranscriptContext({
+  tracks,
+}: {
+  tracks: TimelineTrack[];
+}): Promise<TranscriptContext | null> {
+  const hasAudioSource = tracks.some((track) =>
+    track.elements.some((element) => canElementHaveAudio(element))
+  );
+  if (!hasAudioSource) {
+    return null;
+  }
+
+  const editor = EditorCore.getInstance();
+  const mediaAssets = editor.media.getAssets();
+  const totalDuration = editor.timeline.getTotalDuration();
+  if (!Number.isFinite(totalDuration) || totalDuration <= 0) {
+    return null;
+  }
+
+  const audioBlob = await extractTimelineAudio({
+    tracks,
+    mediaAssets,
+    totalDuration,
+  });
+  const { samples } = await decodeAudioToFloat32({ audioBlob });
+  if (samples.length === 0) {
+    return null;
+  }
+
+  const result = await transcriptionService.transcribe({
+    audioData: samples,
+    language: 'auto',
+  });
+
+  const segments = result.segments
+    .map((segment) => ({
+      startTime: segment.start,
+      endTime: segment.end,
+      text: segment.text.trim(),
+    }))
+    .filter((segment) => segment.text.length > 0);
+  const words = result.words
+    .map((word) => ({
+      startTime: word.start,
+      endTime: word.end,
+      text: word.text.trim(),
+    }))
+    .filter((word) => word.text.length > 0);
+
+  if (segments.length === 0 && words.length === 0) {
+    return null;
+  }
+
+  return {
+    segments,
+    words,
+    source: 'whisper',
+  };
+}
+
+async function getTranscriptContext({
+  tracks,
+}: {
+  tracks: TimelineTrack[];
+}): Promise<TranscriptContext> {
+  const editor = EditorCore.getInstance();
+  const activeProject = editor.project.getActive();
+  const projectId = activeProject?.metadata.id ?? 'unknown-project';
+  const cacheKey = buildTranscriptCacheKey({ projectId, tracks });
+  const cached = transcriptContextCache.get(cacheKey);
+  if (cached) {
+    return cached.context;
+  }
+
+  const captionSegments = collectCaptionSegmentsFromTimeline({ tracks });
+  const captionWords = buildWordsFromSegments(captionSegments);
+  const lastTranscription = transcriptionService.getLastResult();
+  const whisperFromMemory: TranscriptContext | null = lastTranscription
+    ? {
+        segments: lastTranscription.segments.map((segment) => ({
+          startTime: segment.start,
+          endTime: segment.end,
+          text: segment.text.trim(),
+        })),
+        words: lastTranscription.words.map((word) => ({
+          startTime: word.start,
+          endTime: word.end,
+          text: word.text.trim(),
+        })),
+        source: 'whisper',
+      }
+    : null;
+
+  let resolvedContext: TranscriptContext = {
+    segments: captionSegments,
+    words: captionWords,
+    source: captionSegments.length > 0 ? 'captions' : 'none',
+  };
+
+  if (whisperFromMemory && whisperFromMemory.words.length > 0) {
+    resolvedContext = whisperFromMemory;
+  } else {
+    try {
+      const whisperContext = await buildWhisperTranscriptContext({ tracks });
+      if (whisperContext) {
+        resolvedContext = whisperContext;
+      } else if (captionSegments.length > 0 && captionWords.length > 0) {
+        resolvedContext = {
+          segments: captionSegments,
+          words: captionWords,
+          source: 'mixed',
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to build whisper transcript context:', error);
+      if (captionSegments.length > 0 && captionWords.length > 0) {
+        resolvedContext = {
+          segments: captionSegments,
+          words: captionWords,
+          source: 'mixed',
+        };
+      }
+    }
+  }
+
+  transcriptContextCache.set(cacheKey, {
+    cacheKey,
+    context: resolvedContext,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return resolvedContext;
+}
+
+interface AssetTimePlacement {
+  timelineStartTime: number;
+  timelineEndTime: number;
+  sourceStartTime: number;
+  sourceEndTime: number;
+}
+
+function createAssetTimeToTimelineMapper({
+  tracks,
+  assetId,
+}: {
+  tracks: TimelineTrack[];
+  assetId: string;
+}): (assetTime: number) => number {
+  const placements = tracks
+    .flatMap((track) =>
+      track.elements
+        .filter(
+          (element): element is Extract<TimelineElement, { type: 'video' }> =>
+            element.type === 'video' && element.mediaId === assetId
+        )
+        .map((element) => {
+          const sourceStartTime = element.trimStart ?? 0;
+          const sourceEndTime = sourceStartTime + element.duration;
+          return {
+            timelineStartTime: element.startTime,
+            timelineEndTime: element.startTime + element.duration,
+            sourceStartTime,
+            sourceEndTime,
+          } satisfies AssetTimePlacement;
+        })
+    )
+    .sort((a, b) => a.timelineStartTime - b.timelineStartTime);
+
+  if (placements.length === 0) {
+    return (assetTime: number) => assetTime;
+  }
+
+  return (assetTime: number) => {
+    const matchedPlacement =
+      placements.find(
+        (placement) =>
+          assetTime >= placement.sourceStartTime && assetTime <= placement.sourceEndTime
+      ) ?? placements[0];
+
+    const relativeTime = assetTime - matchedPlacement.sourceStartTime;
+    const timelineTime = matchedPlacement.timelineStartTime + relativeTime;
+    if (!Number.isFinite(timelineTime)) {
+      return assetTime;
+    }
+    return Math.max(matchedPlacement.timelineStartTime, Math.min(timelineTime, matchedPlacement.timelineEndTime));
+  };
+}
+
 function getTranscriptForWindow({
-  segments,
+  context,
   centerTime,
   windowSeconds = DEFAULT_TRANSCRIPT_WINDOW_SECONDS,
 }: {
-  segments: TranscriptSegment[];
+  context: TranscriptContext;
   centerTime: number;
   windowSeconds?: number;
 }): string {
   const start = Math.max(0, centerTime - windowSeconds);
   const end = centerTime + windowSeconds;
 
-  return segments
+  const wordsInRange = context.words
+    .filter((word) => word.endTime >= start && word.startTime <= end)
+    .map((word) => word.text)
+    .join(' ')
+    .trim();
+  if (wordsInRange.length > 0) {
+    return wordsInRange;
+  }
+
+  return context.segments
     .filter((segment) => segment.endTime >= start && segment.startTime <= end)
     .map((segment) => segment.text)
     .join(' ')
     .trim();
 }
 
-function getFullTranscript({ segments }: { segments: TranscriptSegment[] }): string {
-  return segments
+function getFullTranscript({ context }: { context: TranscriptContext }): string {
+  if (context.segments.length > 0) {
+    return context.segments
+      .map(
+        (segment) =>
+          `[${segment.startTime.toFixed(2)}-${segment.endTime.toFixed(2)}] ${segment.text}`
+      )
+      .join('\n');
+  }
+
+  if (context.words.length === 0) {
+    return '';
+  }
+
+  return context.words
     .map(
-      (segment) =>
-        `[${segment.startTime.toFixed(2)}-${segment.endTime.toFixed(2)}] ${segment.text}`
+      (word) =>
+        `[${word.startTime.toFixed(2)}-${word.endTime.toFixed(2)}] ${word.text}`
     )
     .join('\n');
 }
@@ -619,15 +914,20 @@ export const analyzeFramesTool: AgentTool = {
         };
       }
 
-      const transcriptSegments = collectTranscriptSegments({ tracks });
+      const transcriptContext = await getTranscriptContext({ tracks });
+      const assetTimeToTimelineTime = createAssetTimeToTimelineMapper({
+        tracks,
+        assetId: asset.id,
+      });
       const analyses: FrameAnalysisResult[] = [];
 
       for (let i = 0; i < sampledFrames.length; i++) {
         const frame = sampledFrames[i];
         const previousDescription = analyses[i - 1]?.description ?? '';
+        const timelineTime = assetTimeToTimelineTime(frame.timestamp);
         const transcriptSegment = getTranscriptForWindow({
-          segments: transcriptSegments,
-          centerTime: frame.timestamp,
+          context: transcriptContext,
+          centerTime: timelineTime,
         });
 
         const promptText = buildFramePrompt({
@@ -749,8 +1049,8 @@ export const suggestEditsTool: AgentTool = {
       }
 
       const frameAnalyses = frameAnalysisCache.get(asset.id)?.analyses ?? [];
-      const transcriptSegments = collectTranscriptSegments({ tracks });
-      const transcript = getFullTranscript({ segments: transcriptSegments });
+      const transcriptContext = await getTranscriptContext({ tracks });
+      const transcript = getFullTranscript({ context: transcriptContext });
 
       const provider = createVisionProvider();
       let suggestions: EditSuggestion[] = [];
@@ -807,7 +1107,9 @@ export const suggestEditsTool: AgentTool = {
           inputs: {
             sceneCount: scenes.length,
             frameAnalysisCount: frameAnalyses.length,
-            transcriptSegmentCount: transcriptSegments.length,
+            transcriptSegmentCount: transcriptContext.segments.length,
+            transcriptWordCount: transcriptContext.words.length,
+            transcriptSource: transcriptContext.source,
           },
         },
       };

@@ -17,6 +17,7 @@ class TranscriptionService {
 	private currentModelId: TranscriptionModelId | null = null;
 	private isInitialized = false;
 	private isInitializing = false;
+	private lastResult: TranscriptionResult | null = null;
 
 	async transcribe({
 		audioData,
@@ -51,11 +52,13 @@ class TranscriptionService {
 
 					case "transcribe-complete":
 						this.worker?.removeEventListener("message", handleMessage);
-						resolve({
+						this.lastResult = {
 							text: response.text,
 							segments: response.segments,
+							words: response.words,
 							language,
-						});
+						};
+						resolve(this.lastResult);
 						break;
 
 					case "transcribe-error":
@@ -82,6 +85,10 @@ class TranscriptionService {
 
 	cancel() {
 		this.worker?.postMessage({ type: "cancel" } satisfies WorkerMessage);
+	}
+
+	getLastResult(): TranscriptionResult | null {
+		return this.lastResult;
 	}
 
 	private async ensureWorker({
@@ -180,6 +187,7 @@ class TranscriptionService {
 		this.isInitialized = false;
 		this.isInitializing = false;
 		this.currentModelId = null;
+		this.lastResult = null;
 	}
 }
 
