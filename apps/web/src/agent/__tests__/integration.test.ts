@@ -976,6 +976,30 @@ describe("Agent Tools Integration", () => {
 			expect(result.message).toContain("auto-caption-cleanup");
 			expect(result.message).toContain("selection-caption-cleanup");
 			expect(result.message).toContain("long-to-short");
+			const workflows = (result.data as { workflows?: Array<unknown> })
+				?.workflows;
+			const longToShort =
+				(Array.isArray(workflows) ? workflows : []).find(
+					(item) =>
+						typeof item === "object" &&
+						item !== null &&
+						(item as { name?: string }).name === "long-to-short",
+				) ?? null;
+			const steps =
+				longToShort && typeof longToShort === "object"
+					? ((longToShort as { steps?: Array<unknown> }).steps ?? [])
+					: [];
+			const applyCut =
+				(Array.isArray(steps) ? steps : []).find(
+					(step) =>
+						typeof step === "object" &&
+						step !== null &&
+						(step as { id?: string }).id === "apply-cut",
+				) ?? null;
+			expect(
+				(applyCut as { requiresConfirmation?: boolean } | null)
+					?.requiresConfirmation,
+			).toBe(true);
 		});
 
 		it("run_workflow should execute preset steps", async () => {
@@ -994,6 +1018,21 @@ describe("Agent Tools Integration", () => {
 			expect(result.success).toBe(true);
 			expect(result.message).toContain("执行完成");
 			expect(editor.timeline.insertElement).toHaveBeenCalled();
+		});
+
+		it("run_workflow should pause before confirmation-required steps", async () => {
+			const tool = getToolByName("run_workflow");
+			const result = await tool.execute({
+				workflowName: "long-to-short",
+				startFromStepId: "apply-cut",
+			});
+
+			expect(result.success).toBe(true);
+			expect(result.message).toContain("暂停");
+			expect(result.data).toMatchObject({
+				errorCode: "WORKFLOW_CONFIRMATION_REQUIRED",
+				status: "awaiting_confirmation",
+			});
 		});
 	});
 

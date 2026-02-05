@@ -37,6 +37,7 @@ const DEFAULT_TOP_N_VISUAL = 15;
 const DEFAULT_SEGMENT_MIN_SECONDS = 8;
 const DEFAULT_SEGMENT_MAX_SECONDS = 30;
 const DEFAULT_DURATION_TOLERANCE = 0.15;
+const DEFAULT_FRAME_EXTRACTION_CONCURRENCY = 4;
 const MIN_INTERVAL_SECONDS = 0.03;
 const SELECT_EPSILON = 0.02;
 
@@ -44,6 +45,7 @@ interface HighlightCacheState {
 	scoredSegments: ScoredSegment[] | null;
 	highlightPlan: HighlightPlan | null;
 	assetId: string | null;
+	timelineFingerprint: string | null;
 	updatedAt: string | null;
 }
 
@@ -57,6 +59,7 @@ const highlightCache: HighlightCacheState = {
 	scoredSegments: null,
 	highlightPlan: null,
 	assetId: null,
+	timelineFingerprint: null,
 	updatedAt: null,
 };
 
@@ -87,6 +90,87 @@ function toBooleanOrDefault(value: unknown, fallback: boolean): boolean {
 
 function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));
+}
+
+function buildTimelineFingerprint(tracks: TimelineTrack[]): string {
+	return tracks
+		.map((track) => {
+			const elements = track.elements
+				.map((element) => {
+					const mediaId =
+						"mediaId" in element && typeof element.mediaId === "string"
+							? element.mediaId
+							: "";
+					const content =
+						element.type === "text" && typeof element.content === "string"
+							? element.content
+							: "";
+					const trimStart =
+						"trimStart" in element && typeof element.trimStart === "number"
+							? element.trimStart
+							: 0;
+					const trimEnd =
+						"trimEnd" in element && typeof element.trimEnd === "number"
+							? element.trimEnd
+							: 0;
+					return [
+						element.id,
+						element.type,
+						element.startTime.toFixed(3),
+						element.duration.toFixed(3),
+						trimStart.toFixed(3),
+						trimEnd.toFixed(3),
+						mediaId,
+						content,
+					].join(":");
+				})
+				.join("|");
+			return `${track.id}:${track.type}:${elements}`;
+		})
+		.join("||");
+}
+
+function isHighlightCacheStale({
+	tracks,
+}: {
+	tracks: TimelineTrack[];
+}): boolean {
+	if (!highlightCache.timelineFingerprint) {
+		return Boolean(
+			highlightCache.scoredSegments || highlightCache.highlightPlan,
+		);
+	}
+	return (
+		highlightCache.timelineFingerprint !== buildTimelineFingerprint(tracks)
+	);
+}
+
+async function mapWithConcurrency<T, R>({
+	items,
+	worker,
+	limit,
+}: {
+	items: T[];
+	worker: (item: T, index: number) => Promise<R>;
+	limit: number;
+}): Promise<R[]> {
+	if (items.length === 0) return [];
+	const results = new Array<R>(items.length);
+	let cursor = 0;
+
+	async function consume(): Promise<void> {
+		while (cursor < items.length) {
+			const index = cursor;
+			cursor += 1;
+			results[index] = await worker(items[index], index);
+		}
+	}
+
+	const tasks = Array.from({ length: Math.min(limit, items.length) }, () =>
+		consume(),
+	);
+	await Promise.all(tasks);
+	return results;
 }
 
 function findElementByRef({
@@ -656,10 +740,12 @@ function updateHighlightCache({
 	assetId,
 	scoredSegments,
 	highlightPlan,
+	timelineFingerprint,
 }: {
 	assetId?: string;
 	scoredSegments?: ScoredSegment[] | null;
 	highlightPlan?: HighlightPlan | null;
+	timelineFingerprint?: string | null;
 }): void {
 	if (assetId !== undefined) {
 		highlightCache.assetId = assetId;
@@ -669,6 +755,9 @@ function updateHighlightCache({
 	}
 	if (highlightPlan !== undefined) {
 		highlightCache.highlightPlan = highlightPlan;
+	}
+	if (timelineFingerprint !== undefined) {
+		highlightCache.timelineFingerprint = timelineFingerprint;
 	}
 	highlightCache.updatedAt = new Date().toISOString();
 }
@@ -711,6 +800,7 @@ export const scoreHighlightsTool: AgentTool = {
 						? params.videoAssetId
 						: undefined,
 			});
+			const timelineFingerprint = buildTimelineFingerprint(tracks);
 
 			const context = await getTranscriptContext({ tracks });
 			if (context.segments.length === 0) {
@@ -814,6 +904,7 @@ export const scoreHighlightsTool: AgentTool = {
 				assetId: asset.id,
 				scoredSegments: ranked,
 				highlightPlan: null,
+				timelineFingerprint,
 			});
 
 			return {
@@ -835,6 +926,7 @@ export const scoreHighlightsTool: AgentTool = {
 					topSegments: ranked.slice(0, 10),
 					segments: ranked,
 					cachedAt: highlightCache.updatedAt,
+					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
 		} catch (error) {
@@ -862,6 +954,11 @@ export const validateHighlightsVisualTool: AgentTool = {
 				type: "number",
 				description: "验证前 N 个候选段（默认 15）(Top N candidates)",
 			},
+			frameConcurrency: {
+				type: "number",
+				description:
+					"关键帧提取并发度，默认 4，范围 1-8 (Frame extraction concurrency)",
+			},
 		},
 		required: [],
 	},
@@ -883,9 +980,37 @@ export const validateHighlightsVisualTool: AgentTool = {
 						? params.videoAssetId
 						: undefined,
 			});
+			const timelineFingerprint = buildTimelineFingerprint(tracks);
+			if (isHighlightCacheStale({ tracks })) {
+				updateHighlightCache({
+					assetId: asset.id,
+					scoredSegments: null,
+					highlightPlan: null,
+					timelineFingerprint,
+				});
+				return {
+					success: false,
+					message: "时间线已变化，缓存评分已失效，请重新执行 score_highlights",
+					data: {
+						errorCode: "HIGHLIGHT_CACHE_STALE",
+						timelineFingerprint,
+					},
+				};
+			}
+
 			const topN = Math.max(
 				1,
 				Math.floor(toNumberOrDefault(params.topN, DEFAULT_TOP_N_VISUAL)),
+			);
+			const frameConcurrency = clamp(
+				Math.floor(
+					toNumberOrDefault(
+						params.frameConcurrency,
+						DEFAULT_FRAME_EXTRACTION_CONCURRENCY,
+					),
+				),
+				1,
+				8,
 			);
 
 			const provider = createLocalProvider();
@@ -902,6 +1027,7 @@ export const validateHighlightsVisualTool: AgentTool = {
 						validatedCount: 0,
 						hasVisual: false,
 						segments: cachedSegments,
+						timelineFingerprint,
 					},
 				};
 			}
@@ -915,21 +1041,23 @@ export const validateHighlightsVisualTool: AgentTool = {
 				assetId: asset.id,
 			});
 
-			const candidatesWithFrames: ScoredSegment[] = [];
-			for (const candidate of topCandidates) {
-				const center =
-					(candidate.chunk.startTime + candidate.chunk.endTime) / 2;
-				const dataUrl = await extractFrameDataUrl({
-					asset,
-					timelineTime: center,
-					timelineToAssetTime: timelineToAsset,
-				});
-
-				candidatesWithFrames.push({
-					...candidate,
-					thumbnailDataUrl: dataUrl ?? undefined,
-				});
-			}
+			const candidatesWithFrames = await mapWithConcurrency({
+				items: topCandidates,
+				limit: frameConcurrency,
+				worker: async (candidate) => {
+					const center =
+						(candidate.chunk.startTime + candidate.chunk.endTime) / 2;
+					const dataUrl = await extractFrameDataUrl({
+						asset,
+						timelineTime: center,
+						timelineToAssetTime: timelineToAsset,
+					});
+					return {
+						...candidate,
+						thumbnailDataUrl: dataUrl ?? undefined,
+					} satisfies ScoredSegment;
+				},
+			});
 
 			const visualMap = await highlightScorerService.scoreWithVision(
 				candidatesWithFrames,
@@ -972,6 +1100,7 @@ export const validateHighlightsVisualTool: AgentTool = {
 			updateHighlightCache({
 				assetId: asset.id,
 				scoredSegments: reranked,
+				timelineFingerprint,
 			});
 
 			return {
@@ -986,6 +1115,7 @@ export const validateHighlightsVisualTool: AgentTool = {
 					topSegments: reranked.slice(0, 10),
 					segments: reranked,
 					cachedAt: highlightCache.updatedAt,
+					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
 		} catch (error) {
@@ -1032,6 +1162,24 @@ export const generateHighlightPlanTool: AgentTool = {
 					data: { errorCode: "HIGHLIGHT_CACHE_MISSING" },
 				};
 			}
+			const editor = EditorCore.getInstance();
+			const tracks = editor.timeline.getTracks();
+			const timelineFingerprint = buildTimelineFingerprint(tracks);
+			if (isHighlightCacheStale({ tracks })) {
+				updateHighlightCache({
+					scoredSegments: null,
+					highlightPlan: null,
+					timelineFingerprint,
+				});
+				return {
+					success: false,
+					message: "时间线已变化，缓存评分已失效，请重新执行 score_highlights",
+					data: {
+						errorCode: "HIGHLIGHT_CACHE_STALE",
+						timelineFingerprint,
+					},
+				};
+			}
 
 			const targetDuration =
 				toNumberOrDefault(params.targetDuration, DEFAULT_TARGET_DURATION) > 0
@@ -1061,7 +1209,7 @@ export const generateHighlightPlanTool: AgentTool = {
 				};
 			}
 
-			updateHighlightCache({ highlightPlan: plan });
+			updateHighlightCache({ highlightPlan: plan, timelineFingerprint });
 
 			return {
 				success: true,
@@ -1069,6 +1217,7 @@ export const generateHighlightPlanTool: AgentTool = {
 				data: {
 					plan,
 					cachedAt: highlightCache.updatedAt,
+					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
 		} catch (error) {
@@ -1117,6 +1266,25 @@ export const applyHighlightCutTool: AgentTool = {
 			const removeSilence = toBooleanOrDefault(params.removeSilence, false);
 
 			const editor = EditorCore.getInstance();
+			const tracksSnapshot = editor.timeline.getTracks();
+			const timelineFingerprint = buildTimelineFingerprint(tracksSnapshot);
+			if (isHighlightCacheStale({ tracks: tracksSnapshot })) {
+				updateHighlightCache({
+					scoredSegments: null,
+					highlightPlan: null,
+					timelineFingerprint,
+				});
+				return {
+					success: false,
+					message:
+						"时间线已变化，缓存计划已失效，请重新执行 score_highlights 和 generate_highlight_plan",
+					data: {
+						errorCode: "HIGHLIGHT_PLAN_STALE",
+						timelineFingerprint,
+					},
+				};
+			}
+
 			const totalDuration = editor.timeline.getTotalDuration();
 
 			const keepRanges = plan.segments.map((segment) => ({
@@ -1131,19 +1299,25 @@ export const applyHighlightCutTool: AgentTool = {
 			let deletedRangeCount = 0;
 			let splitCount = 0;
 
+			const splitTimes = Array.from(
+				new Set(
+					deleteRanges
+						.flatMap((range) => [range.start, range.end])
+						.map((time) => Number(time.toFixed(4))),
+				),
+			).sort((a, b) => b - a);
+
+			for (const splitTime of splitTimes) {
+				const splitResult = await splitAtTimeTool.execute({
+					time: splitTime,
+					selectAll: true,
+				});
+				if (splitResult.success) {
+					splitCount += 1;
+				}
+			}
+
 			for (const range of deleteRanges) {
-				const splitEnd = await splitAtTimeTool.execute({
-					time: range.end,
-					selectAll: true,
-				});
-				if (splitEnd.success) splitCount += 1;
-
-				const splitStart = await splitAtTimeTool.execute({
-					time: range.start,
-					selectAll: true,
-				});
-				if (splitStart.success) splitCount += 1;
-
 				const refs = collectElementsFullyInRange({
 					tracks: editor.timeline.getTracks(),
 					start: range.start,
@@ -1200,10 +1374,12 @@ export const applyHighlightCutTool: AgentTool = {
 					: `精华剪辑已应用，删除区间 ${deletedRangeCount} 个`,
 				data: {
 					deleteRanges,
+					splitTimes,
 					deletedRangeCount,
 					splitCount,
 					followUps,
 					plan,
+					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
 		} catch (error) {

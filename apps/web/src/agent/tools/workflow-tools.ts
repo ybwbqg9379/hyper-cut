@@ -33,6 +33,16 @@ function buildExecutableToolMap(): Map<string, AgentTool> {
 
 const workflowReservedTools = new Set(["run_workflow", "list_workflows"]);
 
+function toBoolean(value: unknown, fallback = false): boolean {
+	return typeof value === "boolean" ? value : fallback;
+}
+
+function toNonEmptyString(value: unknown): string | null {
+	if (typeof value !== "string") return null;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : null;
+}
+
 export const listWorkflowsTool: AgentTool = {
 	name: "list_workflows",
 	description:
@@ -69,6 +79,7 @@ export const listWorkflowsTool: AgentTool = {
 						toolName: step.toolName,
 						summary: step.summary,
 						arguments: step.arguments,
+						requiresConfirmation: step.requiresConfirmation === true,
 					})),
 				})),
 			},
@@ -80,7 +91,7 @@ export const runWorkflowTool: AgentTool = {
 	name: "run_workflow",
 	description:
 		"执行预置工作流。Execute a predefined workflow by name. " +
-		"支持 stepOverrides 覆盖某一步参数。",
+		"支持 stepOverrides 覆盖某一步参数，默认在 requiresConfirmation 步骤前暂停。",
 	parameters: {
 		type: "object",
 		properties: {
@@ -92,6 +103,16 @@ export const runWorkflowTool: AgentTool = {
 				type: "array",
 				description:
 					"步骤参数覆盖数组：[{ stepId 或 index, arguments }] (Optional step overrides)",
+			},
+			confirmRequiredSteps: {
+				type: "boolean",
+				description:
+					"是否确认并执行 requiresConfirmation 步骤，默认 false (Execute confirmation-required steps)",
+			},
+			startFromStepId: {
+				type: "string",
+				description:
+					"从指定步骤开始执行，用于暂停后的恢复 (Resume workflow from a specific step id)",
 			},
 		},
 		required: ["workflowName"],
@@ -106,14 +127,28 @@ export const runWorkflowTool: AgentTool = {
 			};
 		}
 
+		const confirmRequiredSteps = toBoolean(params.confirmRequiredSteps, false);
+		const startFromStepId = toNonEmptyString(params.startFromStepId);
 		const executableTools = buildExecutableToolMap();
+		const steps = resolved.resolved.steps;
+		const startIndex = startFromStepId
+			? steps.findIndex((step) => step.id === startFromStepId)
+			: 0;
+		if (startFromStepId && startIndex < 0) {
+			return {
+				success: false,
+				message: `startFromStepId 无效: ${startFromStepId}`,
+				data: { errorCode: "INVALID_START_STEP_ID", startFromStepId },
+			};
+		}
+
 		const stepResults: Array<{
 			stepId: string;
 			toolName: string;
 			result: ToolResult;
 		}> = [];
 
-		for (const step of resolved.resolved.steps) {
+		for (const step of steps.slice(startIndex)) {
 			if (workflowReservedTools.has(step.toolName)) {
 				return {
 					success: false,
@@ -121,6 +156,32 @@ export const runWorkflowTool: AgentTool = {
 						`工作流步骤 ${step.id} 包含保留工具 ${step.toolName}，` +
 						"不支持嵌套工作流执行",
 					data: { errorCode: "WORKFLOW_NESTING_NOT_ALLOWED", stepId: step.id },
+				};
+			}
+
+			if (step.requiresConfirmation && !confirmRequiredSteps) {
+				return {
+					success: true,
+					message:
+						`工作流已暂停在步骤 ${step.id} (${step.toolName}) 前，` +
+						"请确认后继续执行",
+					data: {
+						errorCode: "WORKFLOW_CONFIRMATION_REQUIRED",
+						status: "awaiting_confirmation",
+						workflowName: resolved.resolved.workflow.name,
+						stepResults,
+						nextStep: {
+							id: step.id,
+							toolName: step.toolName,
+							summary: step.summary,
+							arguments: step.arguments,
+						},
+						resumeHint: {
+							workflowName: resolved.resolved.workflow.name,
+							startFromStepId: step.id,
+							confirmRequiredSteps: true,
+						},
+					},
 				};
 			}
 

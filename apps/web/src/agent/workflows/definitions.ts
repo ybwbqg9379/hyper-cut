@@ -87,6 +87,7 @@ export const WORKFLOWS: Workflow[] = [
 					removeSilence: true,
 				},
 				summary: "应用剪辑计划到时间线",
+				requiresConfirmation: true,
 			},
 		],
 	},

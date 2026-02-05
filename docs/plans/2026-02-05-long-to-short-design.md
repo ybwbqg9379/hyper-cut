@@ -272,7 +272,7 @@ export class SegmentSelectorService {
    *    a. 跳过与已选段时间重叠的
    *    b. 累加时长，直到达到目标 ±15%
    * 3. 按原始时间顺序重排选中段
-  * 4. Hook 优化: 仅当最强 Hook 段较首段 hookPotential 至少高 2 分，且不重叠、且不超时长时才替换
+   * 4. Hook 优化: 仅当最强 Hook 段较首段 hookPotential 至少高 2 分，且不重叠、且不超时长时才替换
    *
    * 参数:
    *   segments: 所有评分段
@@ -460,6 +460,7 @@ export class SegmentSelectorService {
     {
       id: "apply-cut",
       toolName: "apply_highlight_cut",
+      requiresConfirmation: true,
       arguments: { addCaptions: true, removeSilence: true },
       summary: "应用剪辑计划到时间线"
     }

@@ -3,6 +3,7 @@ export interface WorkflowStep {
 	toolName: string;
 	arguments: Record<string, unknown>;
 	summary?: string;
+	requiresConfirmation?: boolean;
 }
 
 export interface Workflow {

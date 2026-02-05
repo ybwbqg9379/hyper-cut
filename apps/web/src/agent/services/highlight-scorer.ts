@@ -9,6 +9,8 @@ import type {
 } from "../tools/highlight-types";
 
 const DEFAULT_BLOCK_SECONDS = 300;
+const MAX_BLOCK_SPAN_SECONDS = 480;
+const DEFAULT_VISION_CONCURRENCY = 3;
 const DEFAULT_TEMPERATURE = 0.2;
 
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
@@ -57,6 +59,33 @@ function average(values: number[]): number {
 	return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+async function mapWithConcurrency<T, R>({
+	items,
+	worker,
+	limit,
+}: {
+	items: T[];
+	worker: (item: T, index: number) => Promise<R>;
+	limit: number;
+}): Promise<R[]> {
+	if (items.length === 0) return [];
+	const results = new Array<R>(items.length);
+	let cursor = 0;
+
+	async function consume(): Promise<void> {
+		while (cursor < items.length) {
+			const index = cursor;
+			cursor += 1;
+			results[index] = await worker(items[index], index);
+		}
+	}
+
+	await Promise.all(
+		Array.from({ length: Math.min(limit, items.length) }, () => consume()),
+	);
+	return results;
+}
+
 function normalizeRuleScore(ruleScores: RuleScores): number {
 	return average([
 		clamp(ruleScores.speakingRate, 0, 1),
@@ -98,23 +127,33 @@ function buildBlocks(chunks: TranscriptChunk[]): LLMBlock[] {
 
 	let current: TranscriptChunk[] = [];
 	let currentSpanStart = 0;
+	let currentSpeechSeconds = 0;
 
 	for (const chunk of sorted) {
+		const chunkDuration = Math.max(0, chunk.endTime - chunk.startTime);
 		if (current.length === 0) {
 			current = [chunk];
 			currentSpanStart = chunk.startTime;
+			currentSpeechSeconds = chunkDuration;
 			continue;
 		}
 
 		const span = chunk.endTime - currentSpanStart;
-		if (span > DEFAULT_BLOCK_SECONDS && current.length > 0) {
+		const nextSpeechSeconds = currentSpeechSeconds + chunkDuration;
+		if (
+			current.length > 0 &&
+			(nextSpeechSeconds > DEFAULT_BLOCK_SECONDS ||
+				span > MAX_BLOCK_SPAN_SECONDS)
+		) {
 			blocks.push({ chunks: current });
 			current = [chunk];
 			currentSpanStart = chunk.startTime;
+			currentSpeechSeconds = chunkDuration;
 			continue;
 		}
 
 		current.push(chunk);
+		currentSpeechSeconds = nextSpeechSeconds;
 	}
 
 	if (current.length > 0) {
@@ -146,8 +185,8 @@ function buildSemanticPrompt(chunks: TranscriptChunk[]): string {
 		"你是一位专业短视频剪辑师。以下是一段长视频的转录文本片段。",
 		"请为每个编号段落评分(1-10 整数):",
 		"- importance: 信息含量和重要程度",
-		"- emotionalIntensity: 语气的情绪强度",
-		"- hookPotential: 作为短视频开头的吸引力",
+		"- emotionalIntensity: 语气的情绪强度(兴奋/激动/感动/紧张)",
+		"- hookPotential: 如果作为短视频前3秒，能否吸引观众继续看",
 		"- standalone: 脱离上下文后是否仍可理解",
 		"",
 		body,
@@ -301,60 +340,71 @@ export class HighlightScorerService {
 			.slice(0, maxCandidates);
 
 		const prompt = buildVisualPrompt();
-
-		for (const candidate of targets) {
-			if (!candidate.thumbnailDataUrl) {
-				result.set(candidate.chunk.index, {
-					frameQuality: 0,
-					visualInterest: 0,
-					hasValidFrame: false,
-				});
-				continue;
-			}
-
-			try {
-				const response = await provider.chat({
-					messages: [
-						{
-							role: "system",
-							content: "你是视频画面评估助手。只输出 JSON。",
-						},
-						{
-							role: "user",
-							content: [
-								{ type: "text", text: prompt },
-								{
-									type: "image_url",
-									image_url: {
-										url: candidate.thumbnailDataUrl,
-									},
-								},
-							],
-						},
-					],
-					tools: [],
-					temperature: DEFAULT_TEMPERATURE,
-				});
-
-				const content =
-					typeof response.content === "string" ? response.content : "";
-				const visual = parseVisualScores(content);
-				if (visual) {
-					result.set(candidate.chunk.index, visual);
-				} else {
-					result.set(candidate.chunk.index, {
-						frameQuality: 0,
-						visualInterest: 0,
-						hasValidFrame: false,
-					});
+		const evaluated = await mapWithConcurrency({
+			items: targets,
+			limit: DEFAULT_VISION_CONCURRENCY,
+			worker: async (candidate) => {
+				if (!candidate.thumbnailDataUrl) {
+					return {
+						index: candidate.chunk.index,
+						visual: {
+							frameQuality: 0,
+							visualInterest: 0,
+							hasValidFrame: false,
+						} satisfies VisualScores,
+					};
 				}
-			} catch {
-				result.set(candidate.chunk.index, {
-					frameQuality: 0,
-					visualInterest: 0,
-					hasValidFrame: false,
-				});
-			}
+
+				try {
+					const response = await provider.chat({
+						messages: [
+							{
+								role: "system",
+								content: "你是视频画面评估助手。只输出 JSON。",
+							},
+							{
+								role: "user",
+								content: [
+									{ type: "text", text: prompt },
+									{
+										type: "image_url",
+										image_url: {
+											url: candidate.thumbnailDataUrl,
+										},
+									},
+								],
+							},
+						],
+						tools: [],
+						temperature: DEFAULT_TEMPERATURE,
+					});
+
+					const content =
+						typeof response.content === "string" ? response.content : "";
+					const visual = parseVisualScores(content);
+					return {
+						index: candidate.chunk.index,
+						visual: visual ?? {
+							frameQuality: 0,
+							visualInterest: 0,
+							hasValidFrame: false,
+						},
+					};
+				} catch {
+					return {
+						index: candidate.chunk.index,
+						visual: {
+							frameQuality: 0,
+							visualInterest: 0,
+							hasValidFrame: false,
+						} satisfies VisualScores,
+					};
+				}
+			},
+		});
+
+		for (const item of evaluated) {
+			result.set(item.index, item.visual);
 		}
 
 		return result;
