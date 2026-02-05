@@ -33,6 +33,23 @@ const DEFAULT_OPTIONS: Required<Omit<LMStudioProviderOptions, "stop">> & {
 	stop: undefined,
 };
 
+function compactOptions(
+	options: LMStudioProviderOptions,
+): Partial<typeof DEFAULT_OPTIONS> {
+	const next: Partial<typeof DEFAULT_OPTIONS> = {};
+	if (options.url !== undefined) next.url = options.url;
+	if (options.model !== undefined) next.model = options.model;
+	if (options.timeoutMs !== undefined) next.timeoutMs = options.timeoutMs;
+	if (options.maxTokens !== undefined) next.maxTokens = options.maxTokens;
+	if (options.temperature !== undefined) next.temperature = options.temperature;
+	if (options.topP !== undefined) next.topP = options.topP;
+	if (options.topK !== undefined) next.topK = options.topK;
+	if (options.repeatPenalty !== undefined)
+		next.repeatPenalty = options.repeatPenalty;
+	if (options.stop !== undefined) next.stop = options.stop;
+	return next;
+}
+
 /**
  * LM Studio Provider
  * Uses OpenAI-compatible API
@@ -54,7 +71,10 @@ export class LMStudioProvider implements LLMProvider {
 			typeof optionsOrBaseUrl === "string"
 				? { url: optionsOrBaseUrl, model, timeoutMs }
 				: optionsOrBaseUrl;
-		this.options = { ...DEFAULT_OPTIONS, ...normalizedOptions };
+		this.options = {
+			...DEFAULT_OPTIONS,
+			...compactOptions(normalizedOptions),
+		};
 	}
 
 	/** @deprecated Use constructor with options object instead */
