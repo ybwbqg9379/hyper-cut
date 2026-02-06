@@ -12,10 +12,12 @@ import {
 	type AgentExecutionEvent,
 	type AgentExecutionPlan,
 	type AgentResponse,
+	type ToolResult,
 	type WorkflowNextStep,
 	type WorkflowResumeHint,
 } from "@/agent";
 import { useAgent } from "@/hooks/use-agent";
+import { useEditor } from "@/hooks/use-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,6 +31,8 @@ import {
 } from "@/components/ui/select";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { cn } from "@/utils/ui";
+import { useAgentUiStore } from "@/stores/agent-ui-store";
+import { toast } from "sonner";
 import {
 	Bot,
 	Send,
@@ -56,7 +60,7 @@ interface Message {
 	resumeHint?: WorkflowResumeHint;
 	toolCalls?: Array<{
 		name: string;
-		result: { success: boolean; message: string };
+		result: ToolResult;
 	}>;
 	plan?: AgentExecutionPlan;
 	requiresConfirmation?: boolean;
@@ -184,12 +188,98 @@ function formatExecutionStatus(status: AgentResponse["status"]): string {
 	return "失败";
 }
 
+interface HighlightPlanPreviewPayload {
+	segments: Array<{
+		startTime: number;
+		endTime: number;
+		score?: number;
+		reason?: string;
+	}>;
+	targetDuration?: number;
+	actualDuration?: number;
+}
+
+function asObjectRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	return value as Record<string, unknown>;
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return undefined;
+	}
+	return value;
+}
+
+function extractHighlightPlanPreviewFromToolCalls(
+	toolCalls: AgentResponse["toolCalls"] | undefined,
+): HighlightPlanPreviewPayload | null {
+	if (!toolCalls || toolCalls.length === 0) return null;
+
+	for (const toolCall of toolCalls) {
+		if (toolCall.name !== "generate_highlight_plan") continue;
+		if (!toolCall.result.success) continue;
+		const dataRecord = asObjectRecord(toolCall.result.data);
+		const planRecord = asObjectRecord(dataRecord?.plan);
+		if (!planRecord) continue;
+		const segmentsRaw = Array.isArray(planRecord.segments)
+			? planRecord.segments
+			: [];
+		const segments = segmentsRaw
+			.map((segment) => {
+				const segmentRecord = asObjectRecord(segment);
+				if (!segmentRecord) return null;
+				const startTime = toFiniteNumber(segmentRecord.startTime);
+				const endTime = toFiniteNumber(segmentRecord.endTime);
+				if (startTime === undefined || endTime === undefined || endTime <= startTime) {
+					return null;
+				}
+				return {
+					startTime,
+					endTime,
+					score: toFiniteNumber(segmentRecord.combinedScore),
+					reason:
+						typeof segmentRecord.reason === "string"
+							? segmentRecord.reason
+							: undefined,
+				};
+			})
+			.filter((segment) => segment !== null);
+
+		if (segments.length === 0) continue;
+		return {
+			segments,
+			targetDuration: toFiniteNumber(planRecord.targetDuration),
+			actualDuration: toFiniteNumber(planRecord.actualDuration),
+		};
+	}
+
+	return null;
+}
+
+function hasSuccessfulToolCall({
+	toolCalls,
+	toolName,
+}: {
+	toolCalls: AgentResponse["toolCalls"] | undefined;
+	toolName: string;
+}): boolean {
+	return Boolean(
+		toolCalls?.some(
+			(toolCall) => toolCall.name === toolName && toolCall.result.success,
+		),
+	);
+}
+
 /**
  * AgentChatbox
  * Chat interface for AI-driven video editing commands
  * Design follows existing panel patterns (PanelBaseView, ScenesView)
  */
 export function AgentChatbox() {
+	const editor = useEditor();
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [input, setInput] = useState("");
 	const [providerStatus, setProviderStatus] = useState<{
@@ -211,6 +301,15 @@ export function AgentChatbox() {
 
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const setHighlightPreviewFromPlan = useAgentUiStore(
+		(state) => state.setHighlightPreviewFromPlan,
+	);
+	const clearHighlightPreview = useAgentUiStore(
+		(state) => state.clearHighlightPreview,
+	);
+	const setHighlightPreviewPlaybackEnabled = useAgentUiStore(
+		(state) => state.setHighlightPreviewPlaybackEnabled,
+	);
 
 	const {
 		sendMessage,
@@ -283,6 +382,58 @@ export function AgentChatbox() {
 	}, [messageCount]);
 
 	const appendAssistantResponse = (response: AgentResponse) => {
+		const highlightPlanPreview = extractHighlightPlanPreviewFromToolCalls(
+			response.toolCalls,
+		);
+		const applyHighlightCutSucceeded = hasSuccessfulToolCall({
+			toolCalls: response.toolCalls,
+			toolName: "apply_highlight_cut",
+		});
+		const removeSilenceSucceeded = hasSuccessfulToolCall({
+			toolCalls: response.toolCalls,
+			toolName: "remove_silence",
+		});
+
+		if (highlightPlanPreview) {
+			const totalDuration = editor.timeline.getTotalDuration();
+			setHighlightPreviewFromPlan({
+				segments: highlightPlanPreview.segments,
+				targetDuration: highlightPlanPreview.targetDuration,
+				actualDuration: highlightPlanPreview.actualDuration,
+				totalDuration,
+				sourceRequestId: response.requestId,
+			});
+			toast.info("已生成精华预览", {
+				description: "时间线已标注保留/删除区间，可先预览再确认应用。",
+			});
+		}
+
+		if (applyHighlightCutSucceeded) {
+			setHighlightPreviewPlaybackEnabled({ enabled: false });
+			clearHighlightPreview();
+			toast.success("精华剪辑已应用到时间线");
+		} else if (removeSilenceSucceeded) {
+			toast.success("静音删除已完成");
+		}
+
+		const hasDedicatedSuccessToast =
+			Boolean(highlightPlanPreview) || applyHighlightCutSucceeded || removeSilenceSucceeded;
+		if (response.status === "error" || response.success === false) {
+			toast.error(response.message);
+		} else if (response.status === "cancelled") {
+			toast("执行已取消", {
+				description: response.message,
+			});
+		} else if (response.status === "awaiting_confirmation") {
+			toast("等待确认", {
+				description: response.message,
+			});
+		} else if (response.status === "completed" && !hasDedicatedSuccessToast) {
+			toast.success("操作完成", {
+				description: response.message,
+			});
+		}
+
 		const assistantMessage: Message = {
 			id: crypto.randomUUID(),
 			role: "assistant",
@@ -401,6 +552,8 @@ export function AgentChatbox() {
 		setPendingPlanId(null);
 		setStepDrafts({});
 		setStepErrors({});
+		setHighlightPreviewPlaybackEnabled({ enabled: false });
+		clearHighlightPreview();
 		clearHistory();
 	};
 

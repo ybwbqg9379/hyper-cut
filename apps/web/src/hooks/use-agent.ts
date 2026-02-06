@@ -7,6 +7,7 @@ import {
 	type AgentExecutionEvent,
 	type AgentResponse,
 } from "@/agent";
+import { useAgentUiStore } from "@/stores/agent-ui-store";
 
 /**
  * React hook for using the Agent Orchestrator
@@ -33,12 +34,42 @@ export function useAgent() {
 		});
 		if (event.type === "request_started") {
 			setActiveExecutionRequestId(event.requestId);
+			useAgentUiStore.getState().setExecutionProgress({
+				requestId: event.requestId,
+				message: event.message ?? "正在处理请求...",
+				updatedAt: event.timestamp,
+			});
+			return;
+		}
+		if (event.type === "tool_started") {
+			useAgentUiStore.getState().setExecutionProgress({
+				requestId: event.requestId,
+				message: `正在执行 ${event.toolName ?? "tool"}`,
+				toolName: event.toolName,
+				stepIndex: event.stepIndex,
+				totalSteps: event.totalSteps,
+				updatedAt: event.timestamp,
+			});
+			return;
+		}
+		if (event.type === "tool_progress") {
+			useAgentUiStore.getState().setExecutionProgress({
+				requestId: event.requestId,
+				message: event.message ?? `${event.toolName ?? "tool"} 执行中`,
+				toolName: event.toolName,
+				stepIndex: event.stepIndex,
+				totalSteps: event.totalSteps,
+				updatedAt: event.timestamp,
+			});
 			return;
 		}
 		if (event.type === "request_completed") {
 			setActiveExecutionRequestId((prev) =>
 				prev === event.requestId ? null : prev,
 			);
+			useAgentUiStore.getState().clearExecutionProgressByRequest({
+				requestId: event.requestId,
+			});
 		}
 	}, []);
 
@@ -194,6 +225,7 @@ export function useAgent() {
 		setError(null);
 		setExecutionEvents([]);
 		setActiveExecutionRequestId(null);
+		useAgentUiStore.getState().clearAllAgentUiState();
 	}, [agent]);
 
 	// Check provider availability

@@ -227,6 +227,79 @@ function compactRunWorkflowData(data: unknown): unknown {
 	return compacted;
 }
 
+function toFiniteNumber(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return undefined;
+	}
+	return value;
+}
+
+function compactGenerateHighlightPlanData(data: unknown): unknown {
+	if (!data || typeof data !== "object" || Array.isArray(data)) {
+		return compactUnknown(data);
+	}
+
+	const record = data as Record<string, unknown>;
+	const planRecord =
+		record.plan && typeof record.plan === "object" && !Array.isArray(record.plan)
+			? (record.plan as Record<string, unknown>)
+			: null;
+	if (!planRecord) {
+		return compactUnknown(data);
+	}
+
+	const segmentsRaw = Array.isArray(planRecord.segments)
+		? planRecord.segments
+		: [];
+	const compactedSegments = segmentsRaw.slice(0, 120).map((segment) => {
+		if (!segment || typeof segment !== "object" || Array.isArray(segment)) {
+			return compactUnknown(segment);
+		}
+
+		const segmentRecord = segment as Record<string, unknown>;
+		const chunkRecord =
+			segmentRecord.chunk &&
+			typeof segmentRecord.chunk === "object" &&
+			!Array.isArray(segmentRecord.chunk)
+				? (segmentRecord.chunk as Record<string, unknown>)
+				: null;
+
+		return {
+			startTime: toFiniteNumber(chunkRecord?.startTime),
+			endTime: toFiniteNumber(chunkRecord?.endTime),
+			combinedScore: toFiniteNumber(segmentRecord.combinedScore),
+			reason:
+				typeof segmentRecord.reason === "string"
+					? compactString(segmentRecord.reason)
+					: undefined,
+		};
+	});
+
+	const compacted: Record<string, unknown> = {
+		plan: {
+			targetDuration: toFiniteNumber(planRecord.targetDuration),
+			actualDuration: toFiniteNumber(planRecord.actualDuration),
+			totalSegments: toFiniteNumber(planRecord.totalSegments),
+			coveragePercent: toFiniteNumber(planRecord.coveragePercent),
+			segments: compactedSegments,
+		},
+	};
+	if (segmentsRaw.length > 120) {
+		compacted.plan = {
+			...(compacted.plan as Record<string, unknown>),
+			segmentsTruncated: segmentsRaw.length - 120,
+		};
+	}
+	if (typeof record.timelineFingerprint === "string") {
+		compacted.timelineFingerprint = record.timelineFingerprint;
+	}
+	if (typeof record.cachedAt === "string") {
+		compacted.cachedAt = record.cachedAt;
+	}
+
+	return compacted;
+}
+
 function compactToolDataForHistory(toolName: string, data: unknown): unknown {
 	if (data === undefined) return undefined;
 	if (toolName === "run_workflow") {
@@ -334,8 +407,17 @@ function compactToolResultForClient(
 		message: result.message,
 	};
 
-	if (toolName === "run_workflow" && result.data !== undefined) {
+	if (result.data === undefined) {
+		return compacted;
+	}
+
+	if (toolName === "run_workflow") {
 		compacted.data = compactRunWorkflowData(result.data);
+		return compacted;
+	}
+
+	if (toolName === "generate_highlight_plan") {
+		compacted.data = compactGenerateHighlightPlanData(result.data);
 	}
 
 	return compacted;

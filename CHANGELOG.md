@@ -94,6 +94,15 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 新增服务：`transcript-analyzer`（语义分段 + 规则评分）、`highlight-scorer`（语义/视觉综合评分）、`segment-selector`（时长约束选段）
   - 新增工作流：`long-to-short`（评分 → 视觉验证 → 计划生成 → 应用剪辑）
   - 新增测试：`transcript-analyzer` / `highlight-scorer` / `segment-selector` / `highlight-tools`
+- **Long-to-Short 可视化预览（Phase 4）**：新增“生成计划后可视化标注 + 预览播放 + 主编辑区反馈”
+  - Timeline 头部新增 `AI 预览` 区间条：绿色保留区间、红色删除区间
+  - Preview 面板新增浮层：执行中状态提示、精华预览摘要、`播放预览/停止预览/清除` 控件
+  - `AgentChatbox` 新增操作结果 toast：完成/失败/取消/待确认态提示
+  - `useAgent` 执行事件同步到全局 `agent-ui-store`，支持主编辑区跨面板反馈
+- **Agent 缓存持久化（Phase 4）**：高光评分/计划与转录上下文持久化到 IndexedDB
+  - `highlightCacheStore` 增加按项目 hydration + 持久化写回
+  - `transcriptContextCache` 增加 IndexedDB 回填与失效清理
+  - 非浏览器环境自动降级为内存缓存，不影响测试与 SSR
 
 ### Changed
 
@@ -137,6 +146,9 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 若实际时长未缩短，将返回 `HIGHLIGHT_CUT_NO_EFFECT`，避免误报“已应用”
   - 删除区间改为直接调用 `editor.timeline.deleteElements`，避免在无 action handler 场景下“提示成功但未实际删除”
   - 新增保留区间有效性校验与“剪空自动回滚”，避免导出时报“Project is empty”
+- **计划数据透传**: Orchestrator 对 `generate_highlight_plan` 增加轻量数据下发
+  - 向客户端返回压缩后的片段时间区间与计划摘要，避免大 payload
+  - 支持前端直接渲染时间线预览区间，不再依赖聊天文本解析
 - **Highlight 帧提取可靠性**: 重构视觉验证帧提取链路，修复 4/5 帧空白问题
   - 根因：共享 `videoCache` 单例被编辑器渲染器与 Agent 同时使用，seek 互相干扰导致 canvas 被覆写
   - 新方案：独立 `HTMLVideoElement` + `canvas.drawImage()`，完全绕过共享 videoCache

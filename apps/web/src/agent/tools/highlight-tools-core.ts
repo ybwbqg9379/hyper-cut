@@ -75,6 +75,269 @@ interface TranscriptContextCacheEntry {
 const highlightCacheStore = new Map<string, HighlightCacheState>();
 
 const transcriptContextCache = new Map<string, TranscriptContextCacheEntry>();
+const hydratedHighlightCacheProjects = new Set<string>();
+const AGENT_CACHE_DB_NAME = "hypercut-agent-cache";
+const AGENT_CACHE_DB_VERSION = 1;
+const HIGHLIGHT_CACHE_STORE_NAME = "highlight-cache";
+const TRANSCRIPT_CACHE_STORE_NAME = "transcript-context-cache";
+
+function isIndexedDBAvailable(): boolean {
+	return (
+		typeof window !== "undefined" &&
+		typeof window.indexedDB !== "undefined"
+	);
+}
+
+function toObjectRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	return value as Record<string, unknown>;
+}
+
+function toOptionalString(value: unknown): string | null {
+	return typeof value === "string" ? value : null;
+}
+
+function normalizePersistedHighlightCache(
+	value: unknown,
+): HighlightCacheState | null {
+	const record = toObjectRecord(value);
+	if (!record) return null;
+
+	return {
+		scoredSegments: Array.isArray(record.scoredSegments)
+			? (record.scoredSegments as ScoredSegment[])
+			: null,
+		highlightPlan:
+			record.highlightPlan &&
+			typeof record.highlightPlan === "object" &&
+			!Array.isArray(record.highlightPlan)
+				? (record.highlightPlan as HighlightPlan)
+				: null,
+		assetId: toOptionalString(record.assetId),
+		timelineFingerprint: toOptionalString(record.timelineFingerprint),
+		updatedAt: toOptionalString(record.updatedAt),
+	};
+}
+
+function normalizePersistedTranscriptCacheEntry(
+	value: unknown,
+): TranscriptContextCacheEntry | null {
+	const record = toObjectRecord(value);
+	if (!record) return null;
+	const contextRecord = toObjectRecord(record.context);
+	if (!contextRecord) return null;
+
+	const source =
+		contextRecord.source === "whisper" ||
+		contextRecord.source === "captions" ||
+		contextRecord.source === "mixed" ||
+		contextRecord.source === "none"
+			? contextRecord.source
+			: "none";
+
+	return {
+		cacheKey:
+			typeof record.cacheKey === "string"
+				? record.cacheKey
+				: typeof record.id === "string"
+					? record.id
+					: "",
+		context: {
+			segments: Array.isArray(contextRecord.segments)
+				? (contextRecord.segments as TranscriptSegment[])
+				: [],
+			words: Array.isArray(contextRecord.words)
+				? (contextRecord.words as TranscriptWord[])
+				: [],
+			source,
+		},
+		updatedAt:
+			typeof record.updatedAt === "string"
+				? record.updatedAt
+				: new Date().toISOString(),
+	};
+}
+
+async function openAgentCacheDatabase(): Promise<IDBDatabase | null> {
+	if (!isIndexedDBAvailable()) {
+		return null;
+	}
+
+	return new Promise((resolve) => {
+		try {
+			const request = window.indexedDB.open(
+				AGENT_CACHE_DB_NAME,
+				AGENT_CACHE_DB_VERSION,
+			);
+			request.onerror = () => resolve(null);
+			request.onupgradeneeded = (event) => {
+				const db = (event.target as IDBOpenDBRequest).result;
+				if (!db.objectStoreNames.contains(HIGHLIGHT_CACHE_STORE_NAME)) {
+					db.createObjectStore(HIGHLIGHT_CACHE_STORE_NAME, {
+						keyPath: "id",
+					});
+				}
+				if (!db.objectStoreNames.contains(TRANSCRIPT_CACHE_STORE_NAME)) {
+					db.createObjectStore(TRANSCRIPT_CACHE_STORE_NAME, {
+						keyPath: "id",
+					});
+				}
+			};
+			request.onsuccess = () => resolve(request.result);
+		} catch {
+			resolve(null);
+		}
+	});
+}
+
+async function readAgentCacheRecord({
+	storeName,
+	id,
+}: {
+	storeName: string;
+	id: string;
+}): Promise<unknown | null> {
+	const db = await openAgentCacheDatabase();
+	if (!db) return null;
+
+	return new Promise((resolve) => {
+		try {
+			const transaction = db.transaction([storeName], "readonly");
+			const store = transaction.objectStore(storeName);
+			const request = store.get(id);
+			request.onerror = () => resolve(null);
+			request.onsuccess = () => resolve(request.result ?? null);
+		} catch {
+			resolve(null);
+		}
+	});
+}
+
+async function writeAgentCacheRecord({
+	storeName,
+	id,
+	value,
+}: {
+	storeName: string;
+	id: string;
+	value: unknown;
+}): Promise<void> {
+	const db = await openAgentCacheDatabase();
+	if (!db) return;
+
+	try {
+		const transaction = db.transaction([storeName], "readwrite");
+		const store = transaction.objectStore(storeName);
+		const normalizedValue = toObjectRecord(value);
+		if (normalizedValue) {
+			store.put({ id, ...normalizedValue });
+		} else {
+			store.put({ id, value });
+		}
+	} catch {
+		// Ignore persistence failures and keep in-memory behavior.
+	}
+}
+
+async function removeAgentCacheRecord({
+	storeName,
+	id,
+}: {
+	storeName: string;
+	id: string;
+}): Promise<void> {
+	const db = await openAgentCacheDatabase();
+	if (!db) return;
+
+	try {
+		const transaction = db.transaction([storeName], "readwrite");
+		const store = transaction.objectStore(storeName);
+		store.delete(id);
+	} catch {
+		// Ignore persistence failures and keep in-memory behavior.
+	}
+}
+
+async function ensureHighlightCacheLoaded(projectId = getActiveProjectId()) {
+	if (hydratedHighlightCacheProjects.has(projectId)) {
+		return;
+	}
+	hydratedHighlightCacheProjects.add(projectId);
+
+	const persisted = normalizePersistedHighlightCache(
+		await readAgentCacheRecord({
+			storeName: HIGHLIGHT_CACHE_STORE_NAME,
+			id: projectId,
+		}),
+	);
+	if (!persisted) {
+		return;
+	}
+	highlightCacheStore.set(projectId, persisted);
+}
+
+function persistHighlightCache({
+	projectId,
+	cache,
+}: {
+	projectId: string;
+	cache: HighlightCacheState;
+}): void {
+	void writeAgentCacheRecord({
+		storeName: HIGHLIGHT_CACHE_STORE_NAME,
+		id: projectId,
+		value: {
+			assetId: cache.assetId,
+			scoredSegments: cache.scoredSegments,
+			highlightPlan: cache.highlightPlan,
+			timelineFingerprint: cache.timelineFingerprint,
+			updatedAt: cache.updatedAt,
+		},
+	});
+}
+
+async function getPersistedTranscriptCacheEntry({
+	cacheKey,
+}: {
+	cacheKey: string;
+}): Promise<TranscriptContextCacheEntry | null> {
+	return normalizePersistedTranscriptCacheEntry(
+		await readAgentCacheRecord({
+			storeName: TRANSCRIPT_CACHE_STORE_NAME,
+			id: cacheKey,
+		}),
+	);
+}
+
+function persistTranscriptCacheEntry(entry: TranscriptContextCacheEntry): void {
+	void writeAgentCacheRecord({
+		storeName: TRANSCRIPT_CACHE_STORE_NAME,
+		id: entry.cacheKey,
+		value: entry,
+	});
+}
+
+function removePersistedTranscriptCacheEntry({
+	cacheKey,
+}: {
+	cacheKey: string;
+}): void {
+	void removeAgentCacheRecord({
+		storeName: TRANSCRIPT_CACHE_STORE_NAME,
+		id: cacheKey,
+	});
+}
+
+function clearPersistedAgentCacheDatabase(): void {
+	if (!isIndexedDBAvailable()) return;
+	try {
+		window.indexedDB.deleteDatabase(AGENT_CACHE_DB_NAME);
+	} catch {
+		// Ignore persistence failures and keep in-memory behavior.
+	}
+}
 
 function isExecutionCancelled(signal?: AbortSignal): boolean {
 	return signal?.aborted === true;
@@ -625,12 +888,19 @@ async function getTranscriptContext({
 	const projectId = activeProject?.metadata.id ?? "unknown-project";
 
 	const cacheKey = buildTranscriptCacheKey({ projectId, tracks });
-	const cached = transcriptContextCache.get(cacheKey);
+	let cached = transcriptContextCache.get(cacheKey) ?? null;
+	if (!cached) {
+		cached = await getPersistedTranscriptCacheEntry({ cacheKey });
+		if (cached) {
+			transcriptContextCache.set(cacheKey, cached);
+		}
+	}
 	if (cached && (cached.context.segments.length > 0 || cached.context.words.length > 0)) {
 		return cached.context;
 	}
 	if (cached) {
 		transcriptContextCache.delete(cacheKey);
+		removePersistedTranscriptCacheEntry({ cacheKey });
 	}
 
 	const captionSegments = collectCaptionSegmentsFromTimeline({ tracks });
@@ -715,11 +985,15 @@ async function getTranscriptContext({
 	throwIfExecutionCancelled(signal);
 
 	if (context.segments.length > 0 || context.words.length > 0) {
-		transcriptContextCache.set(cacheKey, {
+		const entry = {
 			cacheKey,
 			context,
 			updatedAt: new Date().toISOString(),
-		});
+		};
+		transcriptContextCache.set(cacheKey, entry);
+		persistTranscriptCacheEntry(entry);
+	} else {
+		removePersistedTranscriptCacheEntry({ cacheKey });
 	}
 
 	return context;
@@ -1090,17 +1364,20 @@ function collectElementsOverlappingRange({
 }
 
 function updateHighlightCache({
+	projectId,
 	assetId,
 	scoredSegments,
 	highlightPlan,
 	timelineFingerprint,
 }: {
+	projectId?: string;
 	assetId?: string;
 	scoredSegments?: ScoredSegment[] | null;
 	highlightPlan?: HighlightPlan | null;
 	timelineFingerprint?: string | null;
 }): void {
-	const cache = getHighlightCache();
+	const resolvedProjectId = projectId ?? getActiveProjectId();
+	const cache = getHighlightCache(resolvedProjectId);
 	if (assetId !== undefined) {
 		cache.assetId = assetId;
 	}
@@ -1114,6 +1391,10 @@ function updateHighlightCache({
 		cache.timelineFingerprint = timelineFingerprint;
 	}
 	cache.updatedAt = new Date().toISOString();
+	persistHighlightCache({
+		projectId: resolvedProjectId,
+		cache,
+	});
 }
 
 export const scoreHighlightsTool: AgentTool = {
@@ -1149,6 +1430,7 @@ export const scoreHighlightsTool: AgentTool = {
 	execute: async (params, context): Promise<ToolResult> => {
 		try {
 			throwIfExecutionCancelled(context?.signal);
+			await ensureHighlightCacheLoaded();
 			const highlightCache = getHighlightCache();
 			const { asset, tracks } = resolveVideoAsset({
 				videoAssetId:
@@ -1354,6 +1636,7 @@ export const validateHighlightsVisualTool: AgentTool = {
 	execute: async (params, context): Promise<ToolResult> => {
 		try {
 			throwIfExecutionCancelled(context?.signal);
+			await ensureHighlightCacheLoaded();
 			const highlightCache = getHighlightCache();
 			const cachedSegments = highlightCache.scoredSegments;
 			if (!cachedSegments || cachedSegments.length === 0) {
@@ -1580,6 +1863,7 @@ export const generateHighlightPlanTool: AgentTool = {
 	execute: async (params, context): Promise<ToolResult> => {
 		try {
 			throwIfExecutionCancelled(context?.signal);
+			await ensureHighlightCacheLoaded();
 			const highlightCache = getHighlightCache();
 			const scoredSegments = highlightCache.scoredSegments;
 			if (!scoredSegments || scoredSegments.length === 0) {
@@ -1700,6 +1984,7 @@ export const applyHighlightCutTool: AgentTool = {
 	execute: async (params, context): Promise<ToolResult> => {
 		try {
 			throwIfExecutionCancelled(context?.signal);
+			await ensureHighlightCacheLoaded();
 			const highlightCache = getHighlightCache();
 			const plan = highlightCache.highlightPlan;
 			if (!plan || plan.segments.length === 0) {
@@ -1969,6 +2254,8 @@ export const applyHighlightCutTool: AgentTool = {
 export function __resetHighlightToolCachesForTests(): void {
 	highlightCacheStore.clear();
 	transcriptContextCache.clear();
+	hydratedHighlightCacheProjects.clear();
+	clearPersistedAgentCacheDatabase();
 }
 
 export function getHighlightTools(): AgentTool[] {

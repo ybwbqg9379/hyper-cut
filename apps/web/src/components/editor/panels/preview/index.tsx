@@ -8,6 +8,9 @@ import { CanvasRenderer } from "@/services/renderer/canvas-renderer";
 import type { RootNode } from "@/services/renderer/nodes/root-node";
 import { buildScene } from "@/services/renderer/scene-builder";
 import { getLastFrameTime } from "@/lib/time";
+import { useAgentUiStore } from "@/stores/agent-ui-store";
+import { Button } from "@/components/ui/button";
+import { Ban, Loader2, Pause, Play } from "lucide-react";
 
 function usePreviewSize() {
 	const editor = useEditor();
@@ -51,8 +54,106 @@ export function PreviewPanel() {
 			<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-2">
 				<PreviewCanvas />
 				<RenderTreeController />
+				<AgentPreviewOverlay />
 			</div>
 		</div>
+	);
+}
+
+function AgentPreviewOverlay() {
+	const editor = useEditor();
+	const highlightPreview = useAgentUiStore((state) => state.highlightPreview);
+	const highlightPreviewPlaybackEnabled = useAgentUiStore(
+		(state) => state.highlightPreviewPlaybackEnabled,
+	);
+	const setHighlightPreviewPlaybackEnabled = useAgentUiStore(
+		(state) => state.setHighlightPreviewPlaybackEnabled,
+	);
+	const clearHighlightPreview = useAgentUiStore(
+		(state) => state.clearHighlightPreview,
+	);
+	const executionProgress = useAgentUiStore((state) => state.executionProgress);
+
+	const handleTogglePreviewPlayback = useCallback(() => {
+		if (!highlightPreview || highlightPreview.keepRanges.length === 0) {
+			return;
+		}
+
+		if (highlightPreviewPlaybackEnabled) {
+			setHighlightPreviewPlaybackEnabled({ enabled: false });
+			editor.playback.pause();
+			return;
+		}
+
+		const firstRange = highlightPreview.keepRanges[0];
+		if (!firstRange) return;
+		editor.playback.seek({ time: firstRange.start });
+		editor.playback.play();
+		setHighlightPreviewPlaybackEnabled({ enabled: true });
+	}, [
+		highlightPreview,
+		highlightPreviewPlaybackEnabled,
+		setHighlightPreviewPlaybackEnabled,
+		editor.playback,
+	]);
+
+	const handleClearHighlightPreview = useCallback(() => {
+		setHighlightPreviewPlaybackEnabled({ enabled: false });
+		clearHighlightPreview();
+	}, [clearHighlightPreview, setHighlightPreviewPlaybackEnabled]);
+
+	return (
+		<>
+			{executionProgress ? (
+				<div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex justify-center">
+					<div className="flex items-center gap-2 rounded-md border border-border/80 bg-background/92 px-3 py-2 text-xs shadow-sm">
+						<Loader2 className="size-3.5 animate-spin text-primary" />
+						<div className="flex min-w-0 flex-col">
+							<span className="font-medium">AI 正在处理</span>
+							<span className="truncate text-muted-foreground">
+								{executionProgress.message}
+							</span>
+						</div>
+					</div>
+				</div>
+			) : null}
+
+			{highlightPreview ? (
+				<div className="pointer-events-none absolute bottom-3 left-3 z-20">
+					<div className="pointer-events-auto min-w-[220px] rounded-md border border-border/80 bg-background/95 p-2 shadow-sm">
+						<div className="text-xs font-medium">精华预览</div>
+						<div className="mt-1 text-[11px] text-muted-foreground">
+							保留 {highlightPreview.keepRanges.length} 段，删除{" "}
+							{highlightPreview.deleteRanges.length} 段
+						</div>
+						<div className="mt-2 flex items-center gap-1.5">
+							<Button
+								size="sm"
+								variant="secondary"
+								className="h-7 px-2 text-[11px]"
+								onClick={handleTogglePreviewPlayback}
+							>
+								{highlightPreviewPlaybackEnabled ? (
+									<Pause className="size-3 mr-1" />
+								) : (
+									<Play className="size-3 mr-1" />
+								)}
+								{highlightPreviewPlaybackEnabled ? "停止预览" : "播放预览"}
+							</Button>
+							<Button
+								size="sm"
+								variant="outline"
+								className="h-7 px-2 text-[11px]"
+								onClick={handleClearHighlightPreview}
+							>
+								<Ban className="size-3 mr-1" />
+								清除
+							</Button>
+						</div>
+					</div>
+				</div>
+			) : null}
+		</>
 	);
 }
 
@@ -72,10 +173,43 @@ function PreviewCanvas() {
 			fps: activeProject.settings.fps,
 		});
 	}, [width, height, activeProject.settings.fps]);
+	const highlightPreview = useAgentUiStore((state) => state.highlightPreview);
+	const highlightPreviewPlaybackEnabled = useAgentUiStore(
+		(state) => state.highlightPreviewPlaybackEnabled,
+	);
+	const setHighlightPreviewPlaybackEnabled = useAgentUiStore(
+		(state) => state.setHighlightPreviewPlaybackEnabled,
+	);
 
 	const renderTree = editor.renderer.getRenderTree();
 
 	const render = useCallback(() => {
+		if (
+			highlightPreviewPlaybackEnabled &&
+			highlightPreview &&
+			highlightPreview.keepRanges.length > 0
+		) {
+			const currentTime = editor.playback.getCurrentTime();
+			const epsilon = 1 / 120;
+			const inKeepRange = highlightPreview.keepRanges.some(
+				(range) =>
+					currentTime >= range.start - epsilon &&
+					currentTime < range.end - epsilon,
+			);
+
+			if (!inKeepRange) {
+				const nextRange = highlightPreview.keepRanges.find(
+					(range) => range.end > currentTime + epsilon,
+				);
+				if (nextRange) {
+					editor.playback.seek({ time: nextRange.start });
+				} else {
+					editor.playback.pause();
+					setHighlightPreviewPlaybackEnabled({ enabled: false });
+				}
+			}
+		}
+
 		if (ref.current && renderTree && !renderingRef.current) {
 			const time = editor.playback.getCurrentTime();
 			const lastFrameTime = getLastFrameTime({
@@ -103,7 +237,14 @@ function PreviewCanvas() {
 					});
 			}
 		}
-	}, [renderer, renderTree, editor.playback]);
+	}, [
+		renderer,
+		renderTree,
+		editor.playback,
+		highlightPreview,
+		highlightPreviewPlaybackEnabled,
+		setHighlightPreviewPlaybackEnabled,
+	]);
 
 	useRafLoop(render);
 

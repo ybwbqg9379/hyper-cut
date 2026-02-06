@@ -47,7 +47,9 @@ import { useTimelineSeek } from "@/hooks/timeline/use-timeline-seek";
 import { useTimelineDragDrop } from "@/hooks/timeline/use-timeline-drag-drop";
 import { TimelineRuler } from "./timeline-ruler";
 import { TimelineBookmarksRow } from "./bookmarks";
+import { TimelineHighlightPreviewRow } from "./highlight-preview-row";
 import { useTimelineStore } from "@/stores/timeline-store";
+import { useAgentUiStore } from "@/stores/agent-ui-store";
 import { useEditor } from "@/hooks/use-editor";
 import { useTimelinePlayhead } from "@/hooks/timeline/use-timeline-playhead";
 import { DragLine } from "./drag-line";
@@ -56,6 +58,7 @@ import { invokeAction } from "@/lib/actions";
 export function Timeline() {
 	const tracksContainerHeight = { min: 0, max: 800 };
 	const { snappingEnabled } = useTimelineStore();
+	const highlightPreview = useAgentUiStore((state) => state.highlightPreview);
 	const { clearElementSelection, setElementSelection } = useElementSelection();
 	const editor = useEditor();
 	const timeline = editor.timeline;
@@ -233,6 +236,13 @@ export function Timeline() {
 						<div className="bg-panel flex h-4 items-center justify-between px-3">
 							<span className="opacity-0">.</span>
 						</div>
+						{highlightPreview ? (
+							<div className="bg-panel flex h-5 items-center justify-between px-3">
+								<span className="font-medium text-[10px] text-muted-foreground">
+									AI 预览
+								</span>
+							</div>
+						) : null}
 						{tracks.length > 0 && (
 							<div
 								ref={trackLabelsRef}
@@ -370,6 +380,16 @@ export function Timeline() {
 										handleRulerTrackingMouseDown={handleRulerMouseDown}
 										handleRulerMouseDown={handlePlayheadRulerMouseDown}
 									/>
+									{highlightPreview ? (
+										<TimelineHighlightPreviewRow
+											zoomLevel={zoomLevel}
+											dynamicTimelineWidth={dynamicTimelineWidth}
+											handleWheel={handleWheel}
+											handleTimelineContentClick={handleRulerClick}
+											handleRulerTrackingMouseDown={handleRulerMouseDown}
+											handleRulerMouseDown={handlePlayheadRulerMouseDown}
+										/>
+									) : null}
 								</div>
 								<TimelinePlayhead
 									zoomLevel={zoomLevel}
