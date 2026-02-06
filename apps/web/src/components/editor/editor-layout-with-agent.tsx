@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useMemo } from 'react';
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -20,6 +21,30 @@ const AgentChatbox = dynamic(
 
 // Feature flag: controlled via environment variable
 const AGENT_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === 'true';
+const AGENT_PANEL_DEFAULT_SIZE = 18;
+const AGENT_PANEL_MIN_SIZE = 12;
+const AGENT_PANEL_MAX_SIZE = 30;
+
+type MainPanelSizes = {
+  tools: number;
+  preview: number;
+  properties: number;
+};
+
+function normalizeMainPanelsForAgent(panels: MainPanelSizes): MainPanelSizes {
+  const available = 100 - AGENT_PANEL_DEFAULT_SIZE;
+  const total = panels.tools + panels.preview + panels.properties;
+
+  if (total <= 0) {
+    return { tools: 20.5, preview: 41, properties: 20.5 };
+  }
+
+  const tools = (panels.tools / total) * available;
+  const preview = (panels.preview / total) * available;
+  const properties = available - tools - preview;
+
+  return { tools, preview, properties };
+}
 
 /**
  * EditorLayoutWithAgent
@@ -33,7 +58,16 @@ const AGENT_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === 'true';
  * - Feature is controlled by NEXT_PUBLIC_AGENT_ENABLED env var
  */
 export function EditorLayoutWithAgent() {
-  const { panels, setPanel } = usePanelStore();
+  const { panels, setPanel, setPanels } = usePanelStore();
+  const normalizedMainPanels = useMemo(
+    () =>
+      normalizeMainPanelsForAgent({
+        tools: panels.tools,
+        preview: panels.preview,
+        properties: panels.properties,
+      }),
+    [panels.tools, panels.preview, panels.properties]
+  );
 
   // When agent is disabled, render the original layout exactly
   if (!AGENT_ENABLED) {
@@ -60,14 +94,16 @@ export function EditorLayoutWithAgent() {
           direction="horizontal"
           className="size-full gap-[0.19rem] px-3"
           onLayout={(sizes) => {
-            setPanel('tools', sizes[0] ?? panels.tools);
-            setPanel('preview', sizes[1] ?? panels.preview);
-            setPanel('properties', sizes[2] ?? panels.properties);
-            // Agent panel size is fixed, not persisted
+            const next = normalizeMainPanelsForAgent({
+              tools: sizes[0] ?? normalizedMainPanels.tools,
+              preview: sizes[1] ?? normalizedMainPanels.preview,
+              properties: sizes[2] ?? normalizedMainPanels.properties,
+            });
+            setPanels(next);
           }}
         >
           <ResizablePanel
-            defaultSize={panels.tools}
+            defaultSize={normalizedMainPanels.tools}
             minSize={15}
             maxSize={40}
             className="min-w-0 rounded-sm"
@@ -78,7 +114,7 @@ export function EditorLayoutWithAgent() {
           <ResizableHandle withHandle />
 
           <ResizablePanel
-            defaultSize={panels.preview}
+            defaultSize={normalizedMainPanels.preview}
             minSize={30}
             className="min-h-0 min-w-0 flex-1"
           >
@@ -88,7 +124,7 @@ export function EditorLayoutWithAgent() {
           <ResizableHandle withHandle />
 
           <ResizablePanel
-            defaultSize={panels.properties}
+            defaultSize={normalizedMainPanels.properties}
             minSize={15}
             maxSize={40}
             className="min-w-0 rounded-sm"
@@ -100,9 +136,9 @@ export function EditorLayoutWithAgent() {
           <ResizableHandle withHandle />
 
           <ResizablePanel
-            defaultSize={18}
-            minSize={12}
-            maxSize={30}
+            defaultSize={AGENT_PANEL_DEFAULT_SIZE}
+            minSize={AGENT_PANEL_MIN_SIZE}
+            maxSize={AGENT_PANEL_MAX_SIZE}
             className="min-w-0 rounded-sm"
           >
             <AgentChatbox />

@@ -42,13 +42,15 @@ import type {
 } from "./highlight-types";
 import {
 	splitAtTimeTool,
-	deleteSelectedTool,
 	generateCaptionsTool,
 	removeSilenceTool,
 } from "./timeline-tools";
 
 const MIN_INTERVAL_SECONDS = 0.03;
 const SELECT_EPSILON = 0.02;
+const MAX_HIGHLIGHT_FRAME_WIDTH = 640;
+const MAX_HIGHLIGHT_FRAME_HEIGHT = 360;
+const TRANSCRIPT_ALIGNMENT_TOLERANCE_SECONDS = 1;
 
 interface HighlightCacheState {
 	scoredSegments: ScoredSegment[] | null;
@@ -360,6 +362,146 @@ function buildTranscriptCacheKey({
 	return `${projectId}:${fingerprint}`;
 }
 
+function getTracksDuration(tracks: TimelineTrack[]): number {
+	let maxEndTime = 0;
+	for (const track of tracks) {
+		for (const element of track.elements) {
+			const endTime = element.startTime + element.duration;
+			if (Number.isFinite(endTime) && endTime > maxEndTime) {
+				maxEndTime = endTime;
+			}
+		}
+	}
+	return maxEndTime;
+}
+
+function clampIntervalToDuration({
+	startTime,
+	endTime,
+	totalDuration,
+}: {
+	startTime: number;
+	endTime: number;
+	totalDuration: number;
+}): { startTime: number; endTime: number } | null {
+	const clampedStart = clamp(startTime, 0, totalDuration);
+	const clampedEnd = clamp(endTime, 0, totalDuration);
+	if (clampedEnd - clampedStart < MIN_INTERVAL_SECONDS) {
+		return null;
+	}
+	return {
+		startTime: clampedStart,
+		endTime: clampedEnd,
+	};
+}
+
+function normalizeTranscriptSegments({
+	segments,
+	totalDuration,
+}: {
+	segments: TranscriptSegment[];
+	totalDuration: number;
+}): TranscriptSegment[] {
+	return segments
+		.map((segment) => {
+			const normalizedText = segment.text.trim();
+			if (!normalizedText) return null;
+			const clampedRange = clampIntervalToDuration({
+				startTime: segment.startTime,
+				endTime: segment.endTime,
+				totalDuration,
+			});
+			if (!clampedRange) return null;
+			return {
+				startTime: clampedRange.startTime,
+				endTime: clampedRange.endTime,
+				text: normalizedText,
+			} satisfies TranscriptSegment;
+		})
+		.filter((segment): segment is TranscriptSegment => segment !== null);
+}
+
+function normalizeTranscriptWords({
+	words,
+	totalDuration,
+}: {
+	words: TranscriptWord[];
+	totalDuration: number;
+}): TranscriptWord[] {
+	return words
+		.map((word) => {
+			const normalizedText = word.text.trim();
+			if (!normalizedText) return null;
+			const clampedRange = clampIntervalToDuration({
+				startTime: word.startTime,
+				endTime: word.endTime,
+				totalDuration,
+			});
+			if (!clampedRange) return null;
+			return {
+				startTime: clampedRange.startTime,
+				endTime: clampedRange.endTime,
+				text: normalizedText,
+			} satisfies TranscriptWord;
+		})
+		.filter((word): word is TranscriptWord => word !== null);
+}
+
+function getTranscriptBounds({
+	segments,
+	words,
+}: Pick<TranscriptContext, "segments" | "words">): {
+	minStart: number;
+	maxEnd: number;
+} | null {
+	const starts: number[] = [];
+	const ends: number[] = [];
+
+	for (const segment of segments) {
+		starts.push(segment.startTime);
+		ends.push(segment.endTime);
+	}
+	for (const word of words) {
+		starts.push(word.startTime);
+		ends.push(word.endTime);
+	}
+
+	if (starts.length === 0 || ends.length === 0) {
+		return null;
+	}
+
+	return {
+		minStart: Math.min(...starts),
+		maxEnd: Math.max(...ends),
+	};
+}
+
+function isTranscriptAlignedWithTimeline({
+	context,
+	totalDuration,
+}: {
+	context: Pick<TranscriptContext, "segments" | "words">;
+	totalDuration: number;
+}): boolean {
+	if (!Number.isFinite(totalDuration) || totalDuration <= 0) {
+		return false;
+	}
+
+	const bounds = getTranscriptBounds(context);
+	if (!bounds) {
+		return false;
+	}
+
+	if (bounds.minStart > totalDuration + TRANSCRIPT_ALIGNMENT_TOLERANCE_SECONDS) {
+		return false;
+	}
+	if (bounds.maxEnd > totalDuration + TRANSCRIPT_ALIGNMENT_TOLERANCE_SECONDS) {
+		return false;
+	}
+
+	return true;
+}
+
 async function buildWhisperTranscriptContext({
 	tracks,
 }: {
@@ -394,21 +536,23 @@ async function buildWhisperTranscriptContext({
 		language: "auto",
 	});
 
-	const segments: TranscriptSegment[] = transcription.segments
-		.map((segment) => ({
+	const segments = normalizeTranscriptSegments({
+		segments: transcription.segments.map((segment) => ({
 			startTime: segment.start,
 			endTime: segment.end,
-			text: segment.text.trim(),
-		}))
-		.filter((segment) => segment.text.length > 0);
+			text: segment.text,
+		})),
+		totalDuration,
+	});
 
-	const words: TranscriptWord[] = transcription.words
-		.map((word) => ({
+	const words = normalizeTranscriptWords({
+		words: transcription.words.map((word) => ({
 			startTime: word.start,
 			endTime: word.end,
-			text: word.text.trim(),
-		}))
-		.filter((word) => word.text.length > 0);
+			text: word.text,
+		})),
+		totalDuration,
+	});
 
 	if (segments.length === 0 && words.length === 0) {
 		return null;
@@ -432,12 +576,16 @@ async function getTranscriptContext({
 
 	const cacheKey = buildTranscriptCacheKey({ projectId, tracks });
 	const cached = transcriptContextCache.get(cacheKey);
-	if (cached) {
+	if (cached && (cached.context.segments.length > 0 || cached.context.words.length > 0)) {
 		return cached.context;
+	}
+	if (cached) {
+		transcriptContextCache.delete(cacheKey);
 	}
 
 	const captionSegments = collectCaptionSegmentsFromTimeline({ tracks });
 	const captionWords = buildWordsFromSegments(captionSegments);
+	const totalDuration = getTracksDuration(tracks);
 
 	let context: TranscriptContext = {
 		segments: captionSegments,
@@ -446,24 +594,49 @@ async function getTranscriptContext({
 	};
 
 	const lastResult = transcriptionService.getLastResult();
-	if (lastResult && lastResult.segments.length > 0) {
-		context = {
-			segments: lastResult.segments
-				.map((segment) => ({
-					startTime: segment.start,
-					endTime: segment.end,
-					text: segment.text.trim(),
-				}))
-				.filter((segment) => segment.text.length > 0),
-			words: lastResult.words
-				.map((word) => ({
-					startTime: word.start,
-					endTime: word.end,
-					text: word.text.trim(),
-				}))
-				.filter((word) => word.text.length > 0),
-			source: "whisper",
-		};
+	const memorySegments: TranscriptSegment[] = lastResult
+		? lastResult.segments.map((segment) => ({
+				startTime: segment.start,
+				endTime: segment.end,
+				text: segment.text,
+			}))
+		: [];
+	const memoryWords: TranscriptWord[] = lastResult
+		? lastResult.words.map((word) => ({
+				startTime: word.start,
+				endTime: word.end,
+				text: word.text,
+			}))
+		: [];
+	const hasMemoryTranscript =
+		memorySegments.length > 0 || memoryWords.length > 0;
+	const canUseMemoryTranscript =
+		hasMemoryTranscript &&
+		isTranscriptAlignedWithTimeline({
+			context: {
+				segments: memorySegments,
+				words: memoryWords,
+			},
+			totalDuration,
+		});
+
+	if (canUseMemoryTranscript) {
+		const normalizedSegments = normalizeTranscriptSegments({
+			segments: memorySegments,
+			totalDuration,
+		});
+		const normalizedWords = normalizeTranscriptWords({
+			words: memoryWords,
+			totalDuration,
+		});
+
+		if (normalizedSegments.length > 0 || normalizedWords.length > 0) {
+			context = {
+				segments: normalizedSegments,
+				words: normalizedWords,
+				source: "whisper",
+			};
+		}
 	} else {
 		try {
 			const whisperContext = await buildWhisperTranscriptContext({ tracks });
@@ -487,11 +660,13 @@ async function getTranscriptContext({
 		}
 	}
 
-	transcriptContextCache.set(cacheKey, {
-		cacheKey,
-		context,
-		updatedAt: new Date().toISOString(),
-	});
+	if (context.segments.length > 0 || context.words.length > 0) {
+		transcriptContextCache.set(cacheKey, {
+			cacheKey,
+			context,
+			updatedAt: new Date().toISOString(),
+		});
+	}
 
 	return context;
 }
@@ -503,6 +678,15 @@ function assignRanks(segments: ScoredSegment[]): ScoredSegment[] {
 			...segment,
 			rank: index + 1,
 		}));
+}
+
+function stripSegmentThumbnail(segment: ScoredSegment): ScoredSegment {
+	const { thumbnailDataUrl: _thumbnailDataUrl, ...rest } = segment;
+	return rest;
+}
+
+function stripSegmentThumbnails(segments: ScoredSegment[]): ScoredSegment[] {
+	return segments.map(stripSegmentThumbnail);
 }
 
 function getScoringWeights({
@@ -680,8 +864,15 @@ async function captureFrameAt(
 			);
 		});
 
-		const w = video.videoWidth || 640;
-		const h = video.videoHeight || 360;
+		const sourceW = video.videoWidth || 640;
+		const sourceH = video.videoHeight || 360;
+		const scale = Math.min(
+			1,
+			MAX_HIGHLIGHT_FRAME_WIDTH / Math.max(1, sourceW),
+			MAX_HIGHLIGHT_FRAME_HEIGHT / Math.max(1, sourceH),
+		);
+		const w = Math.max(1, Math.round(sourceW * scale));
+		const h = Math.max(1, Math.round(sourceH * scale));
 		const canvas = document.createElement("canvas");
 		canvas.width = w;
 		canvas.height = h;
@@ -749,6 +940,8 @@ async function extractFrameDataUrl({
 	if (blank) return null;
 
 	const encoded = await encodeCanvasAsJpeg({ canvas, quality: 0.8 });
+	canvas.width = 1;
+	canvas.height = 1;
 	return encoded.dataUrl;
 }
 
@@ -811,6 +1004,68 @@ function complementRanges({
 	return deletes;
 }
 
+function getDeletedDurationBeforeTime({
+	time,
+	deleteRanges,
+}: {
+	time: number;
+	deleteRanges: TimeRange[];
+}): number {
+	let deleted = 0;
+	for (const range of deleteRanges) {
+		if (time >= range.end - SELECT_EPSILON) {
+			deleted += range.end - range.start;
+			continue;
+		}
+		if (time <= range.start + SELECT_EPSILON) {
+			break;
+		}
+		deleted += Math.max(0, time - range.start);
+		break;
+	}
+	return deleted;
+}
+
+function rippleCompressTracks({
+	tracks,
+	deleteRanges,
+}: {
+	tracks: TimelineTrack[];
+	deleteRanges: TimeRange[];
+}): { tracks: TimelineTrack[]; movedElementCount: number } {
+	if (deleteRanges.length === 0) {
+		return { tracks, movedElementCount: 0 };
+	}
+
+	const ascendingDeleteRanges = [...deleteRanges].sort((a, b) => a.start - b.start);
+	let movedElementCount = 0;
+
+	const compressedTracks: TimelineTrack[] = tracks.map((track) => {
+		const nextElements = track.elements.map((element) => {
+			const shift = getDeletedDurationBeforeTime({
+				time: element.startTime,
+				deleteRanges: ascendingDeleteRanges,
+			});
+			if (shift <= SELECT_EPSILON) {
+				return element;
+			}
+
+			movedElementCount += 1;
+			return {
+				...element,
+				startTime: Math.max(0, Number((element.startTime - shift).toFixed(6))),
+			};
+		}) as typeof track.elements;
+
+		return {
+			...track,
+			elements: nextElements,
+		} as TimelineTrack;
+	});
+
+	return { tracks: compressedTracks, movedElementCount };
+}
+
 function collectElementsFullyInRange({
 	tracks,
 	start,
@@ -829,6 +1084,37 @@ function collectElementsFullyInRange({
 			if (
 				elementStart >= start - SELECT_EPSILON &&
 				elementEnd <= end + SELECT_EPSILON &&
+				elementEnd > elementStart
+			) {
+				refs.push({
+					trackId: track.id,
+					elementId: element.id,
+				});
+			}
+		}
+	}
+
+	return refs;
+}
+
+function collectElementsOverlappingRange({
+	tracks,
+	start,
+	end,
+}: {
+	tracks: TimelineTrack[];
+	start: number;
+	end: number;
+}): Array<{ trackId: string; elementId: string }> {
+	const refs: Array<{ trackId: string; elementId: string }> = [];
+
+	for (const track of tracks) {
+		for (const element of track.elements) {
+			const elementStart = element.startTime;
+			const elementEnd = element.startTime + element.duration;
+			if (
+				elementEnd > start + SELECT_EPSILON &&
+				elementStart < end - SELECT_EPSILON &&
 				elementEnd > elementStart
 			) {
 				refs.push({
@@ -1016,9 +1302,10 @@ export const scoreHighlightsTool: AgentTool = {
 			});
 
 			const ranked = assignRanks(scoredSegments);
+			const cleanRanked = stripSegmentThumbnails(ranked);
 			updateHighlightCache({
 				assetId: asset.id,
-				scoredSegments: ranked,
+				scoredSegments: cleanRanked,
 				highlightPlan: null,
 				timelineFingerprint,
 			});
@@ -1037,13 +1324,13 @@ export const scoreHighlightsTool: AgentTool = {
 				data: {
 					assetId: asset.id,
 					transcriptSource: context.source,
-					segmentCount: ranked.length,
+					segmentCount: cleanRanked.length,
 					hasSemantic,
 					llmMode,
 					llmDiagnostics,
 					weights,
-					topSegments: ranked.slice(0, 10),
-					segments: ranked,
+					topSegments: cleanRanked.slice(0, 10),
+					segments: cleanRanked,
 					cachedAt: highlightCache.updatedAt,
 					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
@@ -1139,6 +1426,7 @@ export const validateHighlightsVisualTool: AgentTool = {
 			const providerAvailable = await provider.isAvailable();
 
 			if (!providerAvailable) {
+				const cleanCachedSegments = stripSegmentThumbnails(cachedSegments);
 				return {
 					success: true,
 					message:
@@ -1148,7 +1436,7 @@ export const validateHighlightsVisualTool: AgentTool = {
 						topN,
 						validatedCount: 0,
 						hasVisual: false,
-						segments: cachedSegments,
+						segments: cleanCachedSegments,
 						timelineFingerprint,
 					},
 				};
@@ -1210,7 +1498,7 @@ export const validateHighlightsVisualTool: AgentTool = {
 			}
 
 			for (const candidate of candidatesWithFrames) {
-				mergedByIndex.set(candidate.chunk.index, candidate);
+				mergedByIndex.set(candidate.chunk.index, stripSegmentThumbnail(candidate));
 			}
 
 			const rescored = Array.from(mergedByIndex.values()).map((segment) => {
@@ -1230,11 +1518,16 @@ export const validateHighlightsVisualTool: AgentTool = {
 			});
 
 			const reranked = assignRanks(rescored);
+			const cleanReranked = stripSegmentThumbnails(reranked);
 			updateHighlightCache({
 				assetId: asset.id,
-				scoredSegments: reranked,
+				scoredSegments: cleanReranked,
 				timelineFingerprint,
 			});
+
+			for (const candidate of candidatesWithFrames) {
+				delete candidate.thumbnailDataUrl;
+			}
 
 			return {
 				success: true,
@@ -1245,8 +1538,8 @@ export const validateHighlightsVisualTool: AgentTool = {
 					validatedCount: visualMap.size,
 					hasVisual,
 					weights,
-					topSegments: reranked.slice(0, 10),
-					segments: reranked,
+					topSegments: cleanReranked.slice(0, 10),
+					segments: cleanReranked,
 					cachedAt: highlightCache.updatedAt,
 					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
@@ -1411,6 +1704,7 @@ export const applyHighlightCutTool: AgentTool = {
 
 			const editor = EditorCore.getInstance();
 			const tracksSnapshot = editor.timeline.getTracks();
+			const originalTracks = tracksSnapshot;
 			const timelineFingerprint = buildTimelineFingerprint(tracksSnapshot);
 			if (
 				isHighlightCacheStale({
@@ -1436,14 +1730,55 @@ export const applyHighlightCutTool: AgentTool = {
 
 			const totalDuration = editor.timeline.getTotalDuration();
 
-			const keepRanges = plan.segments.map((segment) => ({
-				start: Math.max(0, segment.chunk.startTime),
-				end: Math.min(totalDuration, segment.chunk.endTime),
-			}));
+			const keepRanges = mergeRanges(
+				plan.segments
+					.map((segment) => ({
+						start: Math.max(0, segment.chunk.startTime),
+						end: Math.min(totalDuration, segment.chunk.endTime),
+					}))
+					.filter((range) => range.end - range.start >= MIN_INTERVAL_SECONDS),
+			);
+
+			if (keepRanges.length === 0) {
+				return {
+					success: false,
+					message:
+						"精华计划区间无效（超出时间线或长度过短），请重新生成计划 (Invalid keep ranges)",
+					data: {
+						errorCode: "HIGHLIGHT_KEEP_RANGES_INVALID",
+						totalDurationBefore: Number(totalDuration.toFixed(4)),
+					},
+				};
+			}
+
+			const keepElementRefs = keepRanges.flatMap((range) =>
+				collectElementsOverlappingRange({
+					tracks: tracksSnapshot,
+					start: range.start,
+					end: range.end,
+				}),
+			);
+			if (keepElementRefs.length === 0) {
+				return {
+					success: false,
+					message:
+						"精华计划未命中任何时间线片段，请重新评分或调整目标时长 (No elements matched keep ranges)",
+					data: {
+						errorCode: "HIGHLIGHT_KEEP_RANGES_NO_MATCH",
+						keepRanges,
+						totalDurationBefore: Number(totalDuration.toFixed(4)),
+					},
+				};
+			}
 
 			const deleteRanges = complementRanges({ totalDuration, keepRanges })
 				.filter((range) => range.end - range.start >= MIN_INTERVAL_SECONDS)
 				.sort((a, b) => b.start - a.start);
+			const totalDeletedDuration = deleteRanges.reduce(
+				(sum, range) => sum + (range.end - range.start),
+				0,
+			);
+			const expectedDuration = Math.max(0, totalDuration - totalDeletedDuration);
 
 			let deletedRangeCount = 0;
 			let splitCount = 0;
@@ -1477,14 +1812,69 @@ export const applyHighlightCutTool: AgentTool = {
 					continue;
 				}
 
-				editor.selection.setSelectedElements({ elements: refs });
-				const deleteResult = await deleteSelectedTool.execute({});
-				if (deleteResult.success) {
-					deletedRangeCount += 1;
-				}
+				editor.timeline.deleteElements({ elements: refs });
+				deletedRangeCount += 1;
 			}
 
 			editor.selection.clearSelection();
+			const tracksAfterDelete = editor.timeline.getTracks();
+			const ripple = rippleCompressTracks({
+				tracks: tracksAfterDelete,
+				deleteRanges,
+			});
+			if (ripple.movedElementCount > 0) {
+				editor.timeline.updateTracks(ripple.tracks);
+			}
+
+			const finalDuration = editor.timeline.getTotalDuration();
+			const finalTracks = editor.timeline.getTracks();
+			const remainingElementCount = finalTracks.reduce(
+				(sum, track) => sum + track.elements.length,
+				0,
+			);
+			if (finalDuration <= MIN_INTERVAL_SECONDS || remainingElementCount === 0) {
+				editor.timeline.updateTracks(originalTracks);
+				return {
+					success: false,
+					message:
+						"剪辑结果会清空时间线，已自动回滚。请降低 targetDuration 或重新生成计划 (Cut would empty timeline, rolled back)",
+					data: {
+						errorCode: "HIGHLIGHT_CUT_EMPTIED_TIMELINE",
+						deleteRanges,
+						keepRanges,
+						totalDurationBefore: Number(totalDuration.toFixed(4)),
+						expectedDuration: Number(expectedDuration.toFixed(4)),
+						finalDuration: Number(finalDuration.toFixed(4)),
+					},
+				};
+			}
+			const durationChanged =
+				totalDeletedDuration <= MIN_INTERVAL_SECONDS ||
+				finalDuration <= totalDuration - MIN_INTERVAL_SECONDS;
+			if (!durationChanged) {
+				const debugSummary =
+					`before=${totalDuration.toFixed(2)}s, ` +
+					`expected=${expectedDuration.toFixed(2)}s, ` +
+					`final=${finalDuration.toFixed(2)}s, ` +
+					`deleteRanges=${deleteRanges.length}, ` +
+					`deletedDuration=${totalDeletedDuration.toFixed(2)}s, ` +
+					`rippleMoved=${ripple.movedElementCount}`;
+				return {
+					success: false,
+					message:
+						`剪辑未实际缩短时间线，请检查候选区间或重试。${debugSummary} ` +
+						"(Cut applied but timeline duration did not change)",
+					data: {
+						errorCode: "HIGHLIGHT_CUT_NO_EFFECT",
+						deleteRanges,
+						totalDurationBefore: Number(totalDuration.toFixed(4)),
+						expectedDuration: Number(expectedDuration.toFixed(4)),
+						finalDuration: Number(finalDuration.toFixed(4)),
+						deletedRangeCount,
+						splitCount,
+					},
+				};
+			}
 
 			const followUps: Array<{
 				step: string;
@@ -1520,12 +1910,19 @@ export const applyHighlightCutTool: AgentTool = {
 				success: !followUpFailed,
 				message: followUpFailed
 					? "精华剪辑已应用，但后处理步骤存在失败，请查看详情"
-					: `精华剪辑已应用，删除区间 ${deletedRangeCount} 个`,
+					: `精华剪辑已应用，删除区间 ${deletedRangeCount} 个，` +
+						`时长 ${totalDuration.toFixed(2)}s → ${finalDuration.toFixed(2)}s ` +
+						`(expected ${expectedDuration.toFixed(2)}s)，` +
+						`rippleMoved=${ripple.movedElementCount}`,
 				data: {
 					deleteRanges,
 					splitTimes,
 					deletedRangeCount,
 					splitCount,
+					totalDurationBefore: Number(totalDuration.toFixed(4)),
+					expectedDuration: Number(expectedDuration.toFixed(4)),
+					finalDuration: Number(finalDuration.toFixed(4)),
+					rippleMovedElementCount: ripple.movedElementCount,
 					followUps,
 					plan,
 					timelineFingerprint: highlightCache.timelineFingerprint,

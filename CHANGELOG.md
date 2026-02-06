@@ -103,6 +103,32 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Fixed
 
+- **Long-to-Short 内存占用**: 修复 Safari 因内存过高自动刷新（`this webpage was reloaded because it was using significant memory`）
+  - `validate_highlights_visual` 不再将 `thumbnailDataUrl` 写入缓存/计划/返回结果
+  - 视觉关键帧统一降采样到最大 `640x360`，降低 base64 体积与峰值内存
+  - Agent 编排层对 tool 历史消息做体积裁剪，避免将大 `segments/stepResults` 反复注入对话上下文
+  - `run_workflow` 的 `stepResults` 改为轻量摘要（仅 `success/message`）
+  - `long-to-short` 工作流视觉验证默认参数下调：`topN 15 → 8`、`frameConcurrency 2`
+- **编辑器布局告警刷屏**: 修复 Agent 模式下横向 4 面板默认比例总和不为 100 的问题
+  - 对 `tools/preview/properties` 在渲染与持久化时统一做归一化（按 Agent 预留宽度计算）
+  - 消除 `Invalid layout total size ... Layout normalization will be applied` 重复告警
+- **Agent 工具结果渲染告警**: 修复重复 key 导致的 React warning
+  - `AgentChatbox` 的 tool call 列表改为基于 `message.id + index` 生成唯一 key
+  - 消除 `Encountered two children with the same key` 控制台告警
+- **Long-to-Short 区间越界**: 修复 `score_highlights` 误用跨项目旧转录导致计划时间超出当前时间线
+  - 使用 `transcriptionService.getLastResult()` 前先做“转录时间范围 vs 当前时间线时长”对齐校验
+  - 对转录 `segments/words` 做时间裁剪与最小时长过滤，避免生成无效区间
+  - 无效内存转录将自动回退到当前时间线实时转录或字幕上下文
+- **转录缓存鲁棒性**: 修复空转录结果被缓存后导致后续工作流一直提示“无可用转录文本”
+  - `score_highlights` / `vision` 的转录上下文缓存不再持久化 `source=none` 空结果
+  - 命中空缓存时会清除并重试自动转写，无需先手动生成字幕
+- **工具名兼容性**: 增加 `visual_validation` / `visual-validation` 到 `validate_highlights_visual` 的别名映射
+  - 避免模型或用户使用变体命名时出现 `Tool not found`
+- **Long-to-Short 剪辑生效性**: `apply_highlight_cut` 新增删除后时间线压缩（ripple）与时长校验
+  - 删除区间后会将保留片段整体左移，避免出现“有删除但总时长不变”
+  - 若实际时长未缩短，将返回 `HIGHLIGHT_CUT_NO_EFFECT`，避免误报“已应用”
+  - 删除区间改为直接调用 `editor.timeline.deleteElements`，避免在无 action handler 场景下“提示成功但未实际删除”
+  - 新增保留区间有效性校验与“剪空自动回滚”，避免导出时报“Project is empty”
 - **Highlight 帧提取可靠性**: 重构视觉验证帧提取链路，修复 4/5 帧空白问题
   - 根因：共享 `videoCache` 单例被编辑器渲染器与 Agent 同时使用，seek 互相干扰导致 canvas 被覆写
   - 新方案：独立 `HTMLVideoElement` + `canvas.drawImage()`，完全绕过共享 videoCache

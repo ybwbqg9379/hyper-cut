@@ -995,9 +995,9 @@ function MessageBubble({
 				{/* Tool calls display */}
 				{message.toolCalls && message.toolCalls.length > 0 && (
 					<div className="mt-2 pt-2 border-t border-border/20 space-y-1">
-						{message.toolCalls.map((tc) => (
+						{message.toolCalls.map((tc, index) => (
 							<div
-								key={`${tc.name}-${tc.result.success}-${tc.result.message}`}
+								key={`${message.id}-tool-${index}-${tc.name}`}
 								className={cn(
 									"text-xs flex items-center gap-1.5 px-2 py-1 rounded-sm",
 									tc.result.success

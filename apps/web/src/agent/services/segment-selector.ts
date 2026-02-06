@@ -72,7 +72,6 @@ function toSelectedSegment(segment: ScoredSegment): SelectedSegment {
 		chunk: segment.chunk,
 		combinedScore: segment.combinedScore,
 		reason: buildSelectionReason(segment),
-		thumbnailDataUrl: segment.thumbnailDataUrl,
 	};
 }
 

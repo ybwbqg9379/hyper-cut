@@ -396,8 +396,11 @@ async function getTranscriptContext({
 	const { transcriptContextCache } = getVisionProjectCache(projectId);
 	const cacheKey = buildTranscriptCacheKey({ projectId, tracks });
 	const cached = transcriptContextCache.get(cacheKey);
-	if (cached) {
+	if (cached && (cached.context.segments.length > 0 || cached.context.words.length > 0)) {
 		return cached.context;
+	}
+	if (cached) {
+		transcriptContextCache.delete(cacheKey);
 	}
 
 	const captionSegments = collectCaptionSegmentsFromTimeline({ tracks });
@@ -451,11 +454,13 @@ async function getTranscriptContext({
 		}
 	}
 
-	transcriptContextCache.set(cacheKey, {
-		cacheKey,
-		context: resolvedContext,
-		updatedAt: new Date().toISOString(),
-	});
+	if (resolvedContext.segments.length > 0 || resolvedContext.words.length > 0) {
+		transcriptContextCache.set(cacheKey, {
+			cacheKey,
+			context: resolvedContext,
+			updatedAt: new Date().toISOString(),
+		});
+	}
 
 	return resolvedContext;
 }

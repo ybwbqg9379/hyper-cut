@@ -43,10 +43,199 @@ const MAX_HISTORY_MESSAGES = 30;
 const DEFAULT_MAX_TOOL_ITERATIONS = 4;
 const DEFAULT_TOOL_TIMEOUT_MS = 60000;
 const DEFAULT_PLANNING_ENABLED = false;
+const MAX_TOOL_HISTORY_CONTENT_LENGTH = 4000;
+const MAX_TOOL_DATA_DEPTH = 3;
+const MAX_TOOL_DATA_ARRAY_PREVIEW = 5;
+const MAX_TOOL_DATA_OBJECT_KEYS = 20;
+const MAX_TOOL_DATA_STRING_LENGTH = 240;
+
+const TOOL_DATA_DROP_KEYS = new Set([
+	"thumbnailDataUrl",
+	"imageDataUrl",
+	"base64",
+	"audioData",
+]);
+const TOOL_DATA_SUMMARY_KEYS = new Set([
+	"segments",
+	"topSegments",
+	"stepResults",
+	"tracks",
+	"elements",
+	"words",
+	"plan",
+	"deleteRanges",
+	"splitTimes",
+]);
+const TOOL_NAME_ALIASES = new Map<string, string>([
+	["visual_validation", "validate_highlights_visual"],
+	["visual-validation", "validate_highlights_visual"],
+]);
 
 interface PendingPlanState {
 	plan: AgentExecutionPlan;
 	toolCalls: ToolCall[];
+}
+
+function compactString(value: string): string {
+	if (value.length <= MAX_TOOL_DATA_STRING_LENGTH) {
+		return value;
+	}
+	return `${value.slice(0, MAX_TOOL_DATA_STRING_LENGTH)}...(truncated, ${value.length} chars)`;
+}
+
+function compactUnknown(value: unknown, depth = 0): unknown {
+	if (
+		value === null ||
+		typeof value === "number" ||
+		typeof value === "boolean"
+	) {
+		return value;
+	}
+
+	if (typeof value === "string") {
+		return compactString(value);
+	}
+
+	if (Array.isArray(value)) {
+		if (depth >= MAX_TOOL_DATA_DEPTH) {
+			return { type: "array", total: value.length };
+		}
+		const preview = value
+			.slice(0, MAX_TOOL_DATA_ARRAY_PREVIEW)
+			.map((item) => compactUnknown(item, depth + 1));
+		if (value.length > MAX_TOOL_DATA_ARRAY_PREVIEW) {
+			return { preview, total: value.length };
+		}
+		return preview;
+	}
+
+	if (typeof value === "object") {
+		if (depth >= MAX_TOOL_DATA_DEPTH) {
+			return "[object]";
+		}
+
+		const record = value as Record<string, unknown>;
+		const entries = Object.entries(record);
+		const compacted: Record<string, unknown> = {};
+		for (const [key, nextValue] of entries.slice(0, MAX_TOOL_DATA_OBJECT_KEYS)) {
+			if (TOOL_DATA_DROP_KEYS.has(key)) {
+				continue;
+			}
+			if (TOOL_DATA_SUMMARY_KEYS.has(key)) {
+				compacted[`${key}Summary`] = compactUnknown(nextValue, depth + 1);
+				continue;
+			}
+			compacted[key] = compactUnknown(nextValue, depth + 1);
+		}
+
+		if (entries.length > MAX_TOOL_DATA_OBJECT_KEYS) {
+			compacted._truncatedKeyCount =
+				entries.length - MAX_TOOL_DATA_OBJECT_KEYS;
+		}
+
+		return compacted;
+	}
+
+	return String(value);
+}
+
+function compactRunWorkflowData(data: unknown): unknown {
+	if (!data || typeof data !== "object" || Array.isArray(data)) {
+		return compactUnknown(data);
+	}
+
+	const record = data as Record<string, unknown>;
+	const compacted: Record<string, unknown> = {};
+	for (const key of [
+		"errorCode",
+		"status",
+		"workflowName",
+		"nextStep",
+		"resumeHint",
+		"startFromStepId",
+	]) {
+		if (record[key] !== undefined) {
+			compacted[key] = compactUnknown(record[key]);
+		}
+	}
+
+	if (Array.isArray(record.stepResults)) {
+		const stepResults = record.stepResults;
+		compacted.stepResults = stepResults.slice(0, 10).map((item) => {
+			if (!item || typeof item !== "object" || Array.isArray(item)) {
+				return compactUnknown(item);
+			}
+			const stepRecord = item as Record<string, unknown>;
+			const result = stepRecord.result;
+			const normalizedResult =
+				result && typeof result === "object" && !Array.isArray(result)
+					? (result as Record<string, unknown>)
+					: null;
+
+			return {
+				stepId:
+					typeof stepRecord.stepId === "string" ? stepRecord.stepId : undefined,
+				toolName:
+					typeof stepRecord.toolName === "string"
+						? stepRecord.toolName
+						: undefined,
+				success:
+					normalizedResult && typeof normalizedResult.success === "boolean"
+						? normalizedResult.success
+						: undefined,
+				message:
+					normalizedResult && typeof normalizedResult.message === "string"
+						? compactString(normalizedResult.message)
+						: undefined,
+			};
+		});
+
+		if (stepResults.length > 10) {
+			compacted.stepResultsTruncated = stepResults.length - 10;
+		}
+	}
+
+	return compacted;
+}
+
+function compactToolDataForHistory(toolName: string, data: unknown): unknown {
+	if (data === undefined) return undefined;
+	if (toolName === "run_workflow") {
+		return compactRunWorkflowData(data);
+	}
+	return compactUnknown(data);
+}
+
+function serializeToolResultForHistory(
+	toolName: string,
+	result: ToolResult,
+): string {
+	const payload: Record<string, unknown> = {
+		success: result.success,
+		message: compactString(result.message),
+	};
+	const compactedData = compactToolDataForHistory(toolName, result.data);
+	if (compactedData !== undefined) {
+		payload.data = compactedData;
+	}
+
+	const serialized = JSON.stringify(payload);
+	if (serialized.length <= MAX_TOOL_HISTORY_CONTENT_LENGTH) {
+		return serialized;
+	}
+
+	return JSON.stringify({
+		success: result.success,
+		message: compactString(result.message),
+		dataSummary: "tool data omitted due to size",
+	});
+}
+
+function compactToolResultForClient(result: ToolResult): ToolResult {
+	return {
+		success: result.success,
+		message: result.message,
+	};
 }
 
 /**
@@ -121,6 +310,22 @@ export class AgentOrchestrator {
 		return executedTools
 			.map((tool) => `${tool.name}: ${tool.result.message}`)
 			.join("\n");
+	}
+
+	private buildToolHistoryContent(toolCall: ToolCall, result: ToolResult): string {
+		return serializeToolResultForHistory(toolCall.name, result);
+	}
+
+	private toClientToolCalls(
+		executedTools: Array<{ name: string; result: ToolResult }>,
+	): Array<{ name: string; result: ToolResult }> | undefined {
+		if (executedTools.length === 0) {
+			return undefined;
+		}
+		return executedTools.map((tool) => ({
+			name: tool.name,
+			result: compactToolResultForClient(tool.result),
+		}));
 	}
 
 	private buildPlanSummary(toolCall: ToolCall): string {
@@ -238,14 +443,16 @@ export class AgentOrchestrator {
 
 		return {
 			message: responseMessage || fallbackMessage,
-			toolCalls: executedTools.length > 0 ? executedTools : undefined,
+			toolCalls: this.toClientToolCalls(executedTools),
 			success: isSuccess,
 			status: isSuccess ? "completed" : "error",
 		};
 	}
 
 	private async executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
-		const tool = this.tools.get(toolCall.name);
+		const resolvedToolName =
+			TOOL_NAME_ALIASES.get(toolCall.name) ?? toolCall.name;
+		const tool = this.tools.get(resolvedToolName);
 		if (!tool) {
 			return {
 				success: false,
@@ -385,7 +592,7 @@ export class AgentOrchestrator {
 				if (toolIterations >= this.maxToolIterations) {
 					return {
 						message: "工具调用次数已达上限，请重试 (Tool call limit reached)",
-						toolCalls: executedTools.length > 0 ? executedTools : undefined,
+						toolCalls: this.toClientToolCalls(executedTools),
 						success: false,
 						status: "error",
 					};
@@ -397,7 +604,7 @@ export class AgentOrchestrator {
 
 					this.appendHistory({
 						role: "tool",
-						content: JSON.stringify(result),
+						content: this.buildToolHistoryContent(toolCall, result),
 						toolCallId: toolCall.id,
 						name: toolCall.name,
 					});
@@ -515,7 +722,7 @@ export class AgentOrchestrator {
 		const toolResult = await this.executeToolCall(workflowCall);
 		this.appendHistory({
 			role: "tool",
-			content: JSON.stringify(toolResult),
+			content: this.buildToolHistoryContent(workflowCall, toolResult),
 			toolCallId: workflowCall.id,
 			name: workflowCall.name,
 		});
@@ -526,7 +733,12 @@ export class AgentOrchestrator {
 
 		return {
 			message: toolResult.message,
-			toolCalls: [{ name: workflowCall.name, result: toolResult }],
+			toolCalls: [
+				{
+					name: workflowCall.name,
+					result: compactToolResultForClient(toolResult),
+				},
+			],
 			success: toolResult.success,
 			status: toolResult.success ? "completed" : "error",
 		};
@@ -752,7 +964,7 @@ export class AgentOrchestrator {
 				executedTools.push({ name: toolCall.name, result });
 				this.appendHistory({
 					role: "tool",
-					content: JSON.stringify(result),
+					content: this.buildToolHistoryContent(toolCall, result),
 					toolCallId: toolCall.id,
 					name: toolCall.name,
 				});
@@ -770,7 +982,7 @@ export class AgentOrchestrator {
 
 			return {
 				message,
-				toolCalls: executedTools,
+				toolCalls: this.toClientToolCalls(executedTools),
 				success: !hasToolFailure,
 				status: hasToolFailure ? "error" : "completed",
 			};

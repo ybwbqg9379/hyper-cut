@@ -67,7 +67,8 @@ export const WORKFLOWS: Workflow[] = [
 				id: "visual-validation",
 				toolName: "validate_highlights_visual",
 				arguments: {
-					topN: 15,
+					topN: 8,
+					frameConcurrency: 2,
 				},
 				summary: "对候选高光片段做视觉质量验证",
 			},

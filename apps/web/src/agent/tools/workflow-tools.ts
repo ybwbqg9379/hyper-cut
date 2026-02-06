@@ -139,7 +139,7 @@ export const runWorkflowTool: AgentTool = {
 		const stepResults: Array<{
 			stepId: string;
 			toolName: string;
-			result: ToolResult;
+			result: Pick<ToolResult, "success" | "message">;
 		}> = [];
 
 		for (const step of steps.slice(startIndex)) {
@@ -198,7 +198,10 @@ export const runWorkflowTool: AgentTool = {
 			stepResults.push({
 				stepId: step.id,
 				toolName: step.toolName,
-				result,
+				result: {
+					success: result.success,
+					message: result.message,
+				},
 			});
 
 			if (!result.success) {
