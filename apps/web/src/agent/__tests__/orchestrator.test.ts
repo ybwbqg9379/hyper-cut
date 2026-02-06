@@ -452,6 +452,38 @@ describe("AgentOrchestrator", () => {
 		});
 	});
 
+	it("runWorkflow should forward resume parameters", async () => {
+		const provider = buildProvider();
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const runWorkflowExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "workflow ok" });
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "run_workflow",
+					description: "Run workflow",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: runWorkflowExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		await orchestrator.runWorkflow({
+			workflowName: "long-to-short",
+			startFromStepId: "apply-cut",
+			confirmRequiredSteps: true,
+		});
+
+		expect(runWorkflowExecute).toHaveBeenCalledWith({
+			workflowName: "long-to-short",
+			startFromStepId: "apply-cut",
+			confirmRequiredSteps: true,
+		});
+	});
+
 	it("should execute pending plan after confirmation", async () => {
 		const provider = buildProvider();
 		const toolExecute = vi.fn().mockResolvedValue({
@@ -653,6 +685,151 @@ describe("AgentOrchestrator", () => {
 					message.role === "user" && message.content === "[取消执行计划]",
 			),
 		).toBe(true);
+	});
+
+	it("should emit execution events for tool execution flow", async () => {
+		const provider = buildProvider();
+		const toolExecute = vi.fn().mockResolvedValue({
+			success: true,
+			message: "ok",
+		});
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [
+					{ id: "call-1", name: "test_tool", arguments: { value: 1 } },
+				],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "done",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const events: Array<{
+			type: string;
+			requestId: string;
+			status?: string;
+		}> = [];
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "test_tool",
+					description: "test tool",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: toolExecute,
+				},
+			],
+			{
+				onExecutionEvent: (event) => {
+					events.push({
+						type: event.type,
+						requestId: event.requestId,
+						status: event.status,
+					});
+				},
+			},
+		);
+
+		const result = await orchestrator.process("do it");
+
+		expect(result.success).toBe(true);
+		expect(events.map((event) => event.type)).toEqual([
+			"request_started",
+			"tool_started",
+			"tool_completed",
+			"request_completed",
+		]);
+		const requestIds = new Set(events.map((event) => event.requestId));
+		expect(requestIds.size).toBe(1);
+		expect(events[3]?.status).toBe("completed");
+	});
+
+	it("runWorkflow should expose awaiting_confirmation response when workflow pauses", async () => {
+		const provider = buildProvider();
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const runWorkflowExecute = vi.fn().mockResolvedValue({
+			success: true,
+			message: "工作流暂停，等待确认",
+			data: {
+				errorCode: "WORKFLOW_CONFIRMATION_REQUIRED",
+				status: "awaiting_confirmation",
+				nextStep: { id: "apply-cut", toolName: "delete_selection" },
+				resumeHint: {
+					workflowName: "long-to-short",
+					startFromStepId: "apply-cut",
+					confirmRequiredSteps: true,
+				},
+			},
+		});
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "run_workflow",
+					description: "Run workflow",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: runWorkflowExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.runWorkflow({
+			workflowName: "long-to-short",
+		});
+
+		expect(result.success).toBe(false);
+		expect(result.status).toBe("awaiting_confirmation");
+		expect(result.requiresConfirmation).toBe(true);
+		expect(result.nextStep?.id).toBe("apply-cut");
+		expect(result.resumeHint?.startFromStepId).toBe("apply-cut");
+		expect(result.requestId).toBeTruthy();
+	});
+
+	it("confirmPendingPlan should preserve awaiting_confirmation state", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			content: null,
+			toolCalls: [{ id: "call-1", name: "test_tool", arguments: { value: 1 } }],
+			finishReason: "tool_calls",
+		});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "test_tool",
+					description: "test tool",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: vi.fn().mockResolvedValue({
+						success: true,
+						message: "pause",
+						data: {
+							errorCode: "WORKFLOW_CONFIRMATION_REQUIRED",
+							status: "awaiting_confirmation",
+							nextStep: { id: "apply-cut", toolName: "delete_selection" },
+							resumeHint: {
+								workflowName: "long-to-short",
+								startFromStepId: "apply-cut",
+								confirmRequiredSteps: true,
+							},
+						},
+					}),
+				},
+			],
+			{ planningEnabled: true },
+		);
+
+		await orchestrator.process("first");
+		const result = await orchestrator.confirmPendingPlan();
+
+		expect(result.success).toBe(false);
+		expect(result.status).toBe("awaiting_confirmation");
+		expect(result.requiresConfirmation).toBe(true);
+		expect(result.nextStep?.id).toBe("apply-cut");
 	});
 
 	it("should prevent duplicate confirm while a plan is executing", async () => {

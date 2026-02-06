@@ -9,8 +9,11 @@ import {
 } from "react";
 import {
 	listWorkflows as getPresetWorkflows,
+	type AgentExecutionEvent,
 	type AgentExecutionPlan,
 	type AgentResponse,
+	type WorkflowNextStep,
+	type WorkflowResumeHint,
 } from "@/agent";
 import { useAgent } from "@/hooks/use-agent";
 import { Button } from "@/components/ui/button";
@@ -47,6 +50,11 @@ interface Message {
 	role: "user" | "assistant";
 	content: string;
 	timestamp: Date;
+	requestId?: string;
+	status?: AgentResponse["status"];
+	nextStep?: WorkflowNextStep;
+	resumeHint?: WorkflowResumeHint;
+	executionEvents?: AgentExecutionEvent[];
 	toolCalls?: Array<{
 		name: string;
 		result: { success: boolean; message: string };
@@ -160,6 +168,23 @@ function formatWorkflowValueForHint(value: unknown): string {
 	}
 }
 
+function formatExecutionMode(
+	mode: AgentExecutionEvent["mode"] | undefined,
+): string {
+	if (mode === "workflow") return "工作流";
+	if (mode === "plan_confirmation") return "计划确认执行";
+	return "聊天请求";
+}
+
+function formatExecutionStatus(status: AgentResponse["status"]): string {
+	if (status === "completed") return "完成";
+	if (status === "planned") return "待确认";
+	if (status === "running") return "执行中";
+	if (status === "awaiting_confirmation") return "等待确认";
+	if (status === "cancelled") return "已取消";
+	return "失败";
+}
+
 /**
  * AgentChatbox
  * Chat interface for AI-driven video editing commands
@@ -199,12 +224,30 @@ export function AgentChatbox() {
 		checkProvider,
 		isProcessing,
 		error,
+		executionEvents,
+		activeExecutionRequestId,
 	} = useAgent();
 	const workflowOptions = useMemo(() => getPresetWorkflows(), []);
 	const selectedWorkflow =
 		workflowOptions.find(
 			(workflow) => workflow.name === selectedWorkflowName,
 		) ?? null;
+	const executionEventsByRequestId = useMemo(() => {
+		const map = new Map<string, AgentExecutionEvent[]>();
+		for (const event of executionEvents) {
+			const requestEvents = map.get(event.requestId);
+			if (requestEvents) {
+				requestEvents.push(event);
+				continue;
+			}
+			map.set(event.requestId, [event]);
+		}
+		return map;
+	}, [executionEvents]);
+	const activeExecutionEvents = useMemo(() => {
+		if (!activeExecutionRequestId) return [];
+		return executionEventsByRequestId.get(activeExecutionRequestId) ?? [];
+	}, [activeExecutionRequestId, executionEventsByRequestId]);
 
 	useEffect(() => {
 		if (!selectedWorkflowName && workflowOptions.length > 0) {
@@ -245,6 +288,13 @@ export function AgentChatbox() {
 			role: "assistant",
 			content: response.message,
 			timestamp: new Date(),
+			requestId: response.requestId,
+			status: response.status,
+			nextStep: response.nextStep,
+			resumeHint: response.resumeHint,
+			executionEvents: response.requestId
+				? (executionEventsByRequestId.get(response.requestId) ?? [])
+				: undefined,
 			toolCalls: response.toolCalls,
 			plan: response.plan,
 			requiresConfirmation: response.requiresConfirmation,
@@ -262,10 +312,9 @@ export function AgentChatbox() {
 			return;
 		}
 
-		if (response.status === "completed" || response.status === "cancelled") {
-			setPendingPlanId(null);
-			setStepErrors({});
-		}
+		setPendingPlanId(null);
+		setStepDrafts({});
+		setStepErrors({});
 	};
 
 	// Handle send message
@@ -380,7 +429,9 @@ export function AgentChatbox() {
 
 	const resetWorkflowStepToDefault = (stepId: string) => {
 		if (isProcessing || pendingPlanId || !selectedWorkflow) return;
-		const targetStep = selectedWorkflow.steps.find((step) => step.id === stepId);
+		const targetStep = selectedWorkflow.steps.find(
+			(step) => step.id === stepId,
+		);
 		if (!targetStep) return;
 
 		setWorkflowStepDrafts((prev) => ({
@@ -460,6 +511,25 @@ export function AgentChatbox() {
 		const response = await runWorkflow({
 			workflowName: selectedWorkflowName,
 			...(hasOverrides ? { stepOverrides: nextStepOverrides } : {}),
+		});
+		appendAssistantResponse(response);
+	};
+
+	const handleResumeWorkflow = async (resumeHint: WorkflowResumeHint) => {
+		if (isProcessing || pendingPlanId) return;
+		const userMessage: Message = {
+			id: crypto.randomUUID(),
+			role: "user",
+			content: `[继续工作流] ${resumeHint.workflowName} @ ${resumeHint.startFromStepId}`,
+			timestamp: new Date(),
+		};
+		setMessages((prev) => [...prev, userMessage]);
+		setActiveView("chat");
+
+		const response = await runWorkflow({
+			workflowName: resumeHint.workflowName,
+			startFromStepId: resumeHint.startFromStepId,
+			confirmRequiredSteps: resumeHint.confirmRequiredSteps,
 		});
 		appendAssistantResponse(response);
 	};
@@ -578,14 +648,24 @@ export function AgentChatbox() {
 									onRemoveStep={handleRemoveStep}
 									onConfirmPlan={handleConfirmPlan}
 									onCancelPlan={handleCancelPlan}
+									onResumeWorkflow={handleResumeWorkflow}
 									controlsDisabled={isProcessing}
+									resumeDisabled={isProcessing || Boolean(pendingPlanId)}
 								/>
 							))}
 
 							{isProcessing && (
-								<div className="flex items-center gap-2 text-muted-foreground text-sm px-3 py-2">
-									<Loader2 className="size-4 animate-spin" />
-									<span>处理中...</span>
+								<div className="space-y-2">
+									<div className="flex items-center gap-2 text-muted-foreground text-sm px-3 py-2">
+										<Loader2 className="size-4 animate-spin" />
+										<span>处理中...</span>
+									</div>
+									{activeExecutionEvents.length > 0 ? (
+										<div className="rounded-md border border-border/50 bg-background/60 px-3 py-2">
+											<div className="text-xs font-medium mb-1">执行进度</div>
+											<ExecutionTimeline events={activeExecutionEvents} />
+										</div>
+									) : null}
 								</div>
 							)}
 
@@ -694,7 +774,9 @@ export function AgentChatbox() {
 									</p>
 									<div className="space-y-2">
 										{selectedWorkflow.steps.map((step, index) => {
-											const stepArguments = Object.entries(step.arguments ?? {});
+											const stepArguments = Object.entries(
+												step.arguments ?? {},
+											);
 											return (
 												<div
 													key={`${selectedWorkflow.name}-${step.id}`}
@@ -708,7 +790,9 @@ export function AgentChatbox() {
 															variant="text"
 															size="sm"
 															className="h-6 px-2 text-[11px]"
-															onClick={() => resetWorkflowStepToDefault(step.id)}
+															onClick={() =>
+																resetWorkflowStepToDefault(step.id)
+															}
 															disabled={
 																workflowActionDisabled ||
 																stepArguments.length === 0
@@ -866,7 +950,52 @@ interface MessageBubbleProps {
 	onRemoveStep: (stepId: string) => void;
 	onConfirmPlan: () => void;
 	onCancelPlan: () => void;
+	onResumeWorkflow: (resumeHint: WorkflowResumeHint) => void;
 	controlsDisabled: boolean;
+	resumeDisabled: boolean;
+}
+
+function ExecutionTimeline({ events }: { events: AgentExecutionEvent[] }) {
+	return (
+		<div className="space-y-1">
+			{events.map((event, index) => {
+				let text = "";
+				if (event.type === "request_started") {
+					text = `开始${formatExecutionMode(event.mode)}`;
+				} else if (event.type === "plan_created") {
+					text = `已生成计划（${event.plan?.steps.length ?? 0} 步）`;
+				} else if (event.type === "tool_started") {
+					text = `开始执行 ${event.toolName ?? "unknown_tool"}`;
+				} else if (event.type === "tool_completed") {
+					const resultText = event.result?.success ? "成功" : "失败";
+					text = `${event.toolName ?? "unknown_tool"} ${resultText}`;
+				} else {
+					text = `请求结束：${formatExecutionStatus(event.status)}`;
+				}
+
+				const isErrorEvent =
+					event.type === "tool_completed"
+						? event.result?.success === false
+						: event.type === "request_completed"
+							? event.status === "error"
+							: false;
+
+				return (
+					<div
+						key={`${event.requestId}-${event.type}-${event.toolCallId ?? "no-tool"}-${index}`}
+						className={cn(
+							"rounded-sm px-2 py-1 text-xs",
+							isErrorEvent
+								? "bg-destructive/10 text-destructive"
+								: "bg-muted/60 text-muted-foreground",
+						)}
+					>
+						{text}
+					</div>
+				);
+			})}
+		</div>
+	);
 }
 
 /**
@@ -883,7 +1012,9 @@ function MessageBubble({
 	onRemoveStep,
 	onConfirmPlan,
 	onCancelPlan,
+	onResumeWorkflow,
 	controlsDisabled,
+	resumeDisabled,
 }: MessageBubbleProps) {
 	const isUser = message.role === "user";
 
@@ -991,6 +1122,39 @@ function MessageBubble({
 						)}
 					</div>
 				)}
+
+				{message.executionEvents && message.executionEvents.length > 0 ? (
+					<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2">
+						<div className="mb-1 text-xs font-medium">执行轨迹</div>
+						<ExecutionTimeline events={message.executionEvents} />
+					</div>
+				) : null}
+
+				{message.resumeHint ? (
+					<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2 space-y-2">
+						<div className="text-xs text-muted-foreground">
+							当前流程在步骤{" "}
+							<span className="font-mono">
+								{message.resumeHint.startFromStepId}
+							</span>{" "}
+							等待确认。
+						</div>
+						<Button
+							size="sm"
+							variant="secondary"
+							onClick={() => {
+								const resumeHint = message.resumeHint;
+								if (!resumeHint) return;
+								onResumeWorkflow(resumeHint);
+							}}
+							disabled={resumeDisabled}
+							className="h-7 px-2 text-xs"
+						>
+							<Play className="size-3 mr-1" />
+							继续执行确认步骤
+						</Button>
+					</div>
+				) : null}
 
 				{/* Tool calls display */}
 				{message.toolCalls && message.toolCalls.length > 0 && (

@@ -1,6 +1,7 @@
 import type {
 	AgentTool,
 	AgentResponse,
+	AgentExecutionEvent,
 	AgentExecutionPlan,
 	AgentPlanStep,
 	LLMProvider,
@@ -9,6 +10,8 @@ import type {
 	ToolResult,
 	ToolCall,
 	AgentOrchestratorOptions,
+	WorkflowNextStep,
+	WorkflowResumeHint,
 } from "./types";
 import { createProvider, getConfiguredProviderType } from "./providers";
 import { resolveWorkflowFromParams } from "./workflows";
@@ -70,10 +73,18 @@ const TOOL_NAME_ALIASES = new Map<string, string>([
 	["visual_validation", "validate_highlights_visual"],
 	["visual-validation", "validate_highlights_visual"],
 ]);
+const WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE =
+	"WORKFLOW_CONFIRMATION_REQUIRED";
 
 interface PendingPlanState {
 	plan: AgentExecutionPlan;
 	toolCalls: ToolCall[];
+}
+
+interface WorkflowPauseInfo {
+	workflowName?: string;
+	nextStep?: WorkflowNextStep;
+	resumeHint?: WorkflowResumeHint;
 }
 
 function compactString(value: string): string {
@@ -117,7 +128,10 @@ function compactUnknown(value: unknown, depth = 0): unknown {
 		const record = value as Record<string, unknown>;
 		const entries = Object.entries(record);
 		const compacted: Record<string, unknown> = {};
-		for (const [key, nextValue] of entries.slice(0, MAX_TOOL_DATA_OBJECT_KEYS)) {
+		for (const [key, nextValue] of entries.slice(
+			0,
+			MAX_TOOL_DATA_OBJECT_KEYS,
+		)) {
 			if (TOOL_DATA_DROP_KEYS.has(key)) {
 				continue;
 			}
@@ -129,8 +143,7 @@ function compactUnknown(value: unknown, depth = 0): unknown {
 		}
 
 		if (entries.length > MAX_TOOL_DATA_OBJECT_KEYS) {
-			compacted._truncatedKeyCount =
-				entries.length - MAX_TOOL_DATA_OBJECT_KEYS;
+			compacted._truncatedKeyCount = entries.length - MAX_TOOL_DATA_OBJECT_KEYS;
 		}
 
 		return compacted;
@@ -231,11 +244,85 @@ function serializeToolResultForHistory(
 	});
 }
 
-function compactToolResultForClient(result: ToolResult): ToolResult {
+function asObjectRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+	return value as Record<string, unknown>;
+}
+
+function asWorkflowResumeHint(value: unknown): WorkflowResumeHint | undefined {
+	const record = asObjectRecord(value);
+	if (!record) return undefined;
+	if (
+		typeof record.workflowName !== "string" ||
+		typeof record.startFromStepId !== "string" ||
+		typeof record.confirmRequiredSteps !== "boolean"
+	) {
+		return undefined;
+	}
 	return {
+		workflowName: record.workflowName,
+		startFromStepId: record.startFromStepId,
+		confirmRequiredSteps: record.confirmRequiredSteps,
+	};
+}
+
+function asWorkflowNextStep(value: unknown): WorkflowNextStep | undefined {
+	const record = asObjectRecord(value);
+	if (!record) return undefined;
+	if (typeof record.id !== "string" || typeof record.toolName !== "string") {
+		return undefined;
+	}
+
+	const nextStep: WorkflowNextStep = {
+		id: record.id,
+		toolName: record.toolName,
+	};
+
+	if (typeof record.summary === "string") {
+		nextStep.summary = record.summary;
+	}
+	if (asObjectRecord(record.arguments)) {
+		nextStep.arguments = record.arguments as Record<string, unknown>;
+	}
+
+	return nextStep;
+}
+
+function extractWorkflowPauseInfo(data: unknown): WorkflowPauseInfo | null {
+	const record = asObjectRecord(data);
+	if (!record) return null;
+
+	const status = record.status;
+	const errorCode = record.errorCode;
+	const isAwaiting =
+		status === "awaiting_confirmation" ||
+		errorCode === WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE;
+	if (!isAwaiting) return null;
+
+	return {
+		workflowName:
+			typeof record.workflowName === "string" ? record.workflowName : undefined,
+		nextStep: asWorkflowNextStep(record.nextStep),
+		resumeHint: asWorkflowResumeHint(record.resumeHint),
+	};
+}
+
+function compactToolResultForClient(
+	toolName: string,
+	result: ToolResult,
+): ToolResult {
+	const compacted: ToolResult = {
 		success: result.success,
 		message: result.message,
 	};
+
+	if (toolName === "run_workflow" && result.data !== undefined) {
+		compacted.data = compactRunWorkflowData(result.data);
+	}
+
+	return compacted;
 }
 
 /**
@@ -252,8 +339,10 @@ export class AgentOrchestrator {
 	private toolTimeoutMs: number;
 	private debug: boolean;
 	private planningEnabled: boolean;
+	private onExecutionEvent?: (event: AgentExecutionEvent) => void;
 	private pendingPlanState: PendingPlanState | null = null;
 	private planSequence = 0;
+	private requestSequence = 0;
 	private isExecutingPlan = false;
 
 	constructor(tools: AgentTool[] = [], options: AgentOrchestratorOptions = {}) {
@@ -274,10 +363,25 @@ export class AgentOrchestrator {
 				: DEFAULT_TOOL_TIMEOUT_MS;
 		this.debug = options.debug ?? false;
 		this.planningEnabled = options.planningEnabled ?? DEFAULT_PLANNING_ENABLED;
+		this.onExecutionEvent = options.onExecutionEvent;
 		this.provider = createProvider(getConfiguredProviderType(config), config);
 		for (const tool of tools) {
 			this.registerTool(tool);
 		}
+	}
+
+	private createRequestId(prefix: "chat" | "workflow" | "confirm"): string {
+		this.requestSequence += 1;
+		return `${prefix}-${Date.now()}-${this.requestSequence}`;
+	}
+
+	private emitExecutionEvent(
+		event: Omit<AgentExecutionEvent, "timestamp">,
+	): void {
+		this.onExecutionEvent?.({
+			...event,
+			timestamp: new Date().toISOString(),
+		});
 	}
 
 	/**
@@ -312,7 +416,10 @@ export class AgentOrchestrator {
 			.join("\n");
 	}
 
-	private buildToolHistoryContent(toolCall: ToolCall, result: ToolResult): string {
+	private buildToolHistoryContent(
+		toolCall: ToolCall,
+		result: ToolResult,
+	): string {
 		return serializeToolResultForHistory(toolCall.name, result);
 	}
 
@@ -324,8 +431,20 @@ export class AgentOrchestrator {
 		}
 		return executedTools.map((tool) => ({
 			name: tool.name,
-			result: compactToolResultForClient(tool.result),
+			result: compactToolResultForClient(tool.name, tool.result),
 		}));
+	}
+
+	private extractFirstWorkflowPauseInfo(
+		executedTools: Array<{ name: string; result: ToolResult }>,
+	): WorkflowPauseInfo | null {
+		for (const tool of executedTools) {
+			const pauseInfo = extractWorkflowPauseInfo(tool.result.data);
+			if (pauseInfo) {
+				return pauseInfo;
+			}
+		}
+		return null;
 	}
 
 	private buildPlanSummary(toolCall: ToolCall): string {
@@ -413,20 +532,49 @@ export class AgentOrchestrator {
 		return [intro, ...stepLines].join("\n");
 	}
 
-	private buildPendingPlanBlockedResponse(): AgentResponse {
+	private buildPendingPlanBlockedResponse(requestId: string): AgentResponse {
 		return {
 			message: "当前有待确认的计划，请先确认执行或取消后再发起新请求。",
 			success: false,
 			status: "planned",
 			requiresConfirmation: true,
 			plan: this.pendingPlanState?.plan,
+			requestId,
 		};
 	}
 
+	private completeRequest({
+		requestId,
+		mode,
+		response,
+	}: {
+		requestId: string;
+		mode: "chat" | "workflow" | "plan_confirmation";
+		response: AgentResponse;
+	}): AgentResponse {
+		const status =
+			response.status ?? (response.success ? "completed" : "error");
+		const finalizedResponse: AgentResponse = {
+			...response,
+			status,
+			requestId,
+		};
+		this.emitExecutionEvent({
+			type: "request_completed",
+			requestId,
+			mode,
+			status,
+			message: finalizedResponse.message,
+		});
+		return finalizedResponse;
+	}
+
 	private buildFinalResponse({
+		requestId,
 		response,
 		executedTools,
 	}: {
+		requestId: string;
 		response: {
 			content: string | null;
 			finishReason: "stop" | "tool_calls" | "error";
@@ -435,17 +583,40 @@ export class AgentOrchestrator {
 	}): AgentResponse {
 		const responseMessage =
 			response.content ?? this.buildToolSummary(executedTools);
-		const hasToolFailure = executedTools.some((tool) => !tool.result.success);
-		const isSuccess = response.finishReason !== "error" && !hasToolFailure;
-		const fallbackMessage = isSuccess
-			? "操作完成"
-			: "处理失败，请重试 (Request failed, please try again)";
+		const hasAwaitingConfirmation = executedTools.some(
+			(tool) => extractWorkflowPauseInfo(tool.result.data) !== null,
+		);
+		const hasToolFailure = executedTools.some(
+			(tool) =>
+				!tool.result.success &&
+				extractWorkflowPauseInfo(tool.result.data) === null,
+		);
+		const isSuccess =
+			response.finishReason !== "error" &&
+			!hasToolFailure &&
+			!hasAwaitingConfirmation;
+		const pauseInfo = this.extractFirstWorkflowPauseInfo(executedTools);
+		const status = hasToolFailure
+			? "error"
+			: hasAwaitingConfirmation
+				? "awaiting_confirmation"
+				: "completed";
+		const fallbackMessage =
+			status === "awaiting_confirmation"
+				? "工作流已暂停，等待确认后继续执行。"
+				: isSuccess
+					? "操作完成"
+					: "处理失败，请重试 (Request failed, please try again)";
 
 		return {
 			message: responseMessage || fallbackMessage,
 			toolCalls: this.toClientToolCalls(executedTools),
 			success: isSuccess,
-			status: isSuccess ? "completed" : "error",
+			status,
+			requiresConfirmation: status === "awaiting_confirmation",
+			requestId,
+			nextStep: pauseInfo?.nextStep,
+			resumeHint: pauseInfo?.resumeHint,
 		};
 	}
 
@@ -503,17 +674,34 @@ export class AgentOrchestrator {
 	 * Process a user message and return the agent's response
 	 */
 	async process(userMessage: string): Promise<AgentResponse> {
+		const requestId = this.createRequestId("chat");
 		if (this.planningEnabled && this.isExecutingPlan) {
-			return {
-				message: "计划正在执行中，请稍候。",
-				success: false,
-				status: "error",
-			};
+			return this.completeRequest({
+				requestId,
+				mode: "chat",
+				response: {
+					message: "计划正在执行中，请稍候。",
+					success: false,
+					status: "error",
+				},
+			});
 		}
 
 		if (this.planningEnabled && this.pendingPlanState) {
-			return this.buildPendingPlanBlockedResponse();
+			return this.completeRequest({
+				requestId,
+				mode: "chat",
+				response: this.buildPendingPlanBlockedResponse(requestId),
+			});
 		}
+
+		this.emitExecutionEvent({
+			type: "request_started",
+			requestId,
+			mode: "chat",
+			status: "running",
+			message: userMessage,
+		});
 
 		const historyLengthBefore = this.conversationHistory.length;
 		// Add user message to history
@@ -530,10 +718,15 @@ export class AgentOrchestrator {
 					0,
 					historyLengthBefore,
 				);
-				return {
-					message: `LLM provider (${this.provider.name}) is not available. Please ensure LM Studio is running.`,
-					success: false,
-				};
+				return this.completeRequest({
+					requestId,
+					mode: "chat",
+					response: {
+						message: `LLM provider (${this.provider.name}) is not available. Please ensure LM Studio is running.`,
+						success: false,
+						status: "error",
+					},
+				});
 			}
 
 			const executedTools: Array<{ name: string; result: ToolResult }> = [];
@@ -560,7 +753,15 @@ export class AgentOrchestrator {
 			});
 
 			if (response.toolCalls.length === 0) {
-				return this.buildFinalResponse({ response, executedTools });
+				return this.completeRequest({
+					requestId,
+					mode: "chat",
+					response: this.buildFinalResponse({
+						requestId,
+						response,
+						executedTools,
+					}),
+				});
 			}
 
 			if (this.planningEnabled) {
@@ -569,13 +770,24 @@ export class AgentOrchestrator {
 				);
 				const pendingPlan = this.buildExecutionPlan(userMessage, planToolCalls);
 				this.pendingPlanState = pendingPlan;
-				return {
-					message: this.formatPlanMessage(pendingPlan.plan),
-					success: true,
+				this.emitExecutionEvent({
+					type: "plan_created",
+					requestId,
+					mode: "chat",
 					status: "planned",
-					requiresConfirmation: true,
 					plan: pendingPlan.plan,
-				};
+				});
+				return this.completeRequest({
+					requestId,
+					mode: "chat",
+					response: {
+						message: this.formatPlanMessage(pendingPlan.plan),
+						success: true,
+						status: "planned",
+						requiresConfirmation: true,
+						plan: pendingPlan.plan,
+					},
+				});
 			}
 
 			let toolIterations = 0;
@@ -590,17 +802,50 @@ export class AgentOrchestrator {
 				}
 
 				if (toolIterations >= this.maxToolIterations) {
-					return {
-						message: "工具调用次数已达上限，请重试 (Tool call limit reached)",
-						toolCalls: this.toClientToolCalls(executedTools),
-						success: false,
-						status: "error",
-					};
+					return this.completeRequest({
+						requestId,
+						mode: "chat",
+						response: {
+							message: "工具调用次数已达上限，请重试 (Tool call limit reached)",
+							toolCalls: this.toClientToolCalls(executedTools),
+							success: false,
+							status: "error",
+						},
+					});
 				}
 
-				for (const toolCall of response.toolCalls) {
+				for (const [index, toolCall] of response.toolCalls.entries()) {
+					this.emitExecutionEvent({
+						type: "tool_started",
+						requestId,
+						mode: "chat",
+						status: "running",
+						toolName: toolCall.name,
+						toolCallId: toolCall.id,
+						stepIndex: index + 1,
+						totalSteps: response.toolCalls.length,
+					});
 					const result = await this.executeToolCall(toolCall);
 					executedTools.push({ name: toolCall.name, result });
+					const pauseInfo = extractWorkflowPauseInfo(result.data);
+					this.emitExecutionEvent({
+						type: "tool_completed",
+						requestId,
+						mode: "chat",
+						status: pauseInfo
+							? "awaiting_confirmation"
+							: result.success
+								? "running"
+								: "error",
+						toolName: toolCall.name,
+						toolCallId: toolCall.id,
+						stepIndex: index + 1,
+						totalSteps: response.toolCalls.length,
+						result: {
+							success: result.success,
+							message: result.message,
+						},
+					});
 
 					this.appendHistory({
 						role: "tool",
@@ -625,7 +870,15 @@ export class AgentOrchestrator {
 				});
 
 				if (response.toolCalls.length === 0) {
-					return this.buildFinalResponse({ response, executedTools });
+					return this.completeRequest({
+						requestId,
+						mode: "chat",
+						response: this.buildFinalResponse({
+							requestId,
+							response,
+							executedTools,
+						}),
+					});
 				}
 			}
 		} catch (error) {
@@ -635,17 +888,23 @@ export class AgentOrchestrator {
 			);
 			const errorMessage =
 				error instanceof Error ? error.message : "Unknown error occurred";
-			return {
-				message: `Error processing request: ${errorMessage}`,
-				success: false,
-				status: "error",
-			};
+			return this.completeRequest({
+				requestId,
+				mode: "chat",
+				response: {
+					message: `Error processing request: ${errorMessage}`,
+					success: false,
+					status: "error",
+				},
+			});
 		}
 	}
 
 	async runWorkflow({
 		workflowName,
 		stepOverrides,
+		startFromStepId,
+		confirmRequiredSteps,
 	}: {
 		workflowName: string;
 		stepOverrides?: Array<{
@@ -653,33 +912,61 @@ export class AgentOrchestrator {
 			index?: number;
 			arguments: Record<string, unknown>;
 		}>;
+		startFromStepId?: string;
+		confirmRequiredSteps?: boolean;
 	}): Promise<AgentResponse> {
+		const requestId = this.createRequestId("workflow");
 		if (this.planningEnabled && this.isExecutingPlan) {
-			return {
-				message: "计划正在执行中，请稍候。",
-				success: false,
-				status: "error",
-			};
+			return this.completeRequest({
+				requestId,
+				mode: "workflow",
+				response: {
+					message: "计划正在执行中，请稍候。",
+					success: false,
+					status: "error",
+				},
+			});
 		}
 
 		if (this.planningEnabled && this.pendingPlanState) {
-			return this.buildPendingPlanBlockedResponse();
+			return this.completeRequest({
+				requestId,
+				mode: "workflow",
+				response: this.buildPendingPlanBlockedResponse(requestId),
+			});
 		}
 
 		const normalizedName = workflowName.trim();
 		if (!normalizedName) {
-			return {
-				message: "workflowName 不能为空",
-				success: false,
-				status: "error",
-			};
+			return this.completeRequest({
+				requestId,
+				mode: "workflow",
+				response: {
+					message: "workflowName 不能为空",
+					success: false,
+					status: "error",
+				},
+			});
 		}
+		this.emitExecutionEvent({
+			type: "request_started",
+			requestId,
+			mode: "workflow",
+			status: "running",
+			message: normalizedName,
+		});
 
 		const argumentsPayload: Record<string, unknown> = {
 			workflowName: normalizedName,
 		};
 		if (stepOverrides && stepOverrides.length > 0) {
 			argumentsPayload.stepOverrides = stepOverrides;
+		}
+		if (startFromStepId && startFromStepId.trim().length > 0) {
+			argumentsPayload.startFromStepId = startFromStepId.trim();
+		}
+		if (confirmRequiredSteps !== undefined) {
+			argumentsPayload.confirmRequiredSteps = confirmRequiredSteps;
 		}
 
 		this.appendHistory({
@@ -710,16 +997,56 @@ export class AgentOrchestrator {
 				content: planMessage,
 			});
 
-			return {
-				message: planMessage,
-				success: true,
+			this.emitExecutionEvent({
+				type: "plan_created",
+				requestId,
+				mode: "workflow",
 				status: "planned",
-				requiresConfirmation: true,
 				plan: pendingPlan.plan,
-			};
+			});
+			return this.completeRequest({
+				requestId,
+				mode: "workflow",
+				response: {
+					message: planMessage,
+					success: true,
+					status: "planned",
+					requiresConfirmation: true,
+					plan: pendingPlan.plan,
+				},
+			});
 		}
 
+		this.emitExecutionEvent({
+			type: "tool_started",
+			requestId,
+			mode: "workflow",
+			status: "running",
+			toolName: workflowCall.name,
+			toolCallId: workflowCall.id,
+			stepIndex: 1,
+			totalSteps: 1,
+		});
 		const toolResult = await this.executeToolCall(workflowCall);
+		const pauseInfo = extractWorkflowPauseInfo(toolResult.data);
+		this.emitExecutionEvent({
+			type: "tool_completed",
+			requestId,
+			mode: "workflow",
+			status: pauseInfo
+				? "awaiting_confirmation"
+				: toolResult.success
+					? "running"
+					: "error",
+			toolName: workflowCall.name,
+			toolCallId: workflowCall.id,
+			stepIndex: 1,
+			totalSteps: 1,
+			result: {
+				success: toolResult.success,
+				message: toolResult.message,
+			},
+		});
 		this.appendHistory({
 			role: "tool",
 			content: this.buildToolHistoryContent(workflowCall, toolResult),
@@ -730,18 +1057,30 @@ export class AgentOrchestrator {
 			role: "assistant",
 			content: toolResult.message,
 		});
+		const status = pauseInfo
+			? "awaiting_confirmation"
+			: toolResult.success
+				? "completed"
+				: "error";
 
-		return {
-			message: toolResult.message,
-			toolCalls: [
-				{
-					name: workflowCall.name,
-					result: compactToolResultForClient(toolResult),
-				},
-			],
-			success: toolResult.success,
-			status: toolResult.success ? "completed" : "error",
-		};
+		return this.completeRequest({
+			requestId,
+			mode: "workflow",
+			response: {
+				message: toolResult.message,
+				toolCalls: [
+					{
+						name: workflowCall.name,
+						result: compactToolResultForClient(workflowCall.name, toolResult),
+					},
+				],
+				success: toolResult.success && !pauseInfo,
+				status,
+				requiresConfirmation: status === "awaiting_confirmation",
+				nextStep: pauseInfo?.nextStep,
+				resumeHint: pauseInfo?.resumeHint,
+			},
+		});
 	}
 
 	getPendingPlan(): AgentExecutionPlan | null {
@@ -932,21 +1271,37 @@ export class AgentOrchestrator {
 	}
 
 	async confirmPendingPlan(): Promise<AgentResponse> {
+		const requestId = this.createRequestId("confirm");
 		if (this.isExecutingPlan) {
-			return {
-				message: "计划正在执行中，请勿重复确认。",
-				success: false,
-				status: "error",
-			};
+			return this.completeRequest({
+				requestId,
+				mode: "plan_confirmation",
+				response: {
+					message: "计划正在执行中，请勿重复确认。",
+					success: false,
+					status: "error",
+				},
+			});
 		}
 
 		if (!this.pendingPlanState) {
-			return {
-				message: "当前没有待确认的计划。",
-				success: false,
-				status: "error",
-			};
+			return this.completeRequest({
+				requestId,
+				mode: "plan_confirmation",
+				response: {
+					message: "当前没有待确认的计划。",
+					success: false,
+					status: "error",
+				},
+			});
 		}
+		this.emitExecutionEvent({
+			type: "request_started",
+			requestId,
+			mode: "plan_confirmation",
+			status: "running",
+			message: this.pendingPlanState.plan.id,
+		});
 
 		const pendingPlan = this.pendingPlanState;
 		this.pendingPlanState = null;
@@ -959,9 +1314,38 @@ export class AgentOrchestrator {
 			});
 
 			const executedTools: Array<{ name: string; result: ToolResult }> = [];
-			for (const toolCall of pendingPlan.toolCalls) {
+			for (const [index, toolCall] of pendingPlan.toolCalls.entries()) {
+				this.emitExecutionEvent({
+					type: "tool_started",
+					requestId,
+					mode: "plan_confirmation",
+					status: "running",
+					toolName: toolCall.name,
+					toolCallId: toolCall.id,
+					stepIndex: index + 1,
+					totalSteps: pendingPlan.toolCalls.length,
+				});
 				const result = await this.executeToolCall(toolCall);
 				executedTools.push({ name: toolCall.name, result });
+				const pauseInfo = extractWorkflowPauseInfo(result.data);
+				this.emitExecutionEvent({
+					type: "tool_completed",
+					requestId,
+					mode: "plan_confirmation",
+					status: pauseInfo
+						? "awaiting_confirmation"
+						: result.success
+							? "running"
+							: "error",
+					toolName: toolCall.name,
+					toolCallId: toolCall.id,
+					stepIndex: index + 1,
+					totalSteps: pendingPlan.toolCalls.length,
+					result: {
+						success: result.success,
+						message: result.message,
+					},
+				});
 				this.appendHistory({
 					role: "tool",
 					content: this.buildToolHistoryContent(toolCall, result),
@@ -970,28 +1354,54 @@ export class AgentOrchestrator {
 				});
 			}
 
-			const hasToolFailure = executedTools.some((tool) => !tool.result.success);
+			const hasAwaitingConfirmation = executedTools.some(
+				(tool) => extractWorkflowPauseInfo(tool.result.data) !== null,
+			);
+			const hasToolFailure = executedTools.some(
+				(tool) =>
+					!tool.result.success &&
+					extractWorkflowPauseInfo(tool.result.data) === null,
+			);
+			const pauseInfo = this.extractFirstWorkflowPauseInfo(executedTools);
 			const message = hasToolFailure
 				? `计划执行完成，但有步骤失败：\n${this.buildToolSummary(executedTools)}`
-				: `计划执行完成：\n${this.buildToolSummary(executedTools)}`;
+				: hasAwaitingConfirmation
+					? `计划执行已暂停，等待确认后继续：\n${this.buildToolSummary(executedTools)}`
+					: `计划执行完成：\n${this.buildToolSummary(executedTools)}`;
 
 			this.appendHistory({
 				role: "assistant",
 				content: message,
 			});
 
-			return {
-				message,
-				toolCalls: this.toClientToolCalls(executedTools),
-				success: !hasToolFailure,
-				status: hasToolFailure ? "error" : "completed",
-			};
+			const status = hasToolFailure
+				? "error"
+				: hasAwaitingConfirmation
+					? "awaiting_confirmation"
+					: "completed";
+			return this.completeRequest({
+				requestId,
+				mode: "plan_confirmation",
+				response: {
+					message,
+					toolCalls: this.toClientToolCalls(executedTools),
+					success: !hasToolFailure && !hasAwaitingConfirmation,
+					status,
+					requiresConfirmation: status === "awaiting_confirmation",
+					nextStep: pauseInfo?.nextStep,
+					resumeHint: pauseInfo?.resumeHint,
+				},
+			});
 		} catch (error) {
-			return {
-				message: `计划执行失败: ${error instanceof Error ? error.message : "Unknown error"}`,
-				success: false,
-				status: "error",
-			};
+			return this.completeRequest({
+				requestId,
+				mode: "plan_confirmation",
+				response: {
+					message: `计划执行失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+					success: false,
+					status: "error",
+				},
+			});
 		} finally {
 			this.isExecutingPlan = false;
 		}

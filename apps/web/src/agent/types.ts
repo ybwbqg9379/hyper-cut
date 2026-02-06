@@ -74,6 +74,19 @@ export interface ToolResult {
 	data?: unknown;
 }
 
+export interface WorkflowResumeHint {
+	workflowName: string;
+	startFromStepId: string;
+	confirmRequiredSteps: boolean;
+}
+
+export interface WorkflowNextStep {
+	id: string;
+	toolName: string;
+	summary?: string;
+	arguments?: Record<string, unknown>;
+}
+
 export interface AgentTool {
 	name: string;
 	description: string;
@@ -106,9 +119,18 @@ export interface AgentResponse {
 		result: ToolResult;
 	}>;
 	success: boolean;
-	status?: "completed" | "planned" | "cancelled" | "error";
+	status?:
+		| "completed"
+		| "planned"
+		| "running"
+		| "awaiting_confirmation"
+		| "cancelled"
+		| "error";
 	requiresConfirmation?: boolean;
 	plan?: AgentExecutionPlan;
+	requestId?: string;
+	nextStep?: WorkflowNextStep;
+	resumeHint?: WorkflowResumeHint;
 }
 
 // ============================================================================
@@ -150,4 +172,34 @@ export interface AgentOrchestratorOptions {
 	debug?: boolean;
 	planningEnabled?: boolean;
 	config?: Partial<AgentConfig>;
+	onExecutionEvent?: (event: AgentExecutionEvent) => void;
+}
+
+export interface AgentExecutionEvent {
+	type:
+		| "request_started"
+		| "tool_started"
+		| "tool_completed"
+		| "plan_created"
+		| "request_completed";
+	requestId: string;
+	mode?: "chat" | "workflow" | "plan_confirmation";
+	toolName?: string;
+	toolCallId?: string;
+	stepIndex?: number;
+	totalSteps?: number;
+	status?:
+		| "completed"
+		| "planned"
+		| "running"
+		| "awaiting_confirmation"
+		| "cancelled"
+		| "error";
+	message?: string;
+	result?: {
+		success: boolean;
+		message: string;
+	};
+	plan?: AgentExecutionPlan;
+	timestamp: string;
 }

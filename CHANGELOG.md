@@ -78,6 +78,14 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 新增 `search_sticker`：仅搜索 Iconify 贴纸候选，不直接插入
   - 新增 `add_sticker`：支持 Iconify 搜索并将贴纸插入时间线
   - 新增 `search_sound_effect`：仅搜索 Freesound 音效候选，不直接插入
+- **Agent 自动剪辑链路可观测性与恢复能力（Phase 3）**
+  - `AgentResponse` 新增 `requestId` / `nextStep` / `resumeHint`，并补全 `awaiting_confirmation` 等状态语义
+  - Orchestrator 新增执行事件流：`request_started`、`tool_started`、`tool_completed`、`plan_created`、`request_completed`
+  - `run_workflow` 支持前端透传 `startFromStepId` 与 `confirmRequiredSteps`，可从暂停步骤继续执行
+  - 统一处理工作流暂停语义：`runWorkflow` 与 `confirmPendingPlan` 遇到确认点时返回 `awaiting_confirmation`
+  - Agent 面板新增“执行进度 / 执行轨迹”可视化，以及暂停后“一键继续执行确认步骤”入口
+  - 修复 `pendingPlanId` 清理不完整导致的输入阻塞残留问题
+  - 新增 orchestrator 覆盖测试：事件流、暂停态传播、恢复参数透传
   - 新增 `add_sound_effect`：支持 `soundId` 直加或按搜索结果添加到时间线
   - 新增 `update_sticker_color`：支持更新贴纸 `color`
   - 扩展 `UpdateElementTransformCommand`：支持 sticker 颜色更新并保留 undo/redo 链路

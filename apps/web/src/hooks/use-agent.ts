@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { AgentOrchestrator, getAllTools, type AgentResponse } from "@/agent";
+import {
+	AgentOrchestrator,
+	getAllTools,
+	type AgentExecutionEvent,
+	type AgentResponse,
+} from "@/agent";
 
 /**
  * React hook for using the Agent Orchestrator
@@ -11,6 +16,31 @@ export function useAgent() {
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [lastResponse, setLastResponse] = useState<AgentResponse | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [executionEvents, setExecutionEvents] = useState<AgentExecutionEvent[]>(
+		[],
+	);
+	const [activeExecutionRequestId, setActiveExecutionRequestId] = useState<
+		string | null
+	>(null);
+
+	const appendExecutionEvent = useCallback((event: AgentExecutionEvent) => {
+		setExecutionEvents((prev) => {
+			const nextEvents = [...prev, event];
+			if (nextEvents.length > 200) {
+				return nextEvents.slice(nextEvents.length - 200);
+			}
+			return nextEvents;
+		});
+		if (event.type === "request_started") {
+			setActiveExecutionRequestId(event.requestId);
+			return;
+		}
+		if (event.type === "request_completed") {
+			setActiveExecutionRequestId((prev) =>
+				prev === event.requestId ? null : prev,
+			);
+		}
+	}, []);
 
 	// Create agent with all tools
 	const agent = useMemo(() => {
@@ -26,8 +56,9 @@ export function useAgent() {
 			systemPrompt,
 			toolTimeoutMs,
 			planningEnabled,
+			onExecutionEvent: appendExecutionEvent,
 		});
-	}, []);
+	}, [appendExecutionEvent]);
 
 	// Process a user message
 	const sendMessage = useCallback(
@@ -111,6 +142,8 @@ export function useAgent() {
 		async ({
 			workflowName,
 			stepOverrides,
+			startFromStepId,
+			confirmRequiredSteps,
 		}: {
 			workflowName: string;
 			stepOverrides?: Array<{
@@ -118,6 +151,8 @@ export function useAgent() {
 				index?: number;
 				arguments: Record<string, unknown>;
 			}>;
+			startFromStepId?: string;
+			confirmRequiredSteps?: boolean;
 		}): Promise<AgentResponse> => {
 			setIsProcessing(true);
 			setError(null);
@@ -125,6 +160,8 @@ export function useAgent() {
 				const response = await agent.runWorkflow({
 					workflowName,
 					stepOverrides,
+					startFromStepId,
+					confirmRequiredSteps,
 				});
 				setLastResponse(response);
 				return response;
@@ -149,6 +186,8 @@ export function useAgent() {
 		agent.clearHistory();
 		setLastResponse(null);
 		setError(null);
+		setExecutionEvents([]);
+		setActiveExecutionRequestId(null);
 	}, [agent]);
 
 	// Check provider availability
@@ -168,5 +207,7 @@ export function useAgent() {
 		isProcessing,
 		lastResponse,
 		error,
+		executionEvents,
+		activeExecutionRequestId,
 	};
 }
