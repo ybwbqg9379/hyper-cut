@@ -216,6 +216,7 @@ export function AgentChatbox() {
 		sendMessage,
 		confirmPlan,
 		cancelPlan,
+		cancelExecution,
 		updatePlanStep,
 		removePlanStep,
 		runWorkflow,
@@ -340,6 +341,11 @@ export function AgentChatbox() {
 	const handleCancelPlan = () => {
 		if (isProcessing) return;
 		const response = cancelPlan();
+		appendAssistantResponse(response);
+	};
+
+	const handleCancelExecution = () => {
+		const response = cancelExecution();
 		appendAssistantResponse(response);
 	};
 
@@ -656,13 +662,24 @@ export function AgentChatbox() {
 								/>
 							))}
 
-							{isProcessing && (
-								<div className="space-y-2">
-									<div className="flex items-center gap-2 text-muted-foreground text-sm px-3 py-2">
-										<Loader2 className="size-4 animate-spin" />
-										<span>处理中...</span>
-									</div>
-									{activeExecutionEvents.length > 0 ? (
+								{isProcessing && (
+									<div className="space-y-2">
+										<div className="flex items-center justify-between gap-2 text-muted-foreground text-sm px-3 py-2">
+											<div className="flex items-center gap-2">
+												<Loader2 className="size-4 animate-spin" />
+												<span>处理中...</span>
+											</div>
+											<Button
+												variant="outline"
+												size="sm"
+												className="h-7 px-2 text-xs"
+												onClick={handleCancelExecution}
+											>
+												<Ban className="size-3 mr-1" />
+												取消执行
+											</Button>
+										</div>
+										{activeExecutionEvents.length > 0 ? (
 										<div className="rounded-md border border-border/50 bg-background/60 px-3 py-2">
 											<div className="text-xs font-medium mb-1">执行进度</div>
 											<ExecutionTimeline events={activeExecutionEvents} />
@@ -969,6 +986,10 @@ function ExecutionTimeline({ events }: { events: AgentExecutionEvent[] }) {
 					text = `已生成计划（${event.plan?.steps.length ?? 0} 步）`;
 				} else if (event.type === "tool_started") {
 					text = `开始执行 ${event.toolName ?? "unknown_tool"}`;
+				} else if (event.type === "tool_progress") {
+					text =
+						event.message ??
+						`${event.toolName ?? "unknown_tool"} 执行中 (${event.stepIndex ?? "?"}/${event.totalSteps ?? "?"})`;
 				} else if (event.type === "tool_completed") {
 					const resultText = event.result?.success ? "成功" : "失败";
 					text = `${event.toolName ?? "unknown_tool"} ${resultText}`;

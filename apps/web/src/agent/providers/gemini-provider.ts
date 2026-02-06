@@ -176,7 +176,10 @@ export class GeminiProvider implements LLMProvider {
 		};
 	}
 
-	async chat(params: ChatParams): Promise<ChatResponse> {
+	async chat(
+		params: ChatParams,
+		options?: { signal?: AbortSignal },
+	): Promise<ChatResponse> {
 		if (!this.apiKey) {
 			throw new Error("Gemini API key is missing");
 		}
@@ -216,6 +219,20 @@ export class GeminiProvider implements LLMProvider {
 		}
 
 		const controller = new AbortController();
+		let abortedByCaller = false;
+		const onCallerAbort = () => {
+			abortedByCaller = true;
+			controller.abort();
+		};
+		if (options?.signal) {
+			if (options.signal.aborted) {
+				onCallerAbort();
+			} else {
+				options.signal.addEventListener("abort", onCallerAbort, {
+					once: true,
+				});
+			}
+		}
 		const timeout = setTimeout(
 			() => controller.abort(),
 			this.options.timeoutMs,
@@ -249,14 +266,19 @@ export class GeminiProvider implements LLMProvider {
 				toolCalls,
 				finishReason: toolCalls.length > 0 ? "tool_calls" : "stop",
 			};
-		} catch (error) {
-			if (error instanceof Error && error.name === "AbortError") {
-				throw new Error("Gemini request timed out");
+			} catch (error) {
+				if (error instanceof Error && error.name === "AbortError") {
+					throw new Error(
+						abortedByCaller ? "Gemini request cancelled" : "Gemini request timed out",
+					);
+				}
+				throw error;
+			} finally {
+				clearTimeout(timeout);
+				if (options?.signal) {
+					options.signal.removeEventListener("abort", onCallerAbort);
+				}
 			}
-			throw error;
-		} finally {
-			clearTimeout(timeout);
-		}
 	}
 
 	async isAvailable(): Promise<boolean> {

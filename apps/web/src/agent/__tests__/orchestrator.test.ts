@@ -71,7 +71,14 @@ describe("AgentOrchestrator", () => {
 
 		const result = await orchestrator.process("do it");
 
-		expect(toolExecute).toHaveBeenCalledWith({ value: 1 });
+		expect(toolExecute).toHaveBeenCalledWith(
+			{ value: 1 },
+			expect.objectContaining({
+				mode: "chat",
+				toolName: "test_tool",
+				toolCallId: "call-1",
+			}),
+		);
 		expect(provider.chat).toHaveBeenCalledTimes(2);
 		expect(result.success).toBe(true);
 		expect(result.message).toBe("已完成");
@@ -447,9 +454,15 @@ describe("AgentOrchestrator", () => {
 
 		expect(result.success).toBe(true);
 		expect(result.status).toBe("completed");
-		expect(runWorkflowExecute).toHaveBeenCalledWith({
-			workflowName: "auto-caption-cleanup",
-		});
+		expect(runWorkflowExecute).toHaveBeenCalledWith(
+			{
+				workflowName: "auto-caption-cleanup",
+			},
+			expect.objectContaining({
+				mode: "workflow",
+				toolName: "run_workflow",
+			}),
+		);
 	});
 
 	it("runWorkflow should forward resume parameters", async () => {
@@ -477,11 +490,17 @@ describe("AgentOrchestrator", () => {
 			confirmRequiredSteps: true,
 		});
 
-		expect(runWorkflowExecute).toHaveBeenCalledWith({
-			workflowName: "long-to-short",
-			startFromStepId: "apply-cut",
-			confirmRequiredSteps: true,
-		});
+		expect(runWorkflowExecute).toHaveBeenCalledWith(
+			{
+				workflowName: "long-to-short",
+				startFromStepId: "apply-cut",
+				confirmRequiredSteps: true,
+			},
+			expect.objectContaining({
+				mode: "workflow",
+				toolName: "run_workflow",
+			}),
+		);
 	});
 
 	it("should execute pending plan after confirmation", async () => {
@@ -518,7 +537,14 @@ describe("AgentOrchestrator", () => {
 		await orchestrator.process("do it");
 		const confirmResult = await orchestrator.confirmPendingPlan();
 
-		expect(toolExecute).toHaveBeenCalledWith({ value: 1 });
+		expect(toolExecute).toHaveBeenCalledWith(
+			{ value: 1 },
+			expect.objectContaining({
+				mode: "plan_confirmation",
+				toolName: "test_tool",
+				toolCallId: "call-1",
+			}),
+		);
 		expect(confirmResult.success).toBe(true);
 		expect(confirmResult.status).toBe("completed");
 	});
@@ -563,7 +589,14 @@ describe("AgentOrchestrator", () => {
 
 		expect(updateResult.success).toBe(true);
 		expect(confirmResult.success).toBe(true);
-		expect(toolExecute).toHaveBeenCalledWith({ value: 999 });
+		expect(toolExecute).toHaveBeenCalledWith(
+			{ value: 999 },
+			expect.objectContaining({
+				mode: "plan_confirmation",
+				toolName: "test_tool",
+				toolCallId: "call-1",
+			}),
+		);
 	});
 
 	it("should block new requests until pending plan is resolved", async () => {

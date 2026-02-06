@@ -52,6 +52,10 @@ export interface ChatParams {
 	temperature?: number;
 }
 
+export interface ProviderChatOptions {
+	signal?: AbortSignal;
+}
+
 export interface ChatResponse {
 	content: string | null;
 	toolCalls: ToolCall[];
@@ -60,7 +64,7 @@ export interface ChatResponse {
 
 export interface LLMProvider {
 	name: string;
-	chat(params: ChatParams): Promise<ChatResponse>;
+	chat(params: ChatParams, options?: ProviderChatOptions): Promise<ChatResponse>;
 	isAvailable(): Promise<boolean>;
 }
 
@@ -72,6 +76,20 @@ export interface ToolResult {
 	success: boolean;
 	message: string;
 	data?: unknown;
+}
+
+export interface ToolExecutionProgress {
+	message: string;
+	data?: unknown;
+}
+
+export interface ToolExecutionContext {
+	requestId?: string;
+	mode?: "chat" | "workflow" | "plan_confirmation";
+	toolName?: string;
+	toolCallId?: string;
+	signal?: AbortSignal;
+	reportProgress?: (progress: ToolExecutionProgress) => void;
 }
 
 export interface WorkflowResumeHint {
@@ -91,7 +109,10 @@ export interface AgentTool {
 	name: string;
 	description: string;
 	parameters: ToolDefinition["parameters"];
-	execute: (params: Record<string, unknown>) => Promise<ToolResult>;
+	execute: (
+		params: Record<string, unknown>,
+		context?: ToolExecutionContext,
+	) => Promise<ToolResult>;
 }
 
 // ============================================================================
@@ -179,6 +200,7 @@ export interface AgentExecutionEvent {
 	type:
 		| "request_started"
 		| "tool_started"
+		| "tool_progress"
 		| "tool_completed"
 		| "plan_created"
 		| "request_completed";
@@ -196,6 +218,10 @@ export interface AgentExecutionEvent {
 		| "cancelled"
 		| "error";
 	message?: string;
+	progress?: {
+		message: string;
+		data?: unknown;
+	};
 	result?: {
 		success: boolean;
 		message: string;

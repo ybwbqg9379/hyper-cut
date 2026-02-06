@@ -90,8 +90,25 @@ export class LMStudioProvider implements LLMProvider {
 		});
 	}
 
-	async chat(params: ChatParams): Promise<ChatResponse> {
+	async chat(
+		params: ChatParams,
+		options?: { signal?: AbortSignal },
+	): Promise<ChatResponse> {
 		const controller = new AbortController();
+		let abortedByCaller = false;
+		const onCallerAbort = () => {
+			abortedByCaller = true;
+			controller.abort();
+		};
+		if (options?.signal) {
+			if (options.signal.aborted) {
+				onCallerAbort();
+			} else {
+				options.signal.addEventListener("abort", onCallerAbort, {
+					once: true,
+				});
+			}
+		}
 		const timeoutId = setTimeout(
 			() => controller.abort(),
 			this.options.timeoutMs,
@@ -129,14 +146,21 @@ export class LMStudioProvider implements LLMProvider {
 				body: JSON.stringify(requestBody),
 				signal: controller.signal,
 			});
-		} catch (error) {
-			if (error instanceof Error && error.name === "AbortError") {
-				throw new Error("LM Studio request timed out");
+			} catch (error) {
+				if (error instanceof Error && error.name === "AbortError") {
+					throw new Error(
+						abortedByCaller
+							? "LM Studio request cancelled"
+							: "LM Studio request timed out",
+					);
+				}
+				throw error;
+			} finally {
+				clearTimeout(timeoutId);
+				if (options?.signal) {
+					options.signal.removeEventListener("abort", onCallerAbort);
+				}
 			}
-			throw error;
-		} finally {
-			clearTimeout(timeoutId);
-		}
 
 		if (!response.ok) {
 			throw new Error(`LM Studio API error: ${response.statusText}`);

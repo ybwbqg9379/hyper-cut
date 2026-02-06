@@ -10,6 +10,7 @@ import { calculateTotalDuration } from "@/lib/timeline";
 import {
 	AddTrackCommand,
 	RemoveTrackCommand,
+	ReplaceTracksCommand,
 	ToggleTrackMuteCommand,
 	ToggleTrackVisibilityCommand,
 	InsertElementCommand,
@@ -274,5 +275,22 @@ export class TimelineManager {
 	updateTracks(newTracks: TimelineTrack[]): void {
 		this.editor.scenes.updateSceneTracks({ tracks: newTracks });
 		this.notify();
+	}
+
+	replaceTracks({
+		tracks,
+		selection,
+		pushHistory = true,
+	}: {
+		tracks: TimelineTrack[];
+		selection?: Array<{ trackId: string; elementId: string }> | null;
+		pushHistory?: boolean;
+	}): void {
+		const command = new ReplaceTracksCommand(tracks, { selection });
+		if (pushHistory) {
+			this.editor.command.execute({ command });
+		} else {
+			command.execute();
+		}
 	}
 }

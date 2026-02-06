@@ -32,6 +32,11 @@ import { createCaptionMetadata } from "@/lib/transcription/caption-metadata";
 import { transcriptionService } from "@/services/transcription/service";
 import { UpdateElementTransformCommand } from "@/lib/commands/timeline";
 import { invokeActionWithCheck } from "./action-utils";
+import {
+	splitTracksAtTime,
+	deleteElementsFullyInRange,
+	rippleCompressTracks,
+} from "./timeline-edit-ops";
 
 /**
  * Timeline Editing Tools
@@ -42,6 +47,7 @@ const TEXT_ALIGN_VALUES = ["left", "center", "right"] as const;
 const TEXT_WEIGHT_VALUES = ["normal", "bold"] as const;
 const TEXT_STYLE_VALUES = ["normal", "italic"] as const;
 const TEXT_DECORATION_VALUES = ["none", "underline", "line-through"] as const;
+const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -49,6 +55,23 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
+}
+
+function throwIfExecutionCancelled(signal?: AbortSignal): void {
+	if (!signal?.aborted) return;
+	throw new Error("Execution cancelled");
+}
+
+function isExecutionCancelledError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+	const lower = error.message.toLowerCase();
+	return (
+		error.name === "AbortError" ||
+		lower.includes("cancelled") ||
+		lower.includes("canceled")
+	);
 }
 
 function resolveElementById({
@@ -349,8 +372,9 @@ export const selectElementTool: AgentTool = {
 		},
 		required: [],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (params, context): Promise<ToolResult> => {
 		try {
+			throwIfExecutionCancelled(context?.signal);
 			const editor = EditorCore.getInstance();
 			const tracks = editor.timeline.getTracks();
 			const mode = params.mode === "add" ? "add" : "replace";
@@ -552,7 +576,7 @@ export const addTrackTool: AgentTool = {
 		},
 		required: ["type"],
 	},
-	execute: async (params): Promise<ToolResult> => {
+		execute: async (params, context): Promise<ToolResult> => {
 		try {
 			const type = params.type as string;
 			const allowedTypes = ["video", "audio", "text", "sticker"];
@@ -2244,8 +2268,9 @@ export const removeSilenceTool: AgentTool = {
 		},
 		required: [],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (params, context): Promise<ToolResult> => {
 		try {
+			throwIfExecutionCancelled(context?.signal);
 			const editor = EditorCore.getInstance();
 			const allTracks = editor.timeline.getTracks();
 			const mediaAssets = editor.media.getAssets();
@@ -2333,7 +2358,9 @@ export const removeSilenceTool: AgentTool = {
 				mediaAssets,
 				totalDuration,
 			});
+			throwIfExecutionCancelled(context?.signal);
 			const { samples, sampleRate } = await decodeAudioToFloat32({ audioBlob });
+			throwIfExecutionCancelled(context?.signal);
 
 			const silenceIntervals = detectSilenceIntervals({
 				samples,
@@ -2366,69 +2393,64 @@ export const removeSilenceTool: AgentTool = {
 				if (source !== "selection") return true;
 				return allowedElements.has(`${trackId}:${elementId}`);
 			};
+			const includePredicate = ({
+				trackId,
+				element,
+			}: {
+				trackId: string;
+				element: TimelineElement;
+			}) => shouldInclude(trackId, element.id);
 
+			let workingTracks = allTracks;
 			for (const interval of filteredIntervals) {
-				const splitAt = (splitTime: number) => {
-					const tracks = editor.timeline.getTracks();
-					const elementsToSplit: Array<{ trackId: string; elementId: string }> =
-						[];
-
-					for (const track of tracks) {
-						for (const element of track.elements) {
-							if (!shouldInclude(track.id, element.id)) continue;
-							const elementStart = element.startTime;
-							const elementEnd = element.startTime + element.duration;
-							if (splitTime > elementStart && splitTime < elementEnd) {
-								elementsToSplit.push({
-									trackId: track.id,
-									elementId: element.id,
-								});
-							}
-						}
-					}
-
-					if (elementsToSplit.length > 0) {
-						const rightSide = editor.timeline.splitElements({
-							elements: elementsToSplit,
-							splitTime,
-						});
-						totalSplits += elementsToSplit.length;
-						if (source === "selection") {
-							for (const ref of rightSide) {
-								allowedElements.add(`${ref.trackId}:${ref.elementId}`);
-							}
-						}
-					}
-				};
-
-				splitAt(interval.start);
-				splitAt(interval.end);
-
-				const updatedTracks = editor.timeline.getTracks();
-				const elementsToDelete: Array<{ trackId: string; elementId: string }> =
-					[];
-
-				for (const track of updatedTracks) {
-					for (const element of track.elements) {
-						if (!shouldInclude(track.id, element.id)) continue;
-						const elementStart = element.startTime;
-						const elementEnd = element.startTime + element.duration;
-						if (elementStart >= interval.start && elementEnd <= interval.end) {
-							elementsToDelete.push({
-								trackId: track.id,
-								elementId: element.id,
-							});
-						}
+				throwIfExecutionCancelled(context?.signal);
+				const splitStartResult = splitTracksAtTime({
+					tracks: workingTracks,
+					splitTime: interval.start,
+					shouldInclude: includePredicate,
+				});
+				workingTracks = splitStartResult.tracks;
+				totalSplits += splitStartResult.splitCount;
+				if (source === "selection") {
+					for (const ref of splitStartResult.rightSideElements) {
+						allowedElements.add(`${ref.trackId}:${ref.elementId}`);
 					}
 				}
 
-				if (elementsToDelete.length > 0) {
-					editor.timeline.deleteElements({ elements: elementsToDelete });
-					totalDeleted += elementsToDelete.length;
+				const splitEndResult = splitTracksAtTime({
+					tracks: workingTracks,
+					splitTime: interval.end,
+					shouldInclude: includePredicate,
+				});
+				workingTracks = splitEndResult.tracks;
+				totalSplits += splitEndResult.splitCount;
+				if (source === "selection") {
+					for (const ref of splitEndResult.rightSideElements) {
+						allowedElements.add(`${ref.trackId}:${ref.elementId}`);
+					}
+				}
+
+				const deleteResult = deleteElementsFullyInRange({
+					tracks: workingTracks,
+					range: interval,
+					shouldInclude: includePredicate,
+				});
+				workingTracks = deleteResult.tracks;
+				if (deleteResult.deletedCount > 0) {
+					totalDeleted += deleteResult.deletedCount;
 				}
 			}
 
-			editor.selection.setSelectedElements({ elements: previousSelection });
+			const ripple = rippleCompressTracks({
+				tracks: workingTracks,
+				deleteRanges: filteredIntervals,
+				shouldShift: source === "selection" ? includePredicate : undefined,
+			});
+			throwIfExecutionCancelled(context?.signal);
+			editor.timeline.replaceTracks({
+				tracks: ripple.tracks,
+				selection: previousSelection,
+			});
 
 			return {
 				success: true,
@@ -2438,12 +2460,20 @@ export const removeSilenceTool: AgentTool = {
 					intervals: filteredIntervals,
 					deletedCount: totalDeleted,
 					splitCount: totalSplits,
+					rippleMovedCount: ripple.movedElementCount,
 					source,
 					threshold,
 					minDuration,
 				},
 			};
 		} catch (error) {
+			if (isExecutionCancelledError(error)) {
+				return {
+					success: false,
+					message: "移除静音已取消 (Remove silence cancelled)",
+					data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
+				};
+			}
 			return {
 				success: false,
 				message: `移除静音失败: ${error instanceof Error ? error.message : "Unknown error"}`,

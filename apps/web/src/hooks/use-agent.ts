@@ -111,6 +111,12 @@ export function useAgent() {
 		return response;
 	}, [agent]);
 
+	const cancelExecution = useCallback((): AgentResponse => {
+		const response = agent.cancelActiveExecution();
+		setLastResponse(response);
+		return response;
+	}, [agent]);
+
 	const updatePlanStep = useCallback(
 		({
 			stepId,
@@ -199,6 +205,7 @@ export function useAgent() {
 		sendMessage,
 		confirmPlan,
 		cancelPlan,
+		cancelExecution,
 		updatePlanStep,
 		removePlanStep,
 		runWorkflow,

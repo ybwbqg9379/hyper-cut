@@ -1,4 +1,4 @@
-import type { AgentTool, ToolResult } from "../types";
+import type { AgentTool, ToolExecutionContext, ToolResult } from "../types";
 import { getTimelineTools } from "./timeline-tools";
 import { getPlaybackTools } from "./playback-tools";
 import { getQueryTools } from "./query-tools";
@@ -33,6 +33,7 @@ function buildExecutableToolMap(): Map<string, AgentTool> {
 }
 
 const workflowReservedTools = new Set(["run_workflow", "list_workflows"]);
+const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 export const listWorkflowsTool: AgentTool = {
 	name: "list_workflows",
@@ -108,7 +109,10 @@ export const runWorkflowTool: AgentTool = {
 		},
 		required: ["workflowName"],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (
+		params,
+		context?: ToolExecutionContext,
+	): Promise<ToolResult> => {
 		const resolved = resolveWorkflowFromParams(params);
 		if (!resolved.ok) {
 			return {
@@ -141,8 +145,34 @@ export const runWorkflowTool: AgentTool = {
 			toolName: string;
 			result: Pick<ToolResult, "success" | "message">;
 		}> = [];
+		const executableSteps = steps.slice(startIndex);
 
-		for (const step of steps.slice(startIndex)) {
+		for (const [index, step] of executableSteps.entries()) {
+			if (context?.signal?.aborted) {
+				return {
+					success: false,
+					message: "工作流执行已取消 (Workflow execution cancelled)",
+					data: {
+						errorCode: EXECUTION_CANCELLED_ERROR_CODE,
+						workflowName: resolved.resolved.workflow.name,
+						stepResults,
+					},
+				};
+			}
+
+			context?.reportProgress?.({
+				message:
+					`执行步骤 ${index + 1}/${executableSteps.length}: ${step.toolName}` +
+					(step.summary ? ` - ${step.summary}` : ""),
+				data: {
+					stepId: step.id,
+					toolName: step.toolName,
+					stepIndex: index + 1,
+					totalSteps: executableSteps.length,
+					summary: step.summary,
+				},
+			});
+
 			if (workflowReservedTools.has(step.toolName)) {
 				return {
 					success: false,
@@ -194,13 +224,27 @@ export const runWorkflowTool: AgentTool = {
 				};
 			}
 
-			const result = await targetTool.execute(step.arguments);
+			const result = await targetTool.execute(step.arguments, context);
 			stepResults.push({
 				stepId: step.id,
 				toolName: step.toolName,
 				result: {
 					success: result.success,
 					message: result.message,
+				},
+			});
+			context?.reportProgress?.({
+				message:
+					`步骤 ${index + 1}/${executableSteps.length} ` +
+					(result.success ? "完成" : "失败") +
+					`: ${step.toolName}`,
+				data: {
+					stepId: step.id,
+					toolName: step.toolName,
+					stepIndex: index + 1,
+					totalSteps: executableSteps.length,
+					success: result.success,
+					resultMessage: result.message,
 				},
 			});
 

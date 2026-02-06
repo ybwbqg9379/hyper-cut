@@ -2,6 +2,7 @@ import type { MediaAsset } from "@/types/assets";
 import type { TimelineElement, TimelineTrack } from "@/types/timeline";
 import { EditorCore } from "@/core";
 import { canElementHaveAudio, hasMediaId } from "@/lib/timeline/element-utils";
+import { calculateTotalDuration } from "@/lib/timeline";
 import { extractTimelineAudio } from "@/lib/media/mediabunny";
 import { decodeAudioToFloat32 } from "@/lib/media/audio";
 import { transcriptionService } from "@/services/transcription/service";
@@ -41,16 +42,21 @@ import type {
 	ScoringWeights,
 } from "./highlight-types";
 import {
-	splitAtTimeTool,
 	generateCaptionsTool,
 	removeSilenceTool,
 } from "./timeline-tools";
+import {
+	splitTracksAtTimes,
+	deleteElementsFullyInRange,
+	rippleCompressTracks,
+} from "./timeline-edit-ops";
 
 const MIN_INTERVAL_SECONDS = 0.03;
 const SELECT_EPSILON = 0.02;
 const MAX_HIGHLIGHT_FRAME_WIDTH = 640;
 const MAX_HIGHLIGHT_FRAME_HEIGHT = 360;
 const TRANSCRIPT_ALIGNMENT_TOLERANCE_SECONDS = 1;
+const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 interface HighlightCacheState {
 	scoredSegments: ScoredSegment[] | null;
@@ -69,6 +75,29 @@ interface TranscriptContextCacheEntry {
 const highlightCacheStore = new Map<string, HighlightCacheState>();
 
 const transcriptContextCache = new Map<string, TranscriptContextCacheEntry>();
+
+function isExecutionCancelled(signal?: AbortSignal): boolean {
+	return signal?.aborted === true;
+}
+
+function throwIfExecutionCancelled(signal?: AbortSignal): void {
+	if (!isExecutionCancelled(signal)) {
+		return;
+	}
+	throw new Error("Execution cancelled");
+}
+
+function isExecutionCancelledError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+	const lower = error.message.toLowerCase();
+	return (
+		error.name === "AbortError" ||
+		lower.includes("cancelled") ||
+		lower.includes("canceled")
+	);
+}
 
 function getActiveProjectId(): string {
 	const editor = EditorCore.getInstance();
@@ -504,9 +533,12 @@ function isTranscriptAlignedWithTimeline({
 
 async function buildWhisperTranscriptContext({
 	tracks,
+	signal,
 }: {
 	tracks: TimelineTrack[];
+	signal?: AbortSignal;
 }): Promise<TranscriptContext | null> {
+	throwIfExecutionCancelled(signal);
 	const hasAudioSource = tracks.some((track) =>
 		track.elements.some((element) => canElementHaveAudio(element)),
 	);
@@ -526,15 +558,30 @@ async function buildWhisperTranscriptContext({
 		mediaAssets,
 		totalDuration,
 	});
+	throwIfExecutionCancelled(signal);
 	const { samples } = await decodeAudioToFloat32({ audioBlob });
 	if (samples.length === 0) {
 		return null;
 	}
 
-	const transcription = await transcriptionService.transcribe({
-		audioData: samples,
-		language: "auto",
-	});
+	const handleAbort = () => {
+		transcriptionService.cancel();
+	};
+	if (signal) {
+		signal.addEventListener("abort", handleAbort, { once: true });
+	}
+	let transcription: Awaited<ReturnType<typeof transcriptionService.transcribe>>;
+	try {
+		transcription = await transcriptionService.transcribe({
+			audioData: samples,
+			language: "auto",
+		});
+	} finally {
+		if (signal) {
+			signal.removeEventListener("abort", handleAbort);
+		}
+	}
+	throwIfExecutionCancelled(signal);
 
 	const segments = normalizeTranscriptSegments({
 		segments: transcription.segments.map((segment) => ({
@@ -567,9 +614,12 @@ async function buildWhisperTranscriptContext({
 
 async function getTranscriptContext({
 	tracks,
+	signal,
 }: {
 	tracks: TimelineTrack[];
+	signal?: AbortSignal;
 }): Promise<TranscriptContext> {
+	throwIfExecutionCancelled(signal);
 	const editor = EditorCore.getInstance();
 	const activeProject = editor.project.getActive();
 	const projectId = activeProject?.metadata.id ?? "unknown-project";
@@ -639,7 +689,10 @@ async function getTranscriptContext({
 		}
 	} else {
 		try {
-			const whisperContext = await buildWhisperTranscriptContext({ tracks });
+			const whisperContext = await buildWhisperTranscriptContext({
+				tracks,
+				signal,
+			});
 			if (whisperContext) {
 				context = whisperContext;
 			} else if (captionSegments.length > 0 && captionWords.length > 0) {
@@ -659,6 +712,7 @@ async function getTranscriptContext({
 			}
 		}
 	}
+	throwIfExecutionCancelled(signal);
 
 	if (context.segments.length > 0 || context.words.length > 0) {
 		transcriptContextCache.set(cacheKey, {
@@ -1004,99 +1058,6 @@ function complementRanges({
 	return deletes;
 }
 
-function getDeletedDurationBeforeTime({
-	time,
-	deleteRanges,
-}: {
-	time: number;
-	deleteRanges: TimeRange[];
-}): number {
-	let deleted = 0;
-	for (const range of deleteRanges) {
-		if (time >= range.end - SELECT_EPSILON) {
-			deleted += range.end - range.start;
-			continue;
-		}
-		if (time <= range.start + SELECT_EPSILON) {
-			break;
-		}
-		deleted += Math.max(0, time - range.start);
-		break;
-	}
-	return deleted;
-}
-
-function rippleCompressTracks({
-	tracks,
-	deleteRanges,
-}: {
-	tracks: TimelineTrack[];
-	deleteRanges: TimeRange[];
-}): { tracks: TimelineTrack[]; movedElementCount: number } {
-	if (deleteRanges.length === 0) {
-		return { tracks, movedElementCount: 0 };
-	}
-
-	const ascendingDeleteRanges = [...deleteRanges].sort((a, b) => a.start - b.start);
-	let movedElementCount = 0;
-
-	const compressedTracks: TimelineTrack[] = tracks.map((track) => {
-		const nextElements = track.elements.map((element) => {
-			const shift = getDeletedDurationBeforeTime({
-				time: element.startTime,
-				deleteRanges: ascendingDeleteRanges,
-			});
-			if (shift <= SELECT_EPSILON) {
-				return element;
-			}
-
-			movedElementCount += 1;
-			return {
-				...element,
-				startTime: Math.max(0, Number((element.startTime - shift).toFixed(6))),
-			};
-		}) as typeof track.elements;
-
-		return {
-			...track,
-			elements: nextElements,
-		} as TimelineTrack;
-	});
-
-	return { tracks: compressedTracks, movedElementCount };
-}
-
-function collectElementsFullyInRange({
-	tracks,
-	start,
-	end,
-}: {
-	tracks: TimelineTrack[];
-	start: number;
-	end: number;
-}): Array<{ trackId: string; elementId: string }> {
-	const refs: Array<{ trackId: string; elementId: string }> = [];
-
-	for (const track of tracks) {
-		for (const element of track.elements) {
-			const elementStart = element.startTime;
-			const elementEnd = element.startTime + element.duration;
-			if (
-				elementStart >= start - SELECT_EPSILON &&
-				elementEnd <= end + SELECT_EPSILON &&
-				elementEnd > elementStart
-			) {
-				refs.push({
-					trackId: track.id,
-					elementId: element.id,
-				});
-			}
-		}
-	}
-
-	return refs;
-}
-
 function collectElementsOverlappingRange({
 	tracks,
 	start,
@@ -1185,8 +1146,9 @@ export const scoreHighlightsTool: AgentTool = {
 		},
 		required: [],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (params, context): Promise<ToolResult> => {
 		try {
+			throwIfExecutionCancelled(context?.signal);
 			const highlightCache = getHighlightCache();
 			const { asset, tracks } = resolveVideoAsset({
 				videoAssetId:
@@ -1196,8 +1158,15 @@ export const scoreHighlightsTool: AgentTool = {
 			});
 			const timelineFingerprint = buildTimelineFingerprint(tracks);
 
-			const context = await getTranscriptContext({ tracks });
-			if (context.segments.length === 0) {
+			context?.reportProgress?.({
+				message: "正在准备转录上下文...",
+			});
+			const transcriptContext = await getTranscriptContext({
+				tracks,
+				signal: context?.signal,
+			});
+			throwIfExecutionCancelled(context?.signal);
+			if (transcriptContext.segments.length === 0) {
 				return {
 					success: false,
 					message:
@@ -1224,10 +1193,13 @@ export const scoreHighlightsTool: AgentTool = {
 			);
 			const useLLM = toBooleanOrDefault(params.useLLM, true);
 
-			const chunks = transcriptAnalyzerService.segmentTranscript(context, {
-				minSeconds: segmentMinSeconds,
-				maxSeconds: segmentMaxSeconds,
-			});
+				context?.reportProgress?.({
+					message: "正在切分候选片段...",
+				});
+				const chunks = transcriptAnalyzerService.segmentTranscript(transcriptContext, {
+					minSeconds: segmentMinSeconds,
+					maxSeconds: segmentMaxSeconds,
+				});
 
 			if (chunks.length === 0) {
 				return {
@@ -1237,11 +1209,11 @@ export const scoreHighlightsTool: AgentTool = {
 				};
 			}
 
-			let scoredSegments: ScoredSegment[] = chunks.map((chunk) => {
-				const ruleScores = transcriptAnalyzerService.computeRuleScores(
-					chunk,
-					context.words,
-				);
+				let scoredSegments: ScoredSegment[] = chunks.map((chunk) => {
+					const ruleScores = transcriptAnalyzerService.computeRuleScores(
+						chunk,
+						transcriptContext.words,
+					);
 				return {
 					chunk,
 					ruleScores,
@@ -1268,21 +1240,25 @@ export const scoreHighlightsTool: AgentTool = {
 				? "enabled"
 				: "disabled";
 
-			if (useLLM) {
-				const provider = createLocalProvider();
-				const available = await provider.isAvailable();
+				if (useLLM) {
+					const provider = createLocalProvider();
+					const available = await provider.isAvailable();
 
-				if (available) {
-					const scoringResult = await highlightScorerService.scoreWithLLM(
-						chunks,
-						provider,
-					);
-					semanticScoresMap = scoringResult.scores;
-					llmDiagnostics = scoringResult.diagnostics;
-				} else {
-					llmMode = "unavailable";
+					if (available) {
+						context?.reportProgress?.({
+							message: "正在进行语义评分...",
+						});
+						const scoringResult = await highlightScorerService.scoreWithLLM(
+							chunks,
+							provider,
+						);
+						semanticScoresMap = scoringResult.scores;
+						llmDiagnostics = scoringResult.diagnostics;
+					} else {
+						llmMode = "unavailable";
+					}
 				}
-			}
+				throwIfExecutionCancelled(context?.signal);
 
 			const hasSemantic = semanticScoresMap.size > 0;
 			const weights = getScoringWeights({ hasSemantic, hasVisual: false });
@@ -1321,9 +1297,9 @@ export const scoreHighlightsTool: AgentTool = {
 								? "（LLM 调用全部失败，已降级规则评分）"
 								: "（规则评分）"
 				}`,
-				data: {
-					assetId: asset.id,
-					transcriptSource: context.source,
+					data: {
+						assetId: asset.id,
+						transcriptSource: transcriptContext.source,
 					segmentCount: cleanRanked.length,
 					hasSemantic,
 					llmMode,
@@ -1335,8 +1311,15 @@ export const scoreHighlightsTool: AgentTool = {
 					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
-		} catch (error) {
-			return {
+			} catch (error) {
+				if (isExecutionCancelledError(error)) {
+					return {
+						success: false,
+						message: "高光评分已取消 (Highlight scoring cancelled)",
+						data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
+					};
+				}
+				return {
 				success: false,
 				message: `高光评分失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "SCORE_HIGHLIGHTS_FAILED" },
@@ -1368,8 +1351,9 @@ export const validateHighlightsVisualTool: AgentTool = {
 		},
 		required: [],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (params, context): Promise<ToolResult> => {
 		try {
+			throwIfExecutionCancelled(context?.signal);
 			const highlightCache = getHighlightCache();
 			const cachedSegments = highlightCache.scoredSegments;
 			if (!cachedSegments || cachedSegments.length === 0) {
@@ -1422,8 +1406,8 @@ export const validateHighlightsVisualTool: AgentTool = {
 				8,
 			);
 
-			const provider = createLocalProvider();
-			const providerAvailable = await provider.isAvailable();
+				const provider = createLocalProvider();
+				const providerAvailable = await provider.isAvailable();
 
 			if (!providerAvailable) {
 				const cleanCachedSegments = stripSegmentThumbnails(cachedSegments);
@@ -1451,19 +1435,23 @@ export const validateHighlightsVisualTool: AgentTool = {
 				assetId: asset.id,
 			});
 
-			const extractor = asset.file
-				? await createFrameExtractor(asset.file)
-				: null;
+				const extractor = asset.file
+					? await createFrameExtractor(asset.file)
+					: null;
 
-			let candidatesWithFrames: ScoredSegment[];
-			try {
-				candidatesWithFrames = extractor
-					? await mapWithConcurrency({
-							items: topCandidates,
-							limit: frameConcurrency,
-							worker: async (candidate) => {
-								const center =
-									(candidate.chunk.startTime + candidate.chunk.endTime) / 2;
+				let candidatesWithFrames: ScoredSegment[];
+				try {
+					context?.reportProgress?.({
+						message: "正在提取关键帧...",
+					});
+					candidatesWithFrames = extractor
+						? await mapWithConcurrency({
+								items: topCandidates,
+								limit: frameConcurrency,
+								worker: async (candidate) => {
+									throwIfExecutionCancelled(context?.signal);
+									const center =
+										(candidate.chunk.startTime + candidate.chunk.endTime) / 2;
 								const dataUrl = await extractFrameDataUrl({
 									extractor,
 									timelineTime: center,
@@ -1474,17 +1462,22 @@ export const validateHighlightsVisualTool: AgentTool = {
 									thumbnailDataUrl: dataUrl ?? undefined,
 								} satisfies ScoredSegment;
 							},
-						})
-					: topCandidates.map((c) => ({ ...c }));
-			} finally {
-				if (extractor) destroyFrameExtractor(extractor);
-			}
+							})
+						: topCandidates.map((c) => ({ ...c }));
+				} finally {
+					if (extractor) destroyFrameExtractor(extractor);
+				}
+				throwIfExecutionCancelled(context?.signal);
 
-			const visualMap = await highlightScorerService.scoreWithVision(
-				candidatesWithFrames,
-				topN,
-				provider,
-			);
+				context?.reportProgress?.({
+					message: "正在进行视觉评分...",
+				});
+				const visualMap = await highlightScorerService.scoreWithVision(
+					candidatesWithFrames,
+					topN,
+					provider,
+				);
+				throwIfExecutionCancelled(context?.signal);
 
 			const hasSemantic = cachedSegments.some(
 				(segment) => segment.semanticScores !== null,
@@ -1544,8 +1537,15 @@ export const validateHighlightsVisualTool: AgentTool = {
 					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
-		} catch (error) {
-			return {
+			} catch (error) {
+				if (isExecutionCancelledError(error)) {
+					return {
+						success: false,
+						message: "视觉验证已取消 (Visual validation cancelled)",
+						data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
+					};
+				}
+				return {
 				success: false,
 				message: `视觉验证失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "VALIDATE_HIGHLIGHTS_VISUAL_FAILED" },
@@ -1577,8 +1577,9 @@ export const generateHighlightPlanTool: AgentTool = {
 		},
 		required: [],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (params, context): Promise<ToolResult> => {
 		try {
+			throwIfExecutionCancelled(context?.signal);
 			const highlightCache = getHighlightCache();
 			const scoredSegments = highlightCache.scoredSegments;
 			if (!scoredSegments || scoredSegments.length === 0) {
@@ -1626,10 +1627,13 @@ export const generateHighlightPlanTool: AgentTool = {
 				0,
 				0.5,
 			);
-			const includeHook = toBooleanOrDefault(params.includeHook, true);
+				const includeHook = toBooleanOrDefault(params.includeHook, true);
+				context?.reportProgress?.({
+					message: "正在生成精华计划...",
+				});
 
-			const plan = segmentSelectorService.selectSegments(
-				scoredSegments,
+				const plan = segmentSelectorService.selectSegments(
+					scoredSegments,
 				targetDuration,
 				tolerance,
 				{
@@ -1645,7 +1649,7 @@ export const generateHighlightPlanTool: AgentTool = {
 				};
 			}
 
-			updateHighlightCache({ highlightPlan: plan, timelineFingerprint });
+				updateHighlightCache({ highlightPlan: plan, timelineFingerprint });
 
 			return {
 				success: true,
@@ -1656,8 +1660,15 @@ export const generateHighlightPlanTool: AgentTool = {
 					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
-		} catch (error) {
-			return {
+			} catch (error) {
+				if (isExecutionCancelledError(error)) {
+					return {
+						success: false,
+						message: "精华计划生成已取消 (Highlight plan cancelled)",
+						data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
+					};
+				}
+				return {
 				success: false,
 				message: `生成精华计划失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "GENERATE_HIGHLIGHT_PLAN_FAILED" },
@@ -1686,8 +1697,9 @@ export const applyHighlightCutTool: AgentTool = {
 		},
 		required: [],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (params, context): Promise<ToolResult> => {
 		try {
+			throwIfExecutionCancelled(context?.signal);
 			const highlightCache = getHighlightCache();
 			const plan = highlightCache.highlightPlan;
 			if (!plan || plan.segments.length === 0) {
@@ -1704,7 +1716,6 @@ export const applyHighlightCutTool: AgentTool = {
 
 			const editor = EditorCore.getInstance();
 			const tracksSnapshot = editor.timeline.getTracks();
-			const originalTracks = tracksSnapshot;
 			const timelineFingerprint = buildTimelineFingerprint(tracksSnapshot);
 			if (
 				isHighlightCacheStale({
@@ -1728,7 +1739,7 @@ export const applyHighlightCutTool: AgentTool = {
 				};
 			}
 
-			const totalDuration = editor.timeline.getTotalDuration();
+			const totalDuration = calculateTotalDuration({ tracks: tracksSnapshot });
 
 			const keepRanges = mergeRanges(
 				plan.segments
@@ -1781,63 +1792,55 @@ export const applyHighlightCutTool: AgentTool = {
 			const expectedDuration = Math.max(0, totalDuration - totalDeletedDuration);
 
 			let deletedRangeCount = 0;
-			let splitCount = 0;
+			let deletedElementCount = 0;
 
 			const splitTimes = Array.from(
 				new Set(
 					deleteRanges
 						.flatMap((range) => [range.start, range.end])
 						.map((time) => Number(time.toFixed(4))),
-				),
-			).sort((a, b) => b - a);
+					),
+				).sort((a, b) => b - a);
 
-			for (const splitTime of splitTimes) {
-				const splitResult = await splitAtTimeTool.execute({
-					time: splitTime,
-					selectAll: true,
-				});
-				if (splitResult.success) {
-					splitCount += 1;
-				}
-			}
-
+			const splitResult = splitTracksAtTimes({
+				tracks: tracksSnapshot,
+				splitTimes,
+			});
+			context?.reportProgress?.({
+				message: "正在应用剪辑区间...",
+			});
+			let workingTracks = splitResult.tracks;
 			for (const range of deleteRanges) {
-				const refs = collectElementsFullyInRange({
-					tracks: editor.timeline.getTracks(),
-					start: range.start,
-					end: range.end,
+				const deleteResult = deleteElementsFullyInRange({
+					tracks: workingTracks,
+					range,
+					epsilon: SELECT_EPSILON,
 				});
-
-				if (refs.length === 0) {
+				workingTracks = deleteResult.tracks;
+				if (deleteResult.deletedCount === 0) {
 					continue;
 				}
-
-				editor.timeline.deleteElements({ elements: refs });
 				deletedRangeCount += 1;
+				deletedElementCount += deleteResult.deletedCount;
 			}
 
-			editor.selection.clearSelection();
-			const tracksAfterDelete = editor.timeline.getTracks();
 			const ripple = rippleCompressTracks({
-				tracks: tracksAfterDelete,
+				tracks: workingTracks,
 				deleteRanges,
+				epsilon: SELECT_EPSILON,
 			});
-			if (ripple.movedElementCount > 0) {
-				editor.timeline.updateTracks(ripple.tracks);
-			}
-
-			const finalDuration = editor.timeline.getTotalDuration();
-			const finalTracks = editor.timeline.getTracks();
+			throwIfExecutionCancelled(context?.signal);
+			const finalTracks = ripple.tracks;
+			const finalDuration = calculateTotalDuration({ tracks: finalTracks });
 			const remainingElementCount = finalTracks.reduce(
 				(sum, track) => sum + track.elements.length,
 				0,
 			);
 			if (finalDuration <= MIN_INTERVAL_SECONDS || remainingElementCount === 0) {
-				editor.timeline.updateTracks(originalTracks);
 				return {
 					success: false,
 					message:
-						"剪辑结果会清空时间线，已自动回滚。请降低 targetDuration 或重新生成计划 (Cut would empty timeline, rolled back)",
+						"剪辑结果会清空时间线，请降低 targetDuration 或重新生成计划 (Cut would empty timeline)",
 					data: {
 						errorCode: "HIGHLIGHT_CUT_EMPTIED_TIMELINE",
 						deleteRanges,
@@ -1871,10 +1874,15 @@ export const applyHighlightCutTool: AgentTool = {
 						expectedDuration: Number(expectedDuration.toFixed(4)),
 						finalDuration: Number(finalDuration.toFixed(4)),
 						deletedRangeCount,
-						splitCount,
+						splitCount: splitResult.splitCount,
 					},
 				};
 			}
+
+			editor.timeline.replaceTracks({
+				tracks: finalTracks,
+				selection: null,
+			});
 
 			const followUps: Array<{
 				step: string;
@@ -1883,9 +1891,15 @@ export const applyHighlightCutTool: AgentTool = {
 			}> = [];
 
 			if (addCaptions) {
-				const captionResult = await generateCaptionsTool.execute({
-					source: "timeline",
+				context?.reportProgress?.({
+					message: "正在生成字幕...",
 				});
+				const captionResult = await generateCaptionsTool.execute(
+					{
+						source: "timeline",
+					},
+					context,
+				);
 				followUps.push({
 					step: "generate_captions",
 					success: captionResult.success,
@@ -1894,9 +1908,15 @@ export const applyHighlightCutTool: AgentTool = {
 			}
 
 			if (removeSilence) {
-				const silenceResult = await removeSilenceTool.execute({
-					source: "timeline",
+				context?.reportProgress?.({
+					message: "正在执行静音删除...",
 				});
+				const silenceResult = await removeSilenceTool.execute(
+					{
+						source: "timeline",
+					},
+					context,
+				);
 				followUps.push({
 					step: "remove_silence",
 					success: silenceResult.success,
@@ -1918,7 +1938,8 @@ export const applyHighlightCutTool: AgentTool = {
 					deleteRanges,
 					splitTimes,
 					deletedRangeCount,
-					splitCount,
+					deletedElementCount,
+					splitCount: splitResult.splitCount,
 					totalDurationBefore: Number(totalDuration.toFixed(4)),
 					expectedDuration: Number(expectedDuration.toFixed(4)),
 					finalDuration: Number(finalDuration.toFixed(4)),
@@ -1929,6 +1950,13 @@ export const applyHighlightCutTool: AgentTool = {
 				},
 			};
 		} catch (error) {
+			if (isExecutionCancelledError(error)) {
+				return {
+					success: false,
+					message: "应用精华剪辑已取消 (Highlight cut cancelled)",
+					data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
+				};
+			}
 			return {
 				success: false,
 				message: `应用精华剪辑失败: ${error instanceof Error ? error.message : "Unknown error"}`,

@@ -75,6 +75,7 @@ const TOOL_NAME_ALIASES = new Map<string, string>([
 ]);
 const WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE =
 	"WORKFLOW_CONFIRMATION_REQUIRED";
+const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 interface PendingPlanState {
 	plan: AgentExecutionPlan;
@@ -91,6 +92,15 @@ interface ExecutedToolsAnalysis {
 	hasAwaitingConfirmation: boolean;
 	hasToolFailure: boolean;
 	pauseInfo: WorkflowPauseInfo | null;
+}
+
+interface ToolExecutionMeta {
+	requestId: string;
+	mode: "chat" | "workflow" | "plan_confirmation";
+	toolCallId: string;
+	stepIndex?: number;
+	totalSteps?: number;
+	signal?: AbortSignal;
 }
 
 function compactString(value: string): string {
@@ -350,6 +360,8 @@ export class AgentOrchestrator {
 	private planSequence = 0;
 	private requestSequence = 0;
 	private isExecutingPlan = false;
+	private activeExecutionAbortController: AbortController | null = null;
+	private activeExecutionRequestId: string | null = null;
 
 	constructor(tools: AgentTool[] = [], options: AgentOrchestratorOptions = {}) {
 		const config = options.config;
@@ -388,6 +400,43 @@ export class AgentOrchestrator {
 			...event,
 			timestamp: new Date().toISOString(),
 		});
+	}
+
+	private beginExecution(requestId: string): AbortSignal {
+		this.activeExecutionAbortController = new AbortController();
+		this.activeExecutionRequestId = requestId;
+		return this.activeExecutionAbortController.signal;
+	}
+
+	private clearExecution(requestId: string): void {
+		if (this.activeExecutionRequestId !== requestId) {
+			return;
+		}
+		this.activeExecutionAbortController = null;
+		this.activeExecutionRequestId = null;
+	}
+
+	private isCancellationError(error: unknown): boolean {
+		if (!(error instanceof Error)) {
+			return false;
+		}
+		const message = error.message.toLowerCase();
+		return (
+			error.name === "AbortError" ||
+			message.includes("cancelled") ||
+			message.includes("canceled") ||
+			message.includes("execution cancelled")
+		);
+	}
+
+	private isToolResultCancelled(result: ToolResult): boolean {
+		if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) {
+			return false;
+		}
+		return (
+			(result.data as Record<string, unknown>).errorCode ===
+			EXECUTION_CANCELLED_ERROR_CODE
+		);
 	}
 
 	/**
@@ -588,6 +637,7 @@ export class AgentOrchestrator {
 			status,
 			message: finalizedResponse.message,
 		});
+		this.clearExecution(requestId);
 		return finalizedResponse;
 	}
 
@@ -635,10 +685,24 @@ export class AgentOrchestrator {
 		};
 	}
 
-	private async executeToolCall(toolCall: ToolCall): Promise<ToolResult> {
+	private async executeToolCall(
+		toolCall: ToolCall,
+		meta: ToolExecutionMeta,
+	): Promise<ToolResult> {
 		const resolvedToolName =
 			TOOL_NAME_ALIASES.get(toolCall.name) ?? toolCall.name;
 		const tool = this.tools.get(resolvedToolName);
+		if (meta.signal?.aborted) {
+			return {
+				success: false,
+				message: "执行已取消 (Execution cancelled)",
+				data: {
+					errorCode: EXECUTION_CANCELLED_ERROR_CODE,
+					toolName: resolvedToolName,
+				},
+			};
+		}
+
 		if (!tool) {
 			return {
 				success: false,
@@ -648,24 +712,58 @@ export class AgentOrchestrator {
 		}
 
 		try {
-			const toolPromise = tool.execute(toolCall.arguments);
-			if (!this.toolTimeoutMs) {
-				return await toolPromise;
-			}
-
-			let timeoutId: ReturnType<typeof setTimeout> | undefined;
-			const timeoutPromise = new Promise<ToolResult>((_, reject) => {
-				timeoutId = setTimeout(() => {
-					reject(new Error("Tool execution timeout"));
-				}, this.toolTimeoutMs);
+			const toolPromise = tool.execute(toolCall.arguments, {
+				requestId: meta.requestId,
+				mode: meta.mode,
+				toolName: resolvedToolName,
+				toolCallId: meta.toolCallId,
+				signal: meta.signal,
+				reportProgress: (progress) => {
+					this.emitExecutionEvent({
+						type: "tool_progress",
+						requestId: meta.requestId,
+						mode: meta.mode,
+						status: "running",
+						toolName: resolvedToolName,
+						toolCallId: meta.toolCallId,
+						stepIndex: meta.stepIndex,
+						totalSteps: meta.totalSteps,
+						message: progress.message,
+						progress: {
+							message: progress.message,
+							data: progress.data,
+						},
+					});
+				},
 			});
-
+			let timeoutId: ReturnType<typeof setTimeout> | undefined;
 			try {
+				if (!this.toolTimeoutMs) {
+					return await toolPromise;
+				}
+
+				const timeoutPromise = new Promise<ToolResult>((_, reject) => {
+					timeoutId = setTimeout(() => {
+						reject(new Error("Tool execution timeout"));
+					}, this.toolTimeoutMs);
+				});
 				return await Promise.race([toolPromise, timeoutPromise]);
 			} finally {
-				if (timeoutId) clearTimeout(timeoutId);
+				if (timeoutId) {
+					clearTimeout(timeoutId);
+				}
 			}
 		} catch (error) {
+			if (this.isCancellationError(error)) {
+				return {
+					success: false,
+					message: "执行已取消 (Execution cancelled)",
+					data: {
+						errorCode: EXECUTION_CANCELLED_ERROR_CODE,
+						toolName: resolvedToolName,
+					},
+				};
+			}
 			return {
 				success: false,
 				message: `工具执行失败: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -702,6 +800,7 @@ export class AgentOrchestrator {
 		if (this.planningEnabled && this.pendingPlanState) {
 			return this.buildPendingPlanBlockedResponse(requestId);
 		}
+		const executionSignal = this.beginExecution(requestId);
 
 		this.emitExecutionEvent({
 			type: "request_started",
@@ -738,10 +837,13 @@ export class AgentOrchestrator {
 			}
 
 			const executedTools: Array<{ name: string; result: ToolResult }> = [];
-			let response = await this.provider.chat({
-				messages: this.buildMessages(),
-				tools: this.getToolDefinitions(),
-			});
+			let response = await this.provider.chat(
+				{
+					messages: this.buildMessages(),
+					tools: this.getToolDefinitions(),
+				},
+				{ signal: executionSignal },
+			);
 
 			if (this.debug) {
 				const toolNames = response.toolCalls.map((toolCall) => toolCall.name);
@@ -822,7 +924,7 @@ export class AgentOrchestrator {
 					});
 				}
 
-				for (const [index, toolCall] of response.toolCalls.entries()) {
+					for (const [index, toolCall] of response.toolCalls.entries()) {
 					this.emitExecutionEvent({
 						type: "tool_started",
 						requestId,
@@ -833,9 +935,28 @@ export class AgentOrchestrator {
 						stepIndex: index + 1,
 						totalSteps: response.toolCalls.length,
 					});
-					const result = await this.executeToolCall(toolCall);
-					executedTools.push({ name: toolCall.name, result });
-					const pauseInfo = extractWorkflowPauseInfo(result.data);
+						const result = await this.executeToolCall(toolCall, {
+							requestId,
+							mode: "chat",
+							toolCallId: toolCall.id,
+							stepIndex: index + 1,
+							totalSteps: response.toolCalls.length,
+							signal: executionSignal,
+						});
+						executedTools.push({ name: toolCall.name, result });
+						if (this.isToolResultCancelled(result)) {
+							return this.completeRequest({
+								requestId,
+								mode: "chat",
+								response: {
+									message: "执行已取消 (Execution cancelled)",
+									toolCalls: this.toClientToolCalls(executedTools),
+									success: false,
+									status: "cancelled",
+								},
+							});
+						}
+						const pauseInfo = extractWorkflowPauseInfo(result.data);
 					this.emitExecutionEvent({
 						type: "tool_completed",
 						requestId,
@@ -861,13 +982,16 @@ export class AgentOrchestrator {
 						toolCallId: toolCall.id,
 						name: toolCall.name,
 					});
-				}
+					}
 
-				toolIterations += 1;
-				response = await this.provider.chat({
-					messages: this.buildMessages(),
-					tools: this.getToolDefinitions(),
-				});
+					toolIterations += 1;
+					response = await this.provider.chat(
+						{
+							messages: this.buildMessages(),
+							tools: this.getToolDefinitions(),
+						},
+						{ signal: executionSignal },
+					);
 
 				this.appendHistory({
 					role: "assistant",
@@ -888,25 +1012,36 @@ export class AgentOrchestrator {
 						}),
 					});
 				}
+				}
+			} catch (error) {
+				this.conversationHistory = this.conversationHistory.slice(
+					0,
+					historyLengthBefore,
+				);
+				if (this.isCancellationError(error)) {
+					return this.completeRequest({
+						requestId,
+						mode: "chat",
+						response: {
+							message: "执行已取消 (Execution cancelled)",
+							success: false,
+							status: "cancelled",
+						},
+					});
+				}
+				const errorMessage =
+					error instanceof Error ? error.message : "Unknown error occurred";
+				return this.completeRequest({
+					requestId,
+					mode: "chat",
+					response: {
+						message: `Error processing request: ${errorMessage}`,
+						success: false,
+						status: "error",
+					},
+				});
 			}
-		} catch (error) {
-			this.conversationHistory = this.conversationHistory.slice(
-				0,
-				historyLengthBefore,
-			);
-			const errorMessage =
-				error instanceof Error ? error.message : "Unknown error occurred";
-			return this.completeRequest({
-				requestId,
-				mode: "chat",
-				response: {
-					message: `Error processing request: ${errorMessage}`,
-					success: false,
-					status: "error",
-				},
-			});
 		}
-	}
 
 	async runWorkflow({
 		workflowName,
@@ -938,15 +1073,16 @@ export class AgentOrchestrator {
 		}
 
 		const normalizedName = workflowName.trim();
-		if (!normalizedName) {
+			if (!normalizedName) {
 			return {
 				message: "workflowName 不能为空",
 				success: false,
 				status: "error",
-				requestId,
-			};
-		}
-		this.emitExecutionEvent({
+					requestId,
+				};
+			}
+			const executionSignal = this.beginExecution(requestId);
+			this.emitExecutionEvent({
 			type: "request_started",
 			requestId,
 			mode: "workflow",
@@ -1025,8 +1161,35 @@ export class AgentOrchestrator {
 			stepIndex: 1,
 			totalSteps: 1,
 		});
-		const toolResult = await this.executeToolCall(workflowCall);
-		const pauseInfo = extractWorkflowPauseInfo(toolResult.data);
+			const toolResult = await this.executeToolCall(workflowCall, {
+				requestId,
+				mode: "workflow",
+				toolCallId: workflowCall.id,
+				stepIndex: 1,
+				totalSteps: 1,
+				signal: executionSignal,
+			});
+			if (this.isToolResultCancelled(toolResult)) {
+				return this.completeRequest({
+					requestId,
+					mode: "workflow",
+					response: {
+						message: "执行已取消 (Execution cancelled)",
+						toolCalls: [
+							{
+								name: workflowCall.name,
+								result: compactToolResultForClient(
+									workflowCall.name,
+									toolResult,
+								),
+							},
+						],
+						success: false,
+						status: "cancelled",
+					},
+				});
+			}
+			const pauseInfo = extractWorkflowPauseInfo(toolResult.data);
 		this.emitExecutionEvent({
 			type: "tool_completed",
 			requestId,
@@ -1268,6 +1431,24 @@ export class AgentOrchestrator {
 		};
 	}
 
+	cancelActiveExecution(): AgentResponse {
+		if (!this.activeExecutionAbortController || !this.activeExecutionRequestId) {
+			return {
+				message: "当前没有正在执行的请求。",
+				success: false,
+				status: "error",
+			};
+		}
+
+		this.activeExecutionAbortController.abort();
+		return {
+			message: "已发送取消请求，请等待当前步骤中断。",
+			success: true,
+			status: "cancelled",
+			requestId: this.activeExecutionRequestId,
+		};
+	}
+
 	async confirmPendingPlan(): Promise<AgentResponse> {
 		const requestId = this.createRequestId("confirm");
 		if (this.isExecutingPlan) {
@@ -1287,6 +1468,7 @@ export class AgentOrchestrator {
 				requestId,
 			};
 		}
+		const executionSignal = this.beginExecution(requestId);
 		this.emitExecutionEvent({
 			type: "request_started",
 			requestId,
@@ -1306,7 +1488,7 @@ export class AgentOrchestrator {
 			});
 
 			const executedTools: Array<{ name: string; result: ToolResult }> = [];
-			for (const [index, toolCall] of pendingPlan.toolCalls.entries()) {
+				for (const [index, toolCall] of pendingPlan.toolCalls.entries()) {
 				this.emitExecutionEvent({
 					type: "tool_started",
 					requestId,
@@ -1317,9 +1499,28 @@ export class AgentOrchestrator {
 					stepIndex: index + 1,
 					totalSteps: pendingPlan.toolCalls.length,
 				});
-				const result = await this.executeToolCall(toolCall);
-				executedTools.push({ name: toolCall.name, result });
-				const pauseInfo = extractWorkflowPauseInfo(result.data);
+					const result = await this.executeToolCall(toolCall, {
+						requestId,
+						mode: "plan_confirmation",
+						toolCallId: toolCall.id,
+						stepIndex: index + 1,
+						totalSteps: pendingPlan.toolCalls.length,
+						signal: executionSignal,
+					});
+					executedTools.push({ name: toolCall.name, result });
+					if (this.isToolResultCancelled(result)) {
+						return this.completeRequest({
+							requestId,
+							mode: "plan_confirmation",
+							response: {
+								message: "执行已取消 (Execution cancelled)",
+								toolCalls: this.toClientToolCalls(executedTools),
+								success: false,
+								status: "cancelled",
+							},
+						});
+					}
+					const pauseInfo = extractWorkflowPauseInfo(result.data);
 				this.emitExecutionEvent({
 					type: "tool_completed",
 					requestId,
@@ -1404,6 +1605,8 @@ export class AgentOrchestrator {
 		}
 		this.conversationHistory = [];
 		this.pendingPlanState = null;
+		this.activeExecutionAbortController = null;
+		this.activeExecutionRequestId = null;
 	}
 
 	/**
