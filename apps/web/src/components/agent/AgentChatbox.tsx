@@ -54,7 +54,6 @@ interface Message {
 	status?: AgentResponse["status"];
 	nextStep?: WorkflowNextStep;
 	resumeHint?: WorkflowResumeHint;
-	executionEvents?: AgentExecutionEvent[];
 	toolCalls?: Array<{
 		name: string;
 		result: { success: boolean; message: string };
@@ -292,9 +291,6 @@ export function AgentChatbox() {
 			status: response.status,
 			nextStep: response.nextStep,
 			resumeHint: response.resumeHint,
-			executionEvents: response.requestId
-				? (executionEventsByRequestId.get(response.requestId) ?? [])
-				: undefined,
 			toolCalls: response.toolCalls,
 			plan: response.plan,
 			requiresConfirmation: response.requiresConfirmation,
@@ -638,6 +634,12 @@ export function AgentChatbox() {
 								<MessageBubble
 									key={message.id}
 									message={message}
+									executionEvents={
+										message.requestId
+											? (executionEventsByRequestId.get(message.requestId) ??
+												[])
+											: undefined
+									}
 									isActivePlan={message.plan?.id === pendingPlanId}
 									stepDrafts={stepDrafts}
 									stepErrors={stepErrors}
@@ -942,6 +944,7 @@ export function AgentChatbox() {
 
 interface MessageBubbleProps {
 	message: Message;
+	executionEvents?: AgentExecutionEvent[];
 	isActivePlan: boolean;
 	stepDrafts: Record<string, string>;
 	stepErrors: Record<string, string>;
@@ -1004,6 +1007,7 @@ function ExecutionTimeline({ events }: { events: AgentExecutionEvent[] }) {
  */
 function MessageBubble({
 	message,
+	executionEvents,
 	isActivePlan,
 	stepDrafts,
 	stepErrors,
@@ -1123,10 +1127,10 @@ function MessageBubble({
 					</div>
 				)}
 
-				{message.executionEvents && message.executionEvents.length > 0 ? (
+				{executionEvents && executionEvents.length > 0 ? (
 					<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2">
 						<div className="mb-1 text-xs font-medium">执行轨迹</div>
-						<ExecutionTimeline events={message.executionEvents} />
+						<ExecutionTimeline events={executionEvents} />
 					</div>
 				) : null}
 

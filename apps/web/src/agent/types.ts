@@ -183,7 +183,7 @@ export interface AgentExecutionEvent {
 		| "plan_created"
 		| "request_completed";
 	requestId: string;
-	mode?: "chat" | "workflow" | "plan_confirmation";
+	mode: "chat" | "workflow" | "plan_confirmation";
 	toolName?: string;
 	toolCallId?: string;
 	stepIndex?: number;

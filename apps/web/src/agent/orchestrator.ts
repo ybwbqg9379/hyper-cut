@@ -87,6 +87,12 @@ interface WorkflowPauseInfo {
 	resumeHint?: WorkflowResumeHint;
 }
 
+interface ExecutedToolsAnalysis {
+	hasAwaitingConfirmation: boolean;
+	hasToolFailure: boolean;
+	pauseInfo: WorkflowPauseInfo | null;
+}
+
 function compactString(value: string): string {
 	if (value.length <= MAX_TOOL_DATA_STRING_LENGTH) {
 		return value;
@@ -435,16 +441,32 @@ export class AgentOrchestrator {
 		}));
 	}
 
-	private extractFirstWorkflowPauseInfo(
+	private analyzeExecutedTools(
 		executedTools: Array<{ name: string; result: ToolResult }>,
-	): WorkflowPauseInfo | null {
+	): ExecutedToolsAnalysis {
+		let hasAwaitingConfirmation = false;
+		let hasToolFailure = false;
+		let pauseInfo: WorkflowPauseInfo | null = null;
+
 		for (const tool of executedTools) {
-			const pauseInfo = extractWorkflowPauseInfo(tool.result.data);
-			if (pauseInfo) {
-				return pauseInfo;
+			const currentPauseInfo = extractWorkflowPauseInfo(tool.result.data);
+			if (currentPauseInfo) {
+				hasAwaitingConfirmation = true;
+				if (!pauseInfo) {
+					pauseInfo = currentPauseInfo;
+				}
+				continue;
+			}
+			if (!tool.result.success) {
+				hasToolFailure = true;
 			}
 		}
-		return null;
+
+		return {
+			hasAwaitingConfirmation,
+			hasToolFailure,
+			pauseInfo,
+		};
 	}
 
 	private buildPlanSummary(toolCall: ToolCall): string {
@@ -583,19 +605,12 @@ export class AgentOrchestrator {
 	}): AgentResponse {
 		const responseMessage =
 			response.content ?? this.buildToolSummary(executedTools);
-		const hasAwaitingConfirmation = executedTools.some(
-			(tool) => extractWorkflowPauseInfo(tool.result.data) !== null,
-		);
-		const hasToolFailure = executedTools.some(
-			(tool) =>
-				!tool.result.success &&
-				extractWorkflowPauseInfo(tool.result.data) === null,
-		);
+		const { hasAwaitingConfirmation, hasToolFailure, pauseInfo } =
+			this.analyzeExecutedTools(executedTools);
 		const isSuccess =
 			response.finishReason !== "error" &&
 			!hasToolFailure &&
 			!hasAwaitingConfirmation;
-		const pauseInfo = this.extractFirstWorkflowPauseInfo(executedTools);
 		const status = hasToolFailure
 			? "error"
 			: hasAwaitingConfirmation
@@ -676,23 +691,16 @@ export class AgentOrchestrator {
 	async process(userMessage: string): Promise<AgentResponse> {
 		const requestId = this.createRequestId("chat");
 		if (this.planningEnabled && this.isExecutingPlan) {
-			return this.completeRequest({
+			return {
+				message: "计划正在执行中，请稍候。",
+				success: false,
+				status: "error",
 				requestId,
-				mode: "chat",
-				response: {
-					message: "计划正在执行中，请稍候。",
-					success: false,
-					status: "error",
-				},
-			});
+			};
 		}
 
 		if (this.planningEnabled && this.pendingPlanState) {
-			return this.completeRequest({
-				requestId,
-				mode: "chat",
-				response: this.buildPendingPlanBlockedResponse(requestId),
-			});
+			return this.buildPendingPlanBlockedResponse(requestId);
 		}
 
 		this.emitExecutionEvent({
@@ -917,36 +925,26 @@ export class AgentOrchestrator {
 	}): Promise<AgentResponse> {
 		const requestId = this.createRequestId("workflow");
 		if (this.planningEnabled && this.isExecutingPlan) {
-			return this.completeRequest({
+			return {
+				message: "计划正在执行中，请稍候。",
+				success: false,
+				status: "error",
 				requestId,
-				mode: "workflow",
-				response: {
-					message: "计划正在执行中，请稍候。",
-					success: false,
-					status: "error",
-				},
-			});
+			};
 		}
 
 		if (this.planningEnabled && this.pendingPlanState) {
-			return this.completeRequest({
-				requestId,
-				mode: "workflow",
-				response: this.buildPendingPlanBlockedResponse(requestId),
-			});
+			return this.buildPendingPlanBlockedResponse(requestId);
 		}
 
 		const normalizedName = workflowName.trim();
 		if (!normalizedName) {
-			return this.completeRequest({
+			return {
+				message: "workflowName 不能为空",
+				success: false,
+				status: "error",
 				requestId,
-				mode: "workflow",
-				response: {
-					message: "workflowName 不能为空",
-					success: false,
-					status: "error",
-				},
-			});
+			};
 		}
 		this.emitExecutionEvent({
 			type: "request_started",
@@ -1273,27 +1271,21 @@ export class AgentOrchestrator {
 	async confirmPendingPlan(): Promise<AgentResponse> {
 		const requestId = this.createRequestId("confirm");
 		if (this.isExecutingPlan) {
-			return this.completeRequest({
+			return {
+				message: "计划正在执行中，请勿重复确认。",
+				success: false,
+				status: "error",
 				requestId,
-				mode: "plan_confirmation",
-				response: {
-					message: "计划正在执行中，请勿重复确认。",
-					success: false,
-					status: "error",
-				},
-			});
+			};
 		}
 
 		if (!this.pendingPlanState) {
-			return this.completeRequest({
+			return {
+				message: "当前没有待确认的计划。",
+				success: false,
+				status: "error",
 				requestId,
-				mode: "plan_confirmation",
-				response: {
-					message: "当前没有待确认的计划。",
-					success: false,
-					status: "error",
-				},
-			});
+			};
 		}
 		this.emitExecutionEvent({
 			type: "request_started",
@@ -1352,17 +1344,13 @@ export class AgentOrchestrator {
 					toolCallId: toolCall.id,
 					name: toolCall.name,
 				});
+				if (pauseInfo) {
+					break;
+				}
 			}
 
-			const hasAwaitingConfirmation = executedTools.some(
-				(tool) => extractWorkflowPauseInfo(tool.result.data) !== null,
-			);
-			const hasToolFailure = executedTools.some(
-				(tool) =>
-					!tool.result.success &&
-					extractWorkflowPauseInfo(tool.result.data) === null,
-			);
-			const pauseInfo = this.extractFirstWorkflowPauseInfo(executedTools);
+			const { hasAwaitingConfirmation, hasToolFailure, pauseInfo } =
+				this.analyzeExecutedTools(executedTools);
 			const message = hasToolFailure
 				? `计划执行完成，但有步骤失败：\n${this.buildToolSummary(executedTools)}`
 				: hasAwaitingConfirmation
