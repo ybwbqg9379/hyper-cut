@@ -189,6 +189,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
 - **Gemini provider**: Marked unavailable until implementation is complete
 - **Caption metadata stability**: `generate_captions` 与资产面板字幕生成均写入结构化 metadata，不再依赖名称前缀作为唯一判定
 - **自动保存稳定性**: 关闭/删除项目后若延迟保存触发，不再因无 active project 抛出运行时错误
+- **Agent 预览状态一致性**: 修复项目切换与预览播放边界状态问题
+  - `EditorProvider` 在 `projectId` 变化与组件卸载时清理 `agent-ui-store`，避免跨项目残留高亮预览与执行进度
+  - `PreviewCanvas` 统一 highlight playback 的 epsilon 边界判定，避免相邻区间场景下漏播/跳帧
+  - `PreviewCanvas` 卸载时重置 `highlightPreviewPlaybackEnabled`，消除 store 脏状态
+  - `vision-tools-core` 统一使用 `isCaptionTextElement()` 判定字幕元素（兼容 metadata 与 legacy 命名）
+  - `paste-at-time` action 补充 `args: { time: "number" }` 文档元数据，与其他有参 action 保持一致
 
 ### Changed
 

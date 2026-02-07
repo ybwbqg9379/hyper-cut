@@ -103,6 +103,7 @@ export const ACTIONS = {
 	"paste-at-time": {
 		description: "Paste elements at a specific time",
 		category: "editing",
+		args: { time: "number" },
 	},
 	"toggle-snapping": {
 		description: "Toggle snapping",

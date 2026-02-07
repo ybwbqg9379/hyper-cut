@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import useDeepCompareEffect from "use-deep-compare-effect";
 import { useEditor } from "@/hooks/use-editor";
 import { useRafLoop } from "@/hooks/use-raf-loop";
@@ -199,7 +199,7 @@ function PreviewCanvas() {
 
 			if (!inKeepRange) {
 				const nextRange = highlightPreview.keepRanges.find(
-					(range) => range.end > currentTime + epsilon,
+					(range) => range.start > currentTime - epsilon,
 				);
 				if (nextRange) {
 					editor.playback.seek({ time: nextRange.start });
@@ -245,6 +245,12 @@ function PreviewCanvas() {
 		highlightPreviewPlaybackEnabled,
 		setHighlightPreviewPlaybackEnabled,
 	]);
+
+	useEffect(() => {
+		return () => {
+			setHighlightPreviewPlaybackEnabled({ enabled: false });
+		};
+	}, [setHighlightPreviewPlaybackEnabled]);
 
 	useRafLoop(render);
 

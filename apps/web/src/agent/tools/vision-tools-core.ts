@@ -1,6 +1,7 @@
 import type { MediaAsset } from "@/types/assets";
 import type { TimelineElement, TimelineTrack } from "@/types/timeline";
 import { canElementHaveAudio, hasMediaId } from "@/lib/timeline/element-utils";
+import { isCaptionTextElement } from "@/lib/transcription/caption-metadata";
 import { EditorCore } from "@/core";
 import { extractTimelineAudio } from "@/lib/media/mediabunny";
 import { decodeAudioToFloat32 } from "@/lib/media/audio";
@@ -247,7 +248,12 @@ function collectCaptionSegmentsFromTimeline({
 		.flatMap((track) =>
 			track.type === "text"
 				? track.elements
-						.filter((element) => element.metadata?.kind === "caption")
+						.filter(
+							(
+								element,
+							): element is Extract<TimelineElement, { type: "text" }> =>
+								element.type === "text" && isCaptionTextElement(element),
+						)
 						.map((element) => ({
 							startTime: element.startTime,
 							endTime: element.startTime + element.duration,
@@ -313,7 +319,7 @@ function buildTranscriptCacheKey({
 		.map((track) => {
 			const elementFingerprint = track.elements
 				.map((element) => {
-					if (element.type === "text" && element.metadata?.kind === "caption") {
+					if (element.type === "text" && isCaptionTextElement(element)) {
 						return `${element.id}:${element.startTime.toFixed(2)}:${element.duration.toFixed(2)}:${element.content}`;
 					}
 					return `${element.id}:${element.type}:${element.startTime.toFixed(2)}:${element.duration.toFixed(2)}`;

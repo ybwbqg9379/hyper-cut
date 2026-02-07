@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useEditor } from "@/hooks/use-editor";
+import { useAgentUiStore } from "@/stores/agent-ui-store";
 import {
 	useKeybindingsListener,
 	useKeybindingDisabler,
@@ -20,6 +21,7 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 	const router = useRouter();
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const previousProjectIdRef = useRef(projectId);
 	const { disableKeybindings, enableKeybindings } = useKeybindingDisabler();
 	const activeProject = editor.project.getActiveOrNull();
 
@@ -75,6 +77,19 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 			cancelled = true;
 		};
 	}, [projectId, editor, router]);
+
+	useEffect(() => {
+		if (previousProjectIdRef.current !== projectId) {
+			useAgentUiStore.getState().clearAllAgentUiState();
+			previousProjectIdRef.current = projectId;
+		}
+	}, [projectId]);
+
+	useEffect(() => {
+		return () => {
+			useAgentUiStore.getState().clearAllAgentUiState();
+		};
+	}, []);
 
 	if (error) {
 		return (
