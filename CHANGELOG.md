@@ -106,6 +106,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Changed
 
+- **Agent UI 统一**: AI 助手面板 header 重构，与编辑器面板风格一致
+  - 替换自定义 Button tab 为标准 `Tabs`/`TabsList`/`TabsTrigger` 组件（对齐 `PanelBaseView` 模式）
+  - 移除冗余 "AI 助手" 文字标签，简化 Online/Offline 状态为圆点指示器
+  - 视图切换从嵌套三元表达式重构为 `TabsContent`
+  - 修复 `frame-extractor.test.ts` 中 mock canvas 类型缺失导致的 TS2345 编译错误
 - **Agent LM Studio configuration**: Full inference parameter support
   - Configurable via `LMStudioConfig` interface or environment variables
   - Supported parameters: `maxTokens`, `temperature`, `topP`, `topK`, `repeatPenalty`, `stop`

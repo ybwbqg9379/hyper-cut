@@ -39,7 +39,7 @@ describe("FrameExtractorService", () => {
 				canvas: {
 					width: 1920,
 					height: 1080,
-				},
+				} as unknown as HTMLCanvasElement,
 			};
 		});
 

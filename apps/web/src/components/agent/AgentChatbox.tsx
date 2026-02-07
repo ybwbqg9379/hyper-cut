@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
 	Select,
 	SelectContent,
@@ -48,6 +49,8 @@ import {
 	ScrollText,
 	GitBranch,
 } from "lucide-react";
+
+type AgentView = "chat" | "transcript" | "workflow";
 
 interface Message {
 	id: string;
@@ -289,9 +292,7 @@ export function AgentChatbox() {
 	const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
 	const [stepDrafts, setStepDrafts] = useState<Record<string, string>>({});
 	const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
-	const [activeView, setActiveView] = useState<
-		"chat" | "transcript" | "workflow"
-	>("chat");
+	const [activeView, setActiveView] = useState<AgentView>("chat");
 	const [selectedWorkflowName, setSelectedWorkflowName] = useState("");
 	const [workflowStepDrafts, setWorkflowStepDrafts] =
 		useState<WorkflowStepDrafts>({});
@@ -694,203 +695,179 @@ export function AgentChatbox() {
 	const workflowActionDisabled = isProcessing || Boolean(pendingPlanId);
 
 	return (
-		<div className="flex flex-col h-full bg-panel">
+		<Tabs
+			value={activeView}
+			onValueChange={(v) => setActiveView(v as AgentView)}
+			className="flex flex-col h-full bg-panel"
+		>
 			{/* Header - matches PanelBaseView sticky header pattern */}
 			<div className="bg-panel sticky top-0 z-10">
-				<div className="flex items-center justify-between px-4 py-3">
-					<div className="flex items-center gap-2">
-						<Bot className="size-4 text-primary" />
-						<span className="font-medium text-sm">AI 助手</span>
-						<div className="ml-1 flex items-center rounded-md border border-border p-0.5">
-							<Button
-								variant="text"
-								size="sm"
-								className={cn(
-									"h-6 px-2 text-xs",
-									activeView === "chat"
-										? "bg-accent text-foreground"
-										: "text-muted-foreground",
-								)}
-								onClick={() => setActiveView("chat")}
-								title="聊天视图"
-							>
-								<MessagesSquare className="size-3 mr-1" />
-								聊天
-							</Button>
-							<Button
-								variant="text"
-								size="sm"
-								className={cn(
-									"h-6 px-2 text-xs",
-									activeView === "transcript"
-										? "bg-accent text-foreground"
-										: "text-muted-foreground",
-								)}
-								onClick={() => setActiveView("transcript")}
-								title="转录联动视图"
-							>
-								<ScrollText className="size-3 mr-1" />
-								转录
-							</Button>
-							<Button
-								variant="text"
-								size="sm"
-								className={cn(
-									"h-6 px-2 text-xs",
-									activeView === "workflow"
-										? "bg-accent text-foreground"
-										: "text-muted-foreground",
-								)}
-								onClick={() => setActiveView("workflow")}
-								title="工作流管理视图"
-							>
-								<GitBranch className="size-3 mr-1" />
-								工作流
-							</Button>
-						</div>
+				<div className="flex items-center justify-between px-3 pt-3 pb-0">
+					<TabsList>
+						<TabsTrigger value="chat">
+							<span className="mr-1 inline-flex items-center">
+								<MessagesSquare className="size-3.5" />
+							</span>
+							聊天
+						</TabsTrigger>
+						<TabsTrigger value="transcript">
+							<span className="mr-1 inline-flex items-center">
+								<ScrollText className="size-3.5" />
+							</span>
+							转录
+						</TabsTrigger>
+						<TabsTrigger value="workflow">
+							<span className="mr-1 inline-flex items-center">
+								<GitBranch className="size-3.5" />
+							</span>
+							工作流
+						</TabsTrigger>
+					</TabsList>
+					<div className="flex items-center gap-1.5">
 						{providerStatus && (
 							<span
 								className={cn(
-									"text-xs px-1.5 py-0.5 rounded-sm",
+									"size-2 rounded-full",
 									providerStatus.available
-										? "bg-constructive/10 text-constructive"
-										: "bg-destructive/10 text-destructive",
+										? "bg-constructive"
+										: "bg-destructive",
 								)}
-							>
-								{providerStatus.available ? "Online" : "Offline"}
-							</span>
+								title={providerStatus.available ? "Online" : "Offline"}
+							/>
 						)}
+						<Button
+							variant="text"
+							size="icon"
+							onClick={handleClear}
+							disabled={messages.length === 0 || isProcessing}
+							title="清空对话"
+						>
+							<Trash2 className="size-4" />
+						</Button>
 					</div>
-					<Button
-						variant="text"
-						size="icon"
-						onClick={handleClear}
-						disabled={messages.length === 0 || isProcessing}
-						title="清空对话"
-					>
-						<Trash2 className="size-4" />
-					</Button>
 				</div>
-				<Separator />
+				<Separator className="mt-3" />
 			</div>
 
-			{activeView === "chat" ? (
-				<>
-					{/* Messages - uses ScrollArea like PanelBaseView */}
-					<ScrollArea className="flex-1">
-						<div className="p-4 space-y-3">
-							{messages.length === 0 && (
-								<div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
-									<Bot className="size-10 mb-3 opacity-20" />
-									<p>输入指令来控制视频编辑</p>
-									<p className="text-xs mt-1 opacity-70">
-										例如: "在当前位置分割视频"
-									</p>
-								</div>
-							)}
+			<TabsContent value="chat" className="mt-0 flex min-h-0 flex-1 flex-col">
+				{/* Messages - uses ScrollArea like PanelBaseView */}
+				<ScrollArea className="flex-1">
+					<div className="p-4 space-y-3">
+						{messages.length === 0 && (
+							<div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
+								<Bot className="size-10 mb-3 opacity-20" />
+								<p>输入指令来控制视频编辑</p>
+								<p className="text-xs mt-1 opacity-70">
+									例如: &quot;在当前位置分割视频&quot;
+								</p>
+							</div>
+						)}
 
-							{messages.map((message) => (
-								<MessageBubble
-									key={message.id}
-									message={message}
-									executionEvents={
-										message.requestId
-											? (executionEventsByRequestId.get(message.requestId) ??
-												[])
-											: undefined
-									}
-									isActivePlan={message.plan?.id === pendingPlanId}
-									stepDrafts={stepDrafts}
-									stepErrors={stepErrors}
-									onStepDraftChange={(stepId, value) => {
-										setStepDrafts((prev) => ({ ...prev, [stepId]: value }));
-									}}
-									onUpdateStep={handleUpdateStep}
-									onRemoveStep={handleRemoveStep}
-									onConfirmPlan={handleConfirmPlan}
-									onCancelPlan={handleCancelPlan}
-									onResumeWorkflow={handleResumeWorkflow}
-									controlsDisabled={isProcessing}
-									resumeDisabled={isProcessing || Boolean(pendingPlanId)}
-								/>
-							))}
-
-								{isProcessing && (
-									<div className="space-y-2">
-										<div className="flex items-center justify-between gap-2 text-muted-foreground text-sm px-3 py-2">
-											<div className="flex items-center gap-2">
-												<Loader2 className="size-4 animate-spin" />
-												<span>处理中...</span>
-											</div>
-											<Button
-												variant="outline"
-												size="sm"
-												className="h-7 px-2 text-xs"
-												onClick={handleCancelExecution}
-											>
-												<Ban className="size-3 mr-1" />
-												取消执行
-											</Button>
-										</div>
-										{activeExecutionEvents.length > 0 ? (
-										<div className="rounded-md border border-border/50 bg-background/60 px-3 py-2">
-											<div className="text-xs font-medium mb-1">执行进度</div>
-											<ExecutionTimeline events={activeExecutionEvents} />
-										</div>
-									) : null}
-								</div>
-							)}
-
-							{error && (
-								<div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-md px-3 py-2">
-									<AlertCircle className="size-4" />
-									<span>{error}</span>
-								</div>
-							)}
-
-							<div ref={messagesEndRef} />
-						</div>
-					</ScrollArea>
-
-					{/* Input - follows consistent spacing and border patterns */}
-					<div className="bg-panel border-t border-border p-3">
-						<div className="flex gap-2">
-							<textarea
-								ref={inputRef}
-								value={input}
-								onChange={(e) => setInput(e.target.value)}
-								onKeyDown={handleKeyDown}
-								placeholder={
-									pendingPlanId
-										? "请先确认或取消当前计划..."
-										: "输入编辑指令..."
+						{messages.map((message) => (
+							<MessageBubble
+								key={message.id}
+								message={message}
+								executionEvents={
+									message.requestId
+										? (executionEventsByRequestId.get(message.requestId) ??
+											[])
+										: undefined
 								}
-								disabled={inputDisabled}
-								className={cn(
-									"flex-1 min-h-[38px] max-h-[100px] resize-none rounded-md",
-									"bg-background border border-border px-3 py-2 text-sm",
-									"placeholder:text-muted-foreground",
-									"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary",
-									"disabled:opacity-50 disabled:cursor-not-allowed",
-								)}
-								rows={1}
+								isActivePlan={message.plan?.id === pendingPlanId}
+								stepDrafts={stepDrafts}
+								stepErrors={stepErrors}
+								onStepDraftChange={(stepId, value) => {
+									setStepDrafts((prev) => ({ ...prev, [stepId]: value }));
+								}}
+								onUpdateStep={handleUpdateStep}
+								onRemoveStep={handleRemoveStep}
+								onConfirmPlan={handleConfirmPlan}
+								onCancelPlan={handleCancelPlan}
+								onResumeWorkflow={handleResumeWorkflow}
+								controlsDisabled={isProcessing}
+								resumeDisabled={isProcessing || Boolean(pendingPlanId)}
 							/>
-							<Button
-								onClick={handleSend}
-								disabled={!input.trim() || inputDisabled}
-								size="icon"
-								className="shrink-0 size-[38px]"
-							>
-								<Send className="size-4" />
-							</Button>
-						</div>
+						))}
+
+							{isProcessing && (
+								<div className="space-y-2">
+									<div className="flex items-center justify-between gap-2 text-muted-foreground text-sm px-3 py-2">
+										<div className="flex items-center gap-2">
+											<Loader2 className="size-4 animate-spin" />
+											<span>处理中...</span>
+										</div>
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-7 px-2 text-xs"
+											onClick={handleCancelExecution}
+										>
+											<Ban className="size-3 mr-1" />
+											取消执行
+										</Button>
+									</div>
+									{activeExecutionEvents.length > 0 ? (
+									<div className="rounded-md border border-border/50 bg-background/60 px-3 py-2">
+										<div className="text-xs font-medium mb-1">执行进度</div>
+										<ExecutionTimeline events={activeExecutionEvents} />
+									</div>
+								) : null}
+								</div>
+							)}
+
+						{error && (
+							<div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-md px-3 py-2">
+								<AlertCircle className="size-4" />
+								<span>{error}</span>
+							</div>
+						)}
+
+						<div ref={messagesEndRef} />
 					</div>
-				</>
-			) : activeView === "transcript" ? (
+				</ScrollArea>
+
+				{/* Input - follows consistent spacing and border patterns */}
+				<div className="bg-panel border-t border-border p-3">
+					<div className="flex gap-2">
+						<textarea
+							ref={inputRef}
+							value={input}
+							onChange={(e) => setInput(e.target.value)}
+							onKeyDown={handleKeyDown}
+							placeholder={
+								pendingPlanId
+									? "请先确认或取消当前计划..."
+									: "输入编辑指令..."
+							}
+							disabled={inputDisabled}
+							className={cn(
+								"flex-1 min-h-[38px] max-h-[100px] resize-none rounded-md",
+								"bg-background border border-border px-3 py-2 text-sm",
+								"placeholder:text-muted-foreground",
+								"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary",
+								"disabled:opacity-50 disabled:cursor-not-allowed",
+							)}
+							rows={1}
+						/>
+						<Button
+							onClick={handleSend}
+							disabled={!input.trim() || inputDisabled}
+							size="icon"
+							className="shrink-0 size-[38px]"
+						>
+							<Send className="size-4" />
+						</Button>
+					</div>
+				</div>
+			</TabsContent>
+
+			<TabsContent value="transcript" className="mt-0 flex min-h-0 flex-1 flex-col">
 				<div className="flex-1 min-h-0">
 					<TranscriptPanel />
 				</div>
-			) : (
+			</TabsContent>
+
+			<TabsContent value="workflow" className="mt-0 flex min-h-0 flex-1 flex-col">
 				<div className="flex-1 min-h-0 flex flex-col">
 					<div className="px-3 py-2 border-b border-border">
 						<p className="text-xs font-medium">工作流管理</p>
@@ -1107,8 +1084,8 @@ export function AgentChatbox() {
 						</Button>
 					</div>
 				</div>
-			)}
-		</div>
+			</TabsContent>
+		</Tabs>
 	);
 }
 
