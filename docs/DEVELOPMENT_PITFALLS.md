@@ -178,6 +178,47 @@ const allowedElements = new Set<string>();
 
 ---
 
+### 8. Test Mocks Not Updated After Tool Refactors
+
+**Problem:** When a tool is refactored to use different EditorCore methods (e.g., `splitElements` → pure functions + `replaceTracks`), the integration test mock and assertions still reference the old API. The missing mock method causes a TypeError, caught silently by the tool's catch block, returning `{success: false}`.
+
+```typescript
+// Tool was refactored from:
+editor.timeline.splitElements(...)
+// To:
+const result = splitTracksAtTime({ tracks, ... }); // pure function
+editor.timeline.replaceTracks({ tracks: result.tracks }); // new API
+
+// But mock still has:
+timeline: { splitElements: vi.fn(), /* no replaceTracks! */ }
+// → TypeError: editor.timeline.replaceTracks is not a function
+// → caught by try/catch → success: false
+```
+
+**Solution:** When refactoring tool internals, always update:
+1. The mock in `integration-harness.ts` — add new methods, keep old ones for other tests
+2. The test assertions — verify the new method is called, not the old one
+3. The type cast in the test — update the type to match new methods
+
+```typescript
+// integration-harness.ts
+timeline: {
+  splitElements: vi.fn(),
+  replaceTracks: vi.fn(), // add new method
+  // ...
+}
+
+// test file
+const editor = EditorCore.getInstance() as unknown as {
+  timeline: { replaceTracks: ReturnType<typeof vi.fn>; /* ... */ };
+};
+expect(editor.timeline.replaceTracks).toHaveBeenCalled();
+```
+
+**Files affected:** `integration-harness.ts`, `integration-registry-*.ts`
+
+---
+
 ## Architecture Principles
 
 ### 9. Fork Management - Minimal Intrusion
