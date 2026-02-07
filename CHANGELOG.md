@@ -200,6 +200,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 工具超时时主动中止该工具的 `AbortSignal`，降低“超时后后台继续运行”的状态漂移风险
   - `search_sound_effect` 与 `add_sound_effect` 接入 `context.signal` 与取消返回码，确保用户取消后尽快停止网络与解码流程
   - `seek_forward`/`seek_backward` 增加 seconds 入参校验；`PlaybackManager.seek()` 对非有限时间值增加兜底
+- **Agent 执行链路工程化改进**: 收敛取消工具与测试断言，降低误判与维护成本
+  - 新增 `agent/utils/cancellation.ts`，统一 `EXECUTION_CANCELLED` 常量、取消检测与取消结果构造逻辑
+  - `orchestrator.ts` 与 `asset-tools-core.ts` 改为复用共享取消工具，减少重复实现
+  - `search_sound_effect` / `add_sound_effect` 删除 `fetch(..., { signal })` 后紧邻的冗余取消检查，保留关键异步边界检测
+  - 超时回归测试改为精确断言 `"aborted by signal"`，避免宽松断言掩盖行为回归
 
 ### Changed
 

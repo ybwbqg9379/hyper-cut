@@ -14,6 +14,11 @@ import type {
 	WorkflowResumeHint,
 } from "./types";
 import { createProvider, getConfiguredProviderType } from "./providers";
+import {
+	EXECUTION_CANCELLED_ERROR_CODE,
+	buildExecutionCancelledResult,
+	isCancellationError,
+} from "./utils/cancellation";
 import { resolveWorkflowFromParams } from "./workflows";
 
 /**
@@ -75,7 +80,6 @@ const TOOL_NAME_ALIASES = new Map<string, string>([
 ]);
 const WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE =
 	"WORKFLOW_CONFIRMATION_REQUIRED";
-const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 const TOOL_EXECUTION_TIMEOUT_ERROR_CODE = "TOOL_EXECUTION_TIMEOUT";
 
 interface PendingPlanState {
@@ -499,19 +503,6 @@ export class AgentOrchestrator {
 		this.activeExecutionRequestId = null;
 	}
 
-	private isCancellationError(error: unknown): boolean {
-		if (!(error instanceof Error)) {
-			return false;
-		}
-		const message = error.message.toLowerCase();
-		return (
-			error.name === "AbortError" ||
-			message.includes("cancelled") ||
-			message.includes("canceled") ||
-			message.includes("execution cancelled")
-		);
-	}
-
 	private isToolResultCancelled(result: ToolResult): boolean {
 		if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) {
 			return false;
@@ -776,14 +767,7 @@ export class AgentOrchestrator {
 			TOOL_NAME_ALIASES.get(toolCall.name) ?? toolCall.name;
 		const tool = this.tools.get(resolvedToolName);
 		if (meta.signal?.aborted) {
-			return {
-				success: false,
-				message: "执行已取消 (Execution cancelled)",
-				data: {
-					errorCode: EXECUTION_CANCELLED_ERROR_CODE,
-					toolName: resolvedToolName,
-				},
-			};
+			return buildExecutionCancelledResult({ toolName: resolvedToolName });
 		}
 
 		if (!tool) {
@@ -857,15 +841,8 @@ export class AgentOrchestrator {
 					},
 				};
 			}
-			if (this.isCancellationError(error)) {
-				return {
-					success: false,
-					message: "执行已取消 (Execution cancelled)",
-					data: {
-						errorCode: EXECUTION_CANCELLED_ERROR_CODE,
-						toolName: resolvedToolName,
-					},
-				};
+			if (isCancellationError(error)) {
+				return buildExecutionCancelledResult({ toolName: resolvedToolName });
 			}
 			return {
 				success: false,
@@ -1148,7 +1125,7 @@ export class AgentOrchestrator {
 				0,
 				historyLengthBefore,
 			);
-			if (this.isCancellationError(error)) {
+			if (isCancellationError(error)) {
 				return this.completeRequest({
 					requestId,
 					mode: "chat",

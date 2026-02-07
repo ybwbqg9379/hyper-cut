@@ -13,12 +13,16 @@ import { canElementGoOnTrack } from "@/lib/timeline/track-utils";
 import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 import { processMediaAssets } from "@/lib/media/processing";
 import { searchIcons } from "@/lib/iconify-api";
+import {
+	buildExecutionCancelledResult,
+	isExecutionCancelled,
+	throwIfExecutionCancelled,
+} from "../utils/cancellation";
 
 const MEDIA_TYPES = ["image", "video", "audio"] as const;
 const FETCH_TIMEOUT_MS = 20000;
 const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
 const SOUND_SEARCH_PAGE_SIZE = 20;
-const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -26,27 +30,6 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
-}
-
-function isExecutionCancelled(signal?: AbortSignal): boolean {
-	return signal?.aborted === true;
-}
-
-function throwIfExecutionCancelled(signal?: AbortSignal): void {
-	if (!isExecutionCancelled(signal)) {
-		return;
-	}
-	throw new Error("Execution cancelled");
-}
-
-function buildExecutionCancelledResult(): ToolResult {
-	return {
-		success: false,
-		message: "执行已取消 (Execution cancelled)",
-		data: {
-			errorCode: EXECUTION_CANCELLED_ERROR_CODE,
-		},
-	};
 }
 
 /**
@@ -585,10 +568,12 @@ export const searchSoundEffectTool: AgentTool = {
 				min_rating: minRating.toString(),
 			});
 
-			const response = await fetch(`/api/sounds/search?${searchParams.toString()}`, {
-				signal: context?.signal,
-			});
-			throwIfExecutionCancelled(context?.signal);
+			const response = await fetch(
+				`/api/sounds/search?${searchParams.toString()}`,
+				{
+					signal: context?.signal,
+				},
+			);
 			if (!response.ok) {
 				return {
 					success: false,
@@ -729,7 +714,8 @@ export const addSoundEffectTool: AgentTool = {
 					? params.commercialOnly
 					: true;
 			const minRating =
-				typeof params.minRating === "number" && Number.isFinite(params.minRating)
+				typeof params.minRating === "number" &&
+				Number.isFinite(params.minRating)
 					? params.minRating
 					: 3;
 			if (minRating < 0 || minRating > 5) {
@@ -747,7 +733,6 @@ export const addSoundEffectTool: AgentTool = {
 				const detailResponse = await fetch(`/api/sounds/${soundId}`, {
 					signal: context?.signal,
 				});
-				throwIfExecutionCancelled(context?.signal);
 				if (!detailResponse.ok) {
 					return {
 						success: false,
@@ -780,7 +765,6 @@ export const addSoundEffectTool: AgentTool = {
 						signal: context?.signal,
 					},
 				);
-				throwIfExecutionCancelled(context?.signal);
 				if (!searchResponse.ok) {
 					return {
 						success: false,
@@ -857,7 +841,6 @@ export const addSoundEffectTool: AgentTool = {
 			const audioResponse = await fetch(previewUrl, {
 				signal: context?.signal,
 			});
-			throwIfExecutionCancelled(context?.signal);
 			if (!audioResponse.ok) {
 				return {
 					success: false,
