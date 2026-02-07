@@ -446,7 +446,7 @@ export function registerRegistryTimelineTests() {
 			const { EditorCore } = await import("@/core");
 			const editor = EditorCore.getInstance() as unknown as {
 				timeline: {
-					splitElements: ReturnType<typeof vi.fn>;
+					replaceTracks: ReturnType<typeof vi.fn>;
 					getTracks: ReturnType<typeof vi.fn>;
 				};
 			};
@@ -480,10 +480,9 @@ export function registerRegistryTimelineTests() {
 				minDuration: 0.00001,
 			});
 			expect(result.success).toBe(true);
-			// Tool should detect silence and attempt to split at silence boundaries
-			expect(editor.timeline.splitElements).toHaveBeenCalled();
-			// Note: deleteElements only called if elements are fully within silence interval
-			// which depends on mock audio data; main goal is to verify silence detection works
+			// After P0/P1 refactor, remove_silence uses pure split/delete/ripple functions
+			// then atomically replaces tracks via replaceTracks
+			expect(editor.timeline.replaceTracks).toHaveBeenCalled();
 		});
 
 		it("remove_silence should fail with no audio source", async () => {

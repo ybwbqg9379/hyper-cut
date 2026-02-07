@@ -290,6 +290,7 @@ vi.mock("@/core", () => {
 			getTotalDuration: vi.fn(() => 120),
 			insertElement: vi.fn(),
 			splitElements: vi.fn(),
+			replaceTracks: vi.fn(),
 			updateTextElement: vi.fn(),
 			updateElementTrim: vi.fn(),
 			updateElementDuration: vi.fn(),
