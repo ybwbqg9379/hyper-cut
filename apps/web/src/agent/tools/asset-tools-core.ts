@@ -32,22 +32,6 @@ function isExecutionCancelled(signal?: AbortSignal): boolean {
 	return signal?.aborted === true;
 }
 
-function isAbortError(error: unknown): boolean {
-	if (error instanceof DOMException) {
-		return error.name === "AbortError";
-	}
-	if (!(error instanceof Error)) {
-		return false;
-	}
-	const message = error.message.toLowerCase();
-	return (
-		error.name === "AbortError" ||
-		message.includes("aborted") ||
-		message.includes("cancelled") ||
-		message.includes("canceled")
-	);
-}
-
 function throwIfExecutionCancelled(signal?: AbortSignal): void {
 	if (!isExecutionCancelled(signal)) {
 		return;
@@ -646,7 +630,7 @@ export const searchSoundEffectTool: AgentTool = {
 				},
 			};
 		} catch (error) {
-			if (isExecutionCancelled(context?.signal) || isAbortError(error)) {
+			if (isExecutionCancelled(context?.signal)) {
 				return buildExecutionCancelledResult();
 			}
 			return {
@@ -977,7 +961,7 @@ export const addSoundEffectTool: AgentTool = {
 				},
 			};
 		} catch (error) {
-			if (isExecutionCancelled(context?.signal) || isAbortError(error)) {
+			if (isExecutionCancelled(context?.signal)) {
 				return buildExecutionCancelledResult();
 			}
 			return {

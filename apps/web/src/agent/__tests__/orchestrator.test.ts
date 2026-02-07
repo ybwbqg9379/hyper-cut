@@ -231,6 +231,7 @@ describe("AgentOrchestrator", () => {
 		expect(aborted).toBe(true);
 		expect(result.success).toBe(false);
 		expect(provider.chat).toHaveBeenCalledTimes(2);
+		// Promise.race 结果取决于工具在收到 abort 后是先返回取消结果还是先被超时拒绝。
 		expect([
 			"aborted by signal",
 			"工具执行超时 (Tool execution timeout)",

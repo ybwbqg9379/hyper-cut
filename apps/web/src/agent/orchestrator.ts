@@ -806,6 +806,7 @@ export class AgentOrchestrator {
 			}
 		}
 
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
 		try {
 			const toolPromise = tool.execute(toolCall.arguments, {
 				requestId: meta.requestId,
@@ -831,27 +832,17 @@ export class AgentOrchestrator {
 					});
 				},
 			});
-			let timeoutId: ReturnType<typeof setTimeout> | undefined;
-			try {
-				if (!this.toolTimeoutMs) {
-					return await toolPromise;
-				}
-
-				const timeoutPromise = new Promise<ToolResult>((_, reject) => {
-					timeoutId = setTimeout(() => {
-						toolAbortController.abort();
-						reject(new Error("Tool execution timeout"));
-					}, this.toolTimeoutMs);
-				});
-				return await Promise.race([toolPromise, timeoutPromise]);
-			} finally {
-				if (timeoutId) {
-					clearTimeout(timeoutId);
-				}
-				if (meta.signal) {
-					meta.signal.removeEventListener("abort", handleParentAbort);
-				}
+			if (!this.toolTimeoutMs) {
+				return await toolPromise;
 			}
+
+			const timeoutPromise = new Promise<ToolResult>((_, reject) => {
+				timeoutId = setTimeout(() => {
+					toolAbortController.abort();
+					reject(new Error("Tool execution timeout"));
+				}, this.toolTimeoutMs);
+			});
+			return await Promise.race([toolPromise, timeoutPromise]);
 		} catch (error) {
 			if (
 				error instanceof Error &&
@@ -881,6 +872,13 @@ export class AgentOrchestrator {
 				message: `工具执行失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "TOOL_EXECUTION_FAILED", toolName: toolCall.name },
 			};
+		} finally {
+			if (timeoutId) {
+				clearTimeout(timeoutId);
+			}
+			if (meta.signal) {
+				meta.signal.removeEventListener("abort", handleParentAbort);
+			}
 		}
 	}
 
