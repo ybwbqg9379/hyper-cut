@@ -1,138 +1,151 @@
-import { IndexedDBAdapter } from "@/services/storage/indexeddb-adapter";
+import {
+	IndexedDBAdapter,
+	deleteDatabase,
+} from "@/services/storage/indexeddb-adapter";
 import type { StorageMigration } from "./base";
-import { StorageVersionManager } from "./version-manager";
+import type { ProjectRecord } from "./transformers/types";
+import { getProjectId, isRecord } from "./transformers/utils";
 
 export interface StorageMigrationResult {
-	fromVersion: number;
-	toVersion: number;
-	migrated: boolean;
+	migratedCount: number;
 }
 
-export type StorageMigrationCallbacks = {
-	onMigrationStart?: ({
-		fromVersion,
-		toVersion,
-	}: {
-		fromVersion: number;
-		toVersion: number;
-	}) => void;
-	onMigrationComplete?: ({
-		fromVersion,
-		toVersion,
-	}: {
-		fromVersion: number;
-		toVersion: number;
-	}) => void;
-};
+export interface MigrationProgress {
+	isMigrating: boolean;
+	fromVersion: number | null;
+	toVersion: number | null;
+	projectName: string | null;
+}
 
-type ProjectRecord = Record<string, unknown>;
+let hasCleanedUpMetaDb = false;
+
+const MIN_MIGRATION_DISPLAY_MS = 1000;
 
 export async function runStorageMigrations({
 	migrations,
-	versionManager = new StorageVersionManager(),
-	callbacks,
+	onProgress,
 }: {
 	migrations: StorageMigration[];
-	versionManager?: StorageVersionManager;
-	callbacks?: StorageMigrationCallbacks;
+	onProgress?: (progress: MigrationProgress) => void;
 }): Promise<StorageMigrationResult> {
-	const versionRecord = await versionManager.getVersionRecord();
-	const inferredVersion = versionRecord
-		? null
-		: await inferStorageVersionFromProjects();
-	const fromVersion =
-		versionRecord?.inProgress?.from ??
-		versionRecord?.version ??
-		inferredVersion ??
-		0;
-
-	if (!versionRecord) {
-		await versionManager.setVersion({ version: fromVersion });
-	}
-
-	const orderedMigrations = [...migrations].sort((a, b) => a.from - b.from);
-	let currentVersion = fromVersion;
-
-	for (const migration of orderedMigrations) {
-		if (migration.from !== currentVersion) {
-			continue;
+	// One-time cleanup: delete the old global version database
+	if (!hasCleanedUpMetaDb) {
+		try {
+			await deleteDatabase({ dbName: "video-editor-meta" });
+		} catch {
+			// Ignore errors - DB might not exist
 		}
-
-		await versionManager.setInProgress({
-			from: migration.from,
-			to: migration.to,
-		});
-		callbacks?.onMigrationStart?.({
-			fromVersion: migration.from,
-			toVersion: migration.to,
-		});
-		await migration.run();
-		currentVersion = migration.to;
-		await versionManager.setVersion({ version: currentVersion });
-		await versionManager.clearInProgress();
-		callbacks?.onMigrationComplete?.({
-			fromVersion: migration.from,
-			toVersion: migration.to,
-		});
+		hasCleanedUpMetaDb = true;
 	}
 
-	return {
-		fromVersion,
-		toVersion: currentVersion,
-		migrated: currentVersion !== fromVersion,
-	};
-}
-
-async function inferStorageVersionFromProjects(): Promise<number> {
-	const projectsAdapter = new IndexedDBAdapter<unknown>(
+	const projectsAdapter = new IndexedDBAdapter<ProjectRecord>(
 		"video-editor-projects",
 		"projects",
 		1,
 	);
 	const projects = await projectsAdapter.getAll();
 
-	if (projects.length === 0) {
-		return 0;
-	}
-
-	let lowestVersion = Number.POSITIVE_INFINITY;
+	const orderedMigrations = [...migrations].sort((a, b) => a.from - b.from);
+	let migratedCount = 0;
+	let migrationStartTime: number | null = null;
 
 	for (const project of projects) {
-		const projectVersion = checkProjectVersion({ project });
-		if (projectVersion < lowestVersion) {
-			lowestVersion = projectVersion;
+		if (typeof project !== "object" || project === null) {
+			continue;
+		}
+
+		let projectRecord = project as ProjectRecord;
+		let currentVersion = getProjectVersion({ project: projectRecord });
+		const targetVersion = orderedMigrations.at(-1)?.to ?? currentVersion;
+
+		if (currentVersion >= targetVersion) {
+			continue;
+		}
+
+		// Track when we first showed the migration dialog
+		if (migrationStartTime === null) {
+			migrationStartTime = Date.now();
+		}
+
+		const projectName = getProjectName({ project: projectRecord });
+		onProgress?.({
+			isMigrating: true,
+			fromVersion: currentVersion,
+			toVersion: targetVersion,
+			projectName,
+		});
+
+		for (const migration of orderedMigrations) {
+			if (migration.from !== currentVersion) {
+				continue;
+			}
+
+			const result = await migration.transform(projectRecord);
+
+			if (result.skipped) {
+				break;
+			}
+
+			const projectId = getProjectId({ project: result.project });
+			if (!projectId) {
+				break;
+			}
+
+			await projectsAdapter.set(projectId, result.project);
+			migratedCount++;
+			currentVersion = migration.to;
+			projectRecord = result.project;
 		}
 	}
 
-	if (lowestVersion === Number.POSITIVE_INFINITY) {
-		return 0;
+	// Ensure dialog is visible for minimum time so users can see it
+	if (migrationStartTime !== null) {
+		const elapsed = Date.now() - migrationStartTime;
+		if (elapsed < MIN_MIGRATION_DISPLAY_MS) {
+			await new Promise((resolve) =>
+				setTimeout(resolve, MIN_MIGRATION_DISPLAY_MS - elapsed),
+			);
+		}
 	}
 
-	return lowestVersion;
+	onProgress?.({
+		isMigrating: false,
+		fromVersion: null,
+		toVersion: null,
+		projectName: null,
+	});
+
+	return { migratedCount };
 }
 
-function checkProjectVersion({ project }: { project: unknown }): number {
-	if (!isRecord(project)) {
-		return 0;
-	}
-
+function getProjectVersion({ project }: { project: ProjectRecord }): number {
 	const versionValue = project.version;
 
-	// v2 and up
+	// v2 and up - has explicit version field
 	if (typeof versionValue === "number") {
 		return versionValue;
 	}
 
-	// v1 (got scenes)
+	// v1 - has scenes array
 	const scenesValue = project.scenes;
 	if (Array.isArray(scenesValue) && scenesValue.length > 0) {
 		return 1;
 	}
 
-	// v0 (didn't have scenes)
+	// v0 - no scenes
 	return 0;
 }
 
-function isRecord(value: unknown): value is ProjectRecord {
-	return typeof value === "object" && value !== null;
+function getProjectName({ project }: { project: ProjectRecord }): string | null {
+	const metadata = project.metadata;
+	if (isRecord(metadata) && typeof metadata.name === "string") {
+		return metadata.name;
+	}
+
+	// v0 had name directly on project
+	if (typeof project.name === "string") {
+		return project.name;
+	}
+
+	return null;
 }
