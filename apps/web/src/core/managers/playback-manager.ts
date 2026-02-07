@@ -42,7 +42,8 @@ export class PlaybackManager {
 
 	seek({ time }: { time: number }): void {
 		const duration = this.editor.timeline.getTotalDuration();
-		this.currentTime = Math.max(0, Math.min(duration, time));
+		const safeTime = Number.isFinite(time) ? time : 0;
+		this.currentTime = Math.max(0, Math.min(duration, safeTime));
 		this.notify();
 
 		window.dispatchEvent(

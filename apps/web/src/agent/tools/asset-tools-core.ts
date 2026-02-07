@@ -18,6 +18,7 @@ const MEDIA_TYPES = ["image", "video", "audio"] as const;
 const FETCH_TIMEOUT_MS = 20000;
 const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
 const SOUND_SEARCH_PAGE_SIZE = 20;
+const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -25,6 +26,43 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
+}
+
+function isExecutionCancelled(signal?: AbortSignal): boolean {
+	return signal?.aborted === true;
+}
+
+function isAbortError(error: unknown): boolean {
+	if (error instanceof DOMException) {
+		return error.name === "AbortError";
+	}
+	if (!(error instanceof Error)) {
+		return false;
+	}
+	const message = error.message.toLowerCase();
+	return (
+		error.name === "AbortError" ||
+		message.includes("aborted") ||
+		message.includes("cancelled") ||
+		message.includes("canceled")
+	);
+}
+
+function throwIfExecutionCancelled(signal?: AbortSignal): void {
+	if (!isExecutionCancelled(signal)) {
+		return;
+	}
+	throw new Error("Execution cancelled");
+}
+
+function buildExecutionCancelledResult(): ToolResult {
+	return {
+		success: false,
+		message: "执行已取消 (Execution cancelled)",
+		data: {
+			errorCode: EXECUTION_CANCELLED_ERROR_CODE,
+		},
+	};
 }
 
 /**
@@ -524,8 +562,9 @@ export const searchSoundEffectTool: AgentTool = {
 		},
 		required: ["query"],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (params, context): Promise<ToolResult> => {
 		try {
+			throwIfExecutionCancelled(context?.signal);
 			const query = isNonEmptyString(params.query) ? params.query.trim() : "";
 			if (!query) {
 				return {
@@ -562,9 +601,10 @@ export const searchSoundEffectTool: AgentTool = {
 				min_rating: minRating.toString(),
 			});
 
-			const response = await fetch(
-				`/api/sounds/search?${searchParams.toString()}`,
-			);
+			const response = await fetch(`/api/sounds/search?${searchParams.toString()}`, {
+				signal: context?.signal,
+			});
+			throwIfExecutionCancelled(context?.signal);
 			if (!response.ok) {
 				return {
 					success: false,
@@ -606,6 +646,9 @@ export const searchSoundEffectTool: AgentTool = {
 				},
 			};
 		} catch (error) {
+			if (isExecutionCancelled(context?.signal) || isAbortError(error)) {
+				return buildExecutionCancelledResult();
+			}
 			return {
 				success: false,
 				message: `搜索音效失败: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -660,8 +703,9 @@ export const addSoundEffectTool: AgentTool = {
 		},
 		required: [],
 	},
-	execute: async (params): Promise<ToolResult> => {
+	execute: async (params, context): Promise<ToolResult> => {
 		try {
+			throwIfExecutionCancelled(context?.signal);
 			const editor = EditorCore.getInstance();
 			const soundId =
 				params.soundId === undefined ? undefined : Number(params.soundId);
@@ -701,8 +745,7 @@ export const addSoundEffectTool: AgentTool = {
 					? params.commercialOnly
 					: true;
 			const minRating =
-				typeof params.minRating === "number" &&
-				Number.isFinite(params.minRating)
+				typeof params.minRating === "number" && Number.isFinite(params.minRating)
 					? params.minRating
 					: 3;
 			if (minRating < 0 || minRating > 5) {
@@ -717,7 +760,10 @@ export const addSoundEffectTool: AgentTool = {
 			let sound: SoundEffect | null = null;
 			let totalMatches: number | undefined;
 			if (hasSoundId) {
-				const detailResponse = await fetch(`/api/sounds/${soundId}`);
+				const detailResponse = await fetch(`/api/sounds/${soundId}`, {
+					signal: context?.signal,
+				});
+				throwIfExecutionCancelled(context?.signal);
 				if (!detailResponse.ok) {
 					return {
 						success: false,
@@ -746,7 +792,11 @@ export const addSoundEffectTool: AgentTool = {
 
 				const searchResponse = await fetch(
 					`/api/sounds/search?${searchParams.toString()}`,
+					{
+						signal: context?.signal,
+					},
 				);
+				throwIfExecutionCancelled(context?.signal);
 				if (!searchResponse.ok) {
 					return {
 						success: false,
@@ -820,7 +870,10 @@ export const addSoundEffectTool: AgentTool = {
 				};
 			}
 
-			const audioResponse = await fetch(previewUrl);
+			const audioResponse = await fetch(previewUrl, {
+				signal: context?.signal,
+			});
+			throwIfExecutionCancelled(context?.signal);
 			if (!audioResponse.ok) {
 				return {
 					success: false,
@@ -833,10 +886,12 @@ export const addSoundEffectTool: AgentTool = {
 			}
 
 			const arrayBuffer = await audioResponse.arrayBuffer();
+			throwIfExecutionCancelled(context?.signal);
 			let buffer: AudioBuffer | undefined;
 			if (typeof AudioContext !== "undefined") {
 				const audioContext = new AudioContext();
 				try {
+					throwIfExecutionCancelled(context?.signal);
 					buffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
 				} catch {
 					buffer = undefined;
@@ -897,6 +952,7 @@ export const addSoundEffectTool: AgentTool = {
 				startTime,
 				buffer,
 			});
+			throwIfExecutionCancelled(context?.signal);
 
 			editor.timeline.insertElement({
 				placement: { mode: "explicit", trackId },
@@ -921,6 +977,9 @@ export const addSoundEffectTool: AgentTool = {
 				},
 			};
 		} catch (error) {
+			if (isExecutionCancelled(context?.signal) || isAbortError(error)) {
+				return buildExecutionCancelledResult();
+			}
 			return {
 				success: false,
 				message: `添加音效失败: ${error instanceof Error ? error.message : "Unknown error"}`,

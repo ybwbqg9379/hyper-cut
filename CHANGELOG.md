@@ -195,6 +195,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `PreviewCanvas` 卸载时重置 `highlightPreviewPlaybackEnabled`，消除 store 脏状态
   - `vision-tools-core` 统一使用 `isCaptionTextElement()` 判定字幕元素（兼容 metadata 与 legacy 命名）
   - `paste-at-time` action 补充 `args: { time: "number" }` 文档元数据，与其他有参 action 保持一致
+- **Agent 执行链路一致性**: 修复暂停/超时/取消链路中的边界行为
+  - `orchestrator.process()` 在检测到 `awaiting_confirmation` 后立即停止剩余工具执行，避免继续向模型发起下一轮 tool loop
+  - 工具超时时主动中止该工具的 `AbortSignal`，降低“超时后后台继续运行”的状态漂移风险
+  - `search_sound_effect` 与 `add_sound_effect` 接入 `context.signal` 与取消返回码，确保用户取消后尽快停止网络与解码流程
+  - `seek_forward`/`seek_backward` 增加 seconds 入参校验；`PlaybackManager.seek()` 对非有限时间值增加兜底
 
 ### Changed
 

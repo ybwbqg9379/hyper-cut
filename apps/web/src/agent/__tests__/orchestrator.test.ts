@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTool, LLMProvider } from "../types";
+import type { AgentTool, LLMProvider, ToolExecutionContext } from "../types";
 import { AgentOrchestrator } from "../orchestrator";
 
 vi.mock("../providers", () => ({
@@ -122,6 +122,119 @@ describe("AgentOrchestrator", () => {
 		expect(result.success).toBe(false);
 		expect(result.message).toContain("工具调用次数已达上限");
 		expect(toolExecute).toHaveBeenCalledTimes(1);
+	});
+
+	it("process should stop executing remaining tools when workflow pauses", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			content: null,
+			toolCalls: [
+				{ id: "call-1", name: "first_tool", arguments: { value: 1 } },
+				{ id: "call-2", name: "second_tool", arguments: { value: 2 } },
+			],
+			finishReason: "tool_calls",
+		});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const firstExecute = vi.fn().mockResolvedValue({
+			success: true,
+			message: "pause",
+			data: {
+				errorCode: "WORKFLOW_CONFIRMATION_REQUIRED",
+				status: "awaiting_confirmation",
+				nextStep: { id: "apply-cut", toolName: "delete_selection" },
+				resumeHint: {
+					workflowName: "long-to-short",
+					startFromStepId: "apply-cut",
+					confirmRequiredSteps: true,
+				},
+			},
+		});
+		const secondExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "should not run" });
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "first_tool",
+					description: "first tool",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: firstExecute,
+				},
+				{
+					name: "second_tool",
+					description: "second tool",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: secondExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.process("do it");
+
+		expect(firstExecute).toHaveBeenCalledTimes(1);
+		expect(secondExecute).not.toHaveBeenCalled();
+		expect(provider.chat).toHaveBeenCalledTimes(1);
+		expect(result.success).toBe(false);
+		expect(result.status).toBe("awaiting_confirmation");
+		expect(result.requiresConfirmation).toBe(true);
+	});
+
+	it("should abort tool signal when execution times out", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [{ id: "call-1", name: "slow_tool", arguments: {} }],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "done",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		let aborted = false;
+		const slowExecute = vi.fn(
+			(_: Record<string, unknown>, context?: ToolExecutionContext) =>
+				new Promise<{ success: boolean; message: string }>((resolve) => {
+					context?.signal?.addEventListener(
+						"abort",
+						() => {
+							aborted = true;
+							resolve({ success: false, message: "aborted by signal" });
+						},
+						{ once: true },
+					);
+				}),
+		);
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "slow_tool",
+					description: "slow tool",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: slowExecute,
+				},
+			],
+			{
+				toolTimeoutMs: 5,
+			},
+		);
+
+		const result = await orchestrator.process("do it");
+
+		expect(aborted).toBe(true);
+		expect(result.success).toBe(false);
+		expect(provider.chat).toHaveBeenCalledTimes(2);
+		expect([
+			"aborted by signal",
+			"工具执行超时 (Tool execution timeout)",
+		]).toContain(result.toolCalls?.[0]?.result.message);
 	});
 
 	it("should mark response failed if any tool execution fails", async () => {

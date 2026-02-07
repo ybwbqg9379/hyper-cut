@@ -76,6 +76,7 @@ const TOOL_NAME_ALIASES = new Map<string, string>([
 const WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE =
 	"WORKFLOW_CONFIRMATION_REQUIRED";
 const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
+const TOOL_EXECUTION_TIMEOUT_ERROR_CODE = "TOOL_EXECUTION_TIMEOUT";
 
 interface PendingPlanState {
 	plan: AgentExecutionPlan;
@@ -793,13 +794,25 @@ export class AgentOrchestrator {
 			};
 		}
 
+		const toolAbortController = new AbortController();
+		const handleParentAbort = () => {
+			toolAbortController.abort();
+		};
+		if (meta.signal) {
+			if (meta.signal.aborted) {
+				toolAbortController.abort();
+			} else {
+				meta.signal.addEventListener("abort", handleParentAbort, { once: true });
+			}
+		}
+
 		try {
 			const toolPromise = tool.execute(toolCall.arguments, {
 				requestId: meta.requestId,
 				mode: meta.mode,
 				toolName: resolvedToolName,
 				toolCallId: meta.toolCallId,
-				signal: meta.signal,
+				signal: toolAbortController.signal,
 				reportProgress: (progress) => {
 					this.emitExecutionEvent({
 						type: "tool_progress",
@@ -826,6 +839,7 @@ export class AgentOrchestrator {
 
 				const timeoutPromise = new Promise<ToolResult>((_, reject) => {
 					timeoutId = setTimeout(() => {
+						toolAbortController.abort();
 						reject(new Error("Tool execution timeout"));
 					}, this.toolTimeoutMs);
 				});
@@ -834,8 +848,24 @@ export class AgentOrchestrator {
 				if (timeoutId) {
 					clearTimeout(timeoutId);
 				}
+				if (meta.signal) {
+					meta.signal.removeEventListener("abort", handleParentAbort);
+				}
 			}
 		} catch (error) {
+			if (
+				error instanceof Error &&
+				error.message === "Tool execution timeout"
+			) {
+				return {
+					success: false,
+					message: "工具执行超时 (Tool execution timeout)",
+					data: {
+						errorCode: TOOL_EXECUTION_TIMEOUT_ERROR_CODE,
+						toolName: resolvedToolName,
+					},
+				};
+			}
 			if (this.isCancellationError(error)) {
 				return {
 					success: false,
@@ -1006,7 +1036,8 @@ export class AgentOrchestrator {
 					});
 				}
 
-					for (const [index, toolCall] of response.toolCalls.entries()) {
+				let shouldPauseForConfirmation = false;
+				for (const [index, toolCall] of response.toolCalls.entries()) {
 					this.emitExecutionEvent({
 						type: "tool_started",
 						requestId,
@@ -1017,28 +1048,28 @@ export class AgentOrchestrator {
 						stepIndex: index + 1,
 						totalSteps: response.toolCalls.length,
 					});
-						const result = await this.executeToolCall(toolCall, {
+					const result = await this.executeToolCall(toolCall, {
+						requestId,
+						mode: "chat",
+						toolCallId: toolCall.id,
+						stepIndex: index + 1,
+						totalSteps: response.toolCalls.length,
+						signal: executionSignal,
+					});
+					executedTools.push({ name: toolCall.name, result });
+					if (this.isToolResultCancelled(result)) {
+						return this.completeRequest({
 							requestId,
 							mode: "chat",
-							toolCallId: toolCall.id,
-							stepIndex: index + 1,
-							totalSteps: response.toolCalls.length,
-							signal: executionSignal,
+							response: {
+								message: "执行已取消 (Execution cancelled)",
+								toolCalls: this.toClientToolCalls(executedTools),
+								success: false,
+								status: "cancelled",
+							},
 						});
-						executedTools.push({ name: toolCall.name, result });
-						if (this.isToolResultCancelled(result)) {
-							return this.completeRequest({
-								requestId,
-								mode: "chat",
-								response: {
-									message: "执行已取消 (Execution cancelled)",
-									toolCalls: this.toClientToolCalls(executedTools),
-									success: false,
-									status: "cancelled",
-								},
-							});
-						}
-						const pauseInfo = extractWorkflowPauseInfo(result.data);
+					}
+					const pauseInfo = extractWorkflowPauseInfo(result.data);
 					this.emitExecutionEvent({
 						type: "tool_completed",
 						requestId,
@@ -1064,16 +1095,35 @@ export class AgentOrchestrator {
 						toolCallId: toolCall.id,
 						name: toolCall.name,
 					});
+					if (pauseInfo) {
+						shouldPauseForConfirmation = true;
+						break;
 					}
+				}
 
-					toolIterations += 1;
-					response = await this.provider.chat(
-						{
-							messages: this.buildMessages(),
-							tools: this.getToolDefinitions(),
-						},
-						{ signal: executionSignal },
-					);
+				if (shouldPauseForConfirmation) {
+					return this.completeRequest({
+						requestId,
+						mode: "chat",
+						response: this.buildFinalResponse({
+							requestId,
+							response: {
+								content: "工作流已暂停，等待确认后继续执行。",
+								finishReason: "stop",
+							},
+							executedTools,
+						}),
+					});
+				}
+
+				toolIterations += 1;
+				response = await this.provider.chat(
+					{
+						messages: this.buildMessages(),
+						tools: this.getToolDefinitions(),
+					},
+					{ signal: executionSignal },
+				);
 
 				this.appendHistory({
 					role: "assistant",
@@ -1094,36 +1144,36 @@ export class AgentOrchestrator {
 						}),
 					});
 				}
-				}
-			} catch (error) {
-				this.conversationHistory = this.conversationHistory.slice(
-					0,
-					historyLengthBefore,
-				);
-				if (this.isCancellationError(error)) {
-					return this.completeRequest({
-						requestId,
-						mode: "chat",
-						response: {
-							message: "执行已取消 (Execution cancelled)",
-							success: false,
-							status: "cancelled",
-						},
-					});
-				}
-				const errorMessage =
-					error instanceof Error ? error.message : "Unknown error occurred";
+			}
+		} catch (error) {
+			this.conversationHistory = this.conversationHistory.slice(
+				0,
+				historyLengthBefore,
+			);
+			if (this.isCancellationError(error)) {
 				return this.completeRequest({
 					requestId,
 					mode: "chat",
 					response: {
-						message: `Error processing request: ${errorMessage}`,
+						message: "执行已取消 (Execution cancelled)",
 						success: false,
-						status: "error",
+						status: "cancelled",
 					},
 				});
 			}
+			const errorMessage =
+				error instanceof Error ? error.message : "Unknown error occurred";
+			return this.completeRequest({
+				requestId,
+				mode: "chat",
+				response: {
+					message: `Error processing request: ${errorMessage}`,
+					success: false,
+					status: "error",
+				},
+			});
 		}
+	}
 
 	async runWorkflow({
 		workflowName,

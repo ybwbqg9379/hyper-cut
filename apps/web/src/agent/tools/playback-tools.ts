@@ -2,6 +2,18 @@ import type { AgentTool, ToolResult } from "../types";
 import { EditorCore } from "@/core";
 import { invokeActionWithCheck } from "./action-utils";
 
+function parseSeekSeconds(
+	value: unknown,
+	defaultValue: number,
+): { ok: true; value: number } | { ok: false } {
+	const parsed =
+		typeof value === "number" && Number.isFinite(value) ? value : defaultValue;
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		return { ok: false };
+	}
+	return { ok: true, value: parsed };
+}
+
 /**
  * Playback Control Tools
  * These tools wrap existing HyperCut actions for playback control
@@ -55,7 +67,15 @@ export const seekForwardTool: AgentTool = {
 	},
 	execute: async (params): Promise<ToolResult> => {
 		try {
-			const seconds = (params.seconds as number) ?? 1;
+			const secondsResult = parseSeekSeconds(params.seconds, 1);
+			if (!secondsResult.ok) {
+				return {
+					success: false,
+					message: "无效的秒数参数 (Invalid seconds parameter)",
+					data: { errorCode: "INVALID_SECONDS" },
+				};
+			}
+			const seconds = secondsResult.value;
 			invokeActionWithCheck("seek-forward", { seconds });
 			return {
 				success: true,
@@ -90,7 +110,15 @@ export const seekBackwardTool: AgentTool = {
 	},
 	execute: async (params): Promise<ToolResult> => {
 		try {
-			const seconds = (params.seconds as number) ?? 1;
+			const secondsResult = parseSeekSeconds(params.seconds, 1);
+			if (!secondsResult.ok) {
+				return {
+					success: false,
+					message: "无效的秒数参数 (Invalid seconds parameter)",
+					data: { errorCode: "INVALID_SECONDS" },
+				};
+			}
+			const seconds = secondsResult.value;
 			invokeActionWithCheck("seek-backward", { seconds });
 			return {
 				success: true,
