@@ -2852,6 +2852,182 @@ export const splitAtTimeTool: AgentTool = {
 };
 
 /**
+ * Delete Element by ID
+ * Deletes one or more elements by their IDs without requiring selection
+ */
+export const deleteElementByIdTool: AgentTool = {
+	name: "delete_element_by_id",
+	description:
+		"按元素ID删除一个或多个元素（无需先选中）。Delete element(s) by ID without requiring selection first.",
+	parameters: {
+		type: "object",
+		properties: {
+			elementId: {
+				type: "string",
+				description:
+					"要删除的元素ID（删除单个元素时使用）(Element ID to delete)",
+			},
+			trackId: {
+				type: "string",
+				description:
+					"元素所在的轨道ID（可选，加速查找）(Optional track ID for faster lookup)",
+			},
+			elements: {
+				type: "array",
+				items: {
+					type: "object",
+					properties: {
+						elementId: { type: "string" },
+						trackId: { type: "string" },
+					},
+					required: ["elementId"],
+				},
+				description:
+					"批量删除时使用的元素列表 (Element list for batch deletion)",
+			},
+		},
+		required: [],
+	},
+	execute: async (params): Promise<ToolResult> => {
+		try {
+			const editor = EditorCore.getInstance();
+			const tracks = editor.timeline.getTracks();
+			const resolveWithTrackHint = ({
+				elementId,
+				trackId,
+			}: {
+				elementId: string;
+				trackId?: string;
+			}): { track: TimelineTrack; element: TimelineElement } | null => {
+				if (isNonEmptyString(trackId)) {
+					const trimmedTrackId = trackId.trim();
+					const directMatch = resolveElementById({
+						tracks,
+						elementId,
+						trackId: trimmedTrackId,
+					});
+					if (directMatch) {
+						return directMatch;
+					}
+				}
+				return resolveElementById({ tracks, elementId });
+			};
+
+			// Build the list of elements to delete, tracking not-found IDs
+			const seen = new Set<string>();
+			const toDelete: Array<{ trackId: string; elementId: string }> = [];
+			const notFound: string[] = [];
+			const invalidItems: Array<{
+				index: number;
+				reason: string;
+			}> = [];
+
+			if (Array.isArray(params.elements) && params.elements.length > 0) {
+				// Batch mode
+				for (const [index, item] of params.elements.entries()) {
+					const elemId =
+						typeof item === "object" && item !== null
+							? (item as { elementId?: unknown }).elementId
+							: undefined;
+					const trkId =
+						typeof item === "object" && item !== null
+							? (item as { trackId?: unknown }).trackId
+							: undefined;
+					if (typeof elemId !== "string" || !elemId.trim()) {
+						invalidItems.push({
+							index,
+							reason: "elementId must be a non-empty string",
+						});
+						continue;
+					}
+					const trimmedId = elemId.trim();
+					if (seen.has(trimmedId)) continue;
+					seen.add(trimmedId);
+					const resolved = resolveWithTrackHint({
+						elementId: trimmedId,
+						trackId: typeof trkId === "string" ? trkId.trim() : undefined,
+					});
+					if (resolved) {
+						toDelete.push({
+							trackId: resolved.track.id,
+							elementId: resolved.element.id,
+						});
+					} else {
+						notFound.push(trimmedId);
+					}
+				}
+			} else if (isNonEmptyString(params.elementId)) {
+				// Single element mode
+				const resolved = resolveWithTrackHint({
+					elementId: (params.elementId as string).trim(),
+					trackId: isNonEmptyString(params.trackId)
+						? (params.trackId as string).trim()
+						: undefined,
+				});
+				if (resolved) {
+					toDelete.push({
+						trackId: resolved.track.id,
+						elementId: resolved.element.id,
+					});
+				} else {
+					notFound.push((params.elementId as string).trim());
+				}
+			} else {
+				return {
+					success: false,
+					message:
+						"请提供 elementId 或 elements 参数 (Provide elementId or elements)",
+					data: { errorCode: "INVALID_PARAMS" },
+				};
+			}
+
+			if (toDelete.length === 0) {
+				if (invalidItems.length > 0 && notFound.length === 0) {
+					return {
+						success: false,
+						message:
+							"elements 参数包含无效条目 (elements contains invalid items)",
+						data: { errorCode: "INVALID_PARAMS", invalidItems },
+					};
+				}
+
+				return {
+					success: false,
+					message: "未找到任何匹配的元素 (No matching elements found)",
+					data: {
+						errorCode: "ELEMENT_NOT_FOUND",
+						notFound,
+						...(invalidItems.length > 0 ? { invalidItems } : {}),
+					},
+				};
+			}
+
+			editor.timeline.deleteElements({ elements: toDelete });
+
+			return {
+				success: true,
+				message:
+					notFound.length > 0
+						? `已删除 ${toDelete.length} 个元素，${notFound.length} 个未找到 (Deleted ${toDelete.length}, ${notFound.length} not found)`
+						: `已删除 ${toDelete.length} 个元素 (Deleted ${toDelete.length} element(s))`,
+				data: {
+					deletedCount: toDelete.length,
+					elements: toDelete,
+					...(notFound.length > 0 ? { notFound } : {}),
+					...(invalidItems.length > 0 ? { invalidItems } : {}),
+				},
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: `删除元素失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+				data: { errorCode: "DELETE_ELEMENT_FAILED" },
+			};
+		}
+	},
+};
+
+/**
  * Get all timeline tools
  */
 export function getTimelineTools(): AgentTool[] {
@@ -2859,6 +3035,7 @@ export function getTimelineTools(): AgentTool[] {
 		splitAtPlayheadTool,
 		splitAtTimeTool,
 		deleteSelectedTool,
+		deleteElementByIdTool,
 		splitLeftTool,
 		splitRightTool,
 		duplicateSelectedTool,

@@ -113,6 +113,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 新增 `transcript-context-builder.ts`：agent 工具与 React hook 共享同一个 TranscriptContext 构建逻辑
   - 新增 11 项 `filler-detector.test.ts` 单元测试（中英文、空转录、重复词、置信度边界等）
   - `transcript-analyzer.ts` 重构为导入共享 `constants/filler.ts`，消除重复定义
+- **Agent 上游能力补齐（Gap Analysis）**：完成全量上游 API 审计并补齐剩余工具缺口
+  - 新增 `delete_element_by_id`：按 ID 删除指定元素（支持单个 + 批量），无需先选中，面向自动化工作流
+  - 新增 `toggle_bookmark_at_time`：在任意时间点添加/移除书签（不依赖播放头位置）
+  - 新增 `get_bookmarks`：查询当前场景所有书签（排序后返回时间列表），供 Agent 导航/编辑决策
+  - 审计覆盖：10 个核心 Manager、35 个 Command 文件、25 个 Action、`element-utils` 构建器、`timeline-edit-ops` 操作
+  - 确认已有 ~55 工具覆盖了绝大部分上游能力，本次补齐后 Agent 工具总数达 ~60
 
 ### Fixed
 

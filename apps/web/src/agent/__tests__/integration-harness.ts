@@ -408,11 +408,16 @@ vi.mock("@/core", () => {
 				id: "scene1",
 				name: "Main Scene",
 				isMain: true,
+				bookmarks: [1.5, 3.0, 7.5],
 			})),
 			createScene: vi.fn(async () => "new-scene-id"),
 			switchToScene: vi.fn(async () => {}),
 			renameScene: vi.fn(async () => {}),
 			deleteScene: vi.fn(async () => {}),
+			toggleBookmark: vi.fn(async () => {}),
+			isBookmarked: vi.fn(({ time }: { time: number }) => {
+				return [1.5, 3.0, 7.5].includes(time);
+			}),
 		},
 	};
 

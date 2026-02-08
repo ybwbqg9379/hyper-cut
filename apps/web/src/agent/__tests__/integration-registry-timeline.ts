@@ -498,5 +498,178 @@ export function registerRegistryTimelineTests() {
 			const result = await tool.execute({ source: "timeline" });
 			expect(result.success).toBe(false);
 		});
+
+		describe("delete_element_by_id", () => {
+			it("should delete a single element by ID", async () => {
+				const tool = getToolByName("delete_element_by_id");
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					timeline: { deleteElements: ReturnType<typeof vi.fn> };
+				};
+
+				const result = await tool.execute({ elementId: "el1" });
+				expect(result.success).toBe(true);
+				expect(editor.timeline.deleteElements).toHaveBeenCalledWith({
+					elements: [{ trackId: "track1", elementId: "el1" }],
+				});
+				const data = result.data as { deletedCount: number };
+				expect(data.deletedCount).toBe(1);
+			});
+
+			it("should delete a single element with trackId hint", async () => {
+				const tool = getToolByName("delete_element_by_id");
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					timeline: { deleteElements: ReturnType<typeof vi.fn> };
+				};
+
+				const result = await tool.execute({
+					elementId: "el3",
+					trackId: "track2",
+				});
+				expect(result.success).toBe(true);
+				expect(editor.timeline.deleteElements).toHaveBeenCalledWith({
+					elements: [{ trackId: "track2", elementId: "el3" }],
+				});
+			});
+
+			it("should fallback to global lookup when trackId hint is wrong", async () => {
+				const tool = getToolByName("delete_element_by_id");
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					timeline: { deleteElements: ReturnType<typeof vi.fn> };
+				};
+
+				const result = await tool.execute({
+					elementId: "el1",
+					trackId: "wrong-track-id",
+				});
+				expect(result.success).toBe(true);
+				expect(editor.timeline.deleteElements).toHaveBeenCalledWith({
+					elements: [{ trackId: "track1", elementId: "el1" }],
+				});
+			});
+
+			it("should batch delete multiple elements", async () => {
+				const tool = getToolByName("delete_element_by_id");
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					timeline: { deleteElements: ReturnType<typeof vi.fn> };
+				};
+
+				const result = await tool.execute({
+					elements: [
+						{ elementId: "el1" },
+						{ elementId: "el3", trackId: "track2" },
+					],
+				});
+				expect(result.success).toBe(true);
+				const data = result.data as { deletedCount: number };
+				expect(data.deletedCount).toBe(2);
+				expect(editor.timeline.deleteElements).toHaveBeenCalledWith({
+					elements: [
+						{ trackId: "track1", elementId: "el1" },
+						{ trackId: "track2", elementId: "el3" },
+					],
+				});
+			});
+
+			it("should deduplicate repeated elementIds in batch mode", async () => {
+				const tool = getToolByName("delete_element_by_id");
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					timeline: { deleteElements: ReturnType<typeof vi.fn> };
+				};
+
+				const result = await tool.execute({
+					elements: [
+						{ elementId: "el1" },
+						{ elementId: "el1" },
+						{ elementId: "el1" },
+					],
+				});
+				expect(result.success).toBe(true);
+				const data = result.data as { deletedCount: number };
+				expect(data.deletedCount).toBe(1);
+				expect(editor.timeline.deleteElements).toHaveBeenCalledWith({
+					elements: [{ trackId: "track1", elementId: "el1" }],
+				});
+			});
+
+			it("should report not-found elements in batch mode", async () => {
+				const tool = getToolByName("delete_element_by_id");
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					timeline: { deleteElements: ReturnType<typeof vi.fn> };
+				};
+
+				const result = await tool.execute({
+					elements: [
+						{ elementId: "el1" },
+						{ elementId: "nonexistent" },
+					],
+				});
+				expect(result.success).toBe(true);
+				const data = result.data as {
+					deletedCount: number;
+					notFound?: string[];
+				};
+				expect(data.deletedCount).toBe(1);
+				expect(data.notFound).toEqual(["nonexistent"]);
+				expect(result.message).toContain("未找到");
+				expect(editor.timeline.deleteElements).toHaveBeenCalled();
+			});
+
+			it("should fail when all elements are not found", async () => {
+				const tool = getToolByName("delete_element_by_id");
+
+				const result = await tool.execute({
+					elements: [{ elementId: "missing1" }, { elementId: "missing2" }],
+				});
+				expect(result.success).toBe(false);
+				expect(result.data).toMatchObject({
+					errorCode: "ELEMENT_NOT_FOUND",
+				});
+				const data = result.data as { notFound: string[] };
+				expect(data.notFound).toEqual(["missing1", "missing2"]);
+			});
+
+			it("should fail when single elementId is not found", async () => {
+				const tool = getToolByName("delete_element_by_id");
+
+				const result = await tool.execute({ elementId: "nonexistent" });
+				expect(result.success).toBe(false);
+				expect(result.data).toMatchObject({
+					errorCode: "ELEMENT_NOT_FOUND",
+					notFound: ["nonexistent"],
+				});
+			});
+
+			it("should fail when no params provided", async () => {
+				const tool = getToolByName("delete_element_by_id");
+
+				const result = await tool.execute({});
+				expect(result.success).toBe(false);
+				expect(result.data).toMatchObject({
+					errorCode: "INVALID_PARAMS",
+				});
+			});
+
+			it("should fail with INVALID_PARAMS when all batch items are invalid", async () => {
+				const tool = getToolByName("delete_element_by_id");
+
+				const result = await tool.execute({
+					elements: [{}, { elementId: "" }, { elementId: "   " }],
+				});
+				expect(result.success).toBe(false);
+				expect(result.data).toMatchObject({
+					errorCode: "INVALID_PARAMS",
+				});
+				const data = result.data as {
+					invalidItems?: Array<{ index: number; reason: string }>;
+				};
+				expect(data.invalidItems?.length).toBe(3);
+			});
+		});
 	});
 }

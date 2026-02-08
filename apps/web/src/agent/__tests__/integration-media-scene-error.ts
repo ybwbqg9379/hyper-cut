@@ -119,6 +119,141 @@ export function registerMediaSceneErrorTests() {
 			const result = await tool.execute({ name: "Missing" });
 			expect(result.success).toBe(false);
 		});
+
+		describe("toggle_bookmark_at_time", () => {
+			it("should add bookmark at new time and report 'added'", async () => {
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					scenes: {
+						toggleBookmark: ReturnType<typeof vi.fn>;
+						isBookmarked: ReturnType<typeof vi.fn>;
+					};
+				};
+				editor.scenes.isBookmarked
+					.mockReturnValueOnce(false)
+					.mockReturnValueOnce(true);
+
+				const tool = getToolByName("toggle_bookmark_at_time");
+				const result = await tool.execute({ time: 5.0 });
+
+				expect(result.success).toBe(true);
+				expect(editor.scenes.toggleBookmark).toHaveBeenCalledWith({
+					time: 5.0,
+				});
+				expect(result.data).toMatchObject({ time: 5.0, action: "added" });
+				expect(result.message).toContain("添加");
+			});
+
+			it("should remove existing bookmark and report 'removed'", async () => {
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					scenes: {
+						toggleBookmark: ReturnType<typeof vi.fn>;
+						isBookmarked: ReturnType<typeof vi.fn>;
+					};
+				};
+				editor.scenes.isBookmarked
+					.mockReturnValueOnce(true)
+					.mockReturnValueOnce(false);
+
+				const tool = getToolByName("toggle_bookmark_at_time");
+				const result = await tool.execute({ time: 3.0 });
+
+				expect(result.success).toBe(true);
+				expect(result.data).toMatchObject({ time: 3.0, action: "removed" });
+				expect(result.message).toContain("移除");
+			});
+
+			it("should reject negative time", async () => {
+				const tool = getToolByName("toggle_bookmark_at_time");
+				const result = await tool.execute({ time: -1 });
+
+				expect(result.success).toBe(false);
+				expect(result.data).toMatchObject({ errorCode: "INVALID_TIME" });
+			});
+
+			it("should reject NaN time", async () => {
+				const tool = getToolByName("toggle_bookmark_at_time");
+				const result = await tool.execute({ time: Number.NaN });
+
+				expect(result.success).toBe(false);
+				expect(result.data).toMatchObject({ errorCode: "INVALID_TIME" });
+			});
+
+			it("should fail when no active project", async () => {
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					project: { getActive: ReturnType<typeof vi.fn> };
+				};
+				editor.project.getActive.mockReturnValueOnce(null);
+
+				const tool = getToolByName("toggle_bookmark_at_time");
+				const result = await tool.execute({ time: 5.0 });
+
+				expect(result.success).toBe(false);
+				expect(result.data).toMatchObject({ errorCode: "NO_ACTIVE_PROJECT" });
+			});
+
+			it("should fail when bookmark state remains unchanged", async () => {
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					scenes: {
+						toggleBookmark: ReturnType<typeof vi.fn>;
+						isBookmarked: ReturnType<typeof vi.fn>;
+					};
+				};
+				editor.scenes.isBookmarked
+					.mockReturnValueOnce(false)
+					.mockReturnValueOnce(false);
+
+				const tool = getToolByName("toggle_bookmark_at_time");
+				const result = await tool.execute({ time: 5.0 });
+
+				expect(result.success).toBe(false);
+				expect(result.data).toMatchObject({
+					errorCode: "BOOKMARK_STATE_UNCHANGED",
+				});
+			});
+		});
+
+		describe("get_bookmarks", () => {
+			it("should return sorted bookmarks from active scene", async () => {
+				const tool = getToolByName("get_bookmarks");
+				const result = await tool.execute({});
+
+				expect(result.success).toBe(true);
+				const data = result.data as {
+					bookmarks: Array<{ time: number; formatted: string }>;
+					count: number;
+				};
+				expect(data.count).toBe(3);
+				expect(data.bookmarks[0].time).toBe(1.5);
+				expect(data.bookmarks[1].time).toBe(3.0);
+				expect(data.bookmarks[2].time).toBe(7.5);
+				expect(data.bookmarks[0].formatted).toBe("1.50s");
+			});
+
+			it("should return empty list when no bookmarks", async () => {
+				const { EditorCore } = await import("@/core");
+				const editor = EditorCore.getInstance() as unknown as {
+					scenes: { getActiveScene: ReturnType<typeof vi.fn> };
+				};
+				editor.scenes.getActiveScene.mockReturnValueOnce({
+					id: "scene1",
+					name: "Main Scene",
+					isMain: true,
+					bookmarks: [],
+				});
+
+				const tool = getToolByName("get_bookmarks");
+				const result = await tool.execute({});
+
+				expect(result.success).toBe(true);
+				const data = result.data as { bookmarks: unknown[]; count: number };
+				expect(data.count).toBe(0);
+				expect(data.bookmarks).toHaveLength(0);
+			});
+		});
 	});
 
 	describe("Tool Error Handling", () => {

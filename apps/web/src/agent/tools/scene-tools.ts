@@ -365,11 +365,132 @@ export const frameStepBackwardTool: AgentTool = {
 };
 
 /**
+ * Toggle Bookmark at Time
+ * Adds or removes a bookmark at a specified time (not playhead)
+ */
+export const toggleBookmarkAtTimeTool: AgentTool = {
+	name: "toggle_bookmark_at_time",
+	description:
+		"在指定时间点添加或移除书签。Toggle bookmark at a specified time (seconds).",
+	parameters: {
+		type: "object",
+		properties: {
+			time: {
+				type: "number",
+				description: "书签时间点（秒）(Time in seconds for the bookmark)",
+			},
+		},
+		required: ["time"],
+	},
+	execute: async (params): Promise<ToolResult> => {
+		try {
+			const time = params.time as number;
+			if (typeof time !== "number" || !Number.isFinite(time) || time < 0) {
+				return {
+					success: false,
+					message: "无效的时间参数 (Invalid time parameter)",
+					data: { errorCode: "INVALID_TIME" },
+				};
+			}
+
+			const editor = EditorCore.getInstance();
+			if (!editor.project.getActive()) {
+				return {
+					success: false,
+					message: "当前没有活动项目 (No active project)",
+					data: { errorCode: "NO_ACTIVE_PROJECT" },
+				};
+			}
+
+			const wasBefore = editor.scenes.isBookmarked({ time });
+			await editor.scenes.toggleBookmark({ time });
+			const isAfter = editor.scenes.isBookmarked({ time });
+
+			if (isAfter === wasBefore) {
+				return {
+					success: false,
+					message: "书签状态未发生变化 (Bookmark state unchanged)",
+					data: { errorCode: "BOOKMARK_STATE_UNCHANGED", time },
+				};
+			}
+
+			const action = isAfter ? "added" : "removed";
+
+			return {
+				success: true,
+				message: action === "removed"
+					? `已移除 ${time.toFixed(2)} 秒处的书签 (Removed bookmark at ${time.toFixed(2)}s)`
+					: `已添加 ${time.toFixed(2)} 秒处的书签 (Added bookmark at ${time.toFixed(2)}s)`,
+				data: { time, action },
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: `操作失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+				data: { errorCode: "TOGGLE_BOOKMARK_FAILED" },
+			};
+		}
+	},
+};
+
+/**
+ * Get Bookmarks
+ * Returns all bookmarks in the active scene
+ */
+export const getBookmarksTool: AgentTool = {
+	name: "get_bookmarks",
+	description:
+		"获取当前场景中所有书签的列表。Get all bookmarks in the active scene.",
+	parameters: {
+		type: "object",
+		properties: {},
+		required: [],
+	},
+	execute: async (): Promise<ToolResult> => {
+		try {
+			const editor = EditorCore.getInstance();
+			const activeScene = editor.scenes.getActiveScene();
+			const bookmarks = [...activeScene.bookmarks].sort(
+				(a, b) => a - b,
+			);
+
+			if (bookmarks.length === 0) {
+				return {
+					success: true,
+					message: "当前场景没有书签 (No bookmarks in active scene)",
+					data: { bookmarks: [], count: 0 },
+				};
+			}
+
+			return {
+				success: true,
+				message: `当前场景有 ${bookmarks.length} 个书签 (${bookmarks.length} bookmark(s))`,
+				data: {
+					bookmarks: bookmarks.map((time) => ({
+						time,
+						formatted: `${time.toFixed(2)}s`,
+					})),
+					count: bookmarks.length,
+				},
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: `获取书签失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+				data: { errorCode: "GET_BOOKMARKS_FAILED" },
+			};
+		}
+	},
+};
+
+/**
  * Get all scene tools
  */
 export function getSceneTools(): AgentTool[] {
 	return [
 		toggleBookmarkTool,
+		toggleBookmarkAtTimeTool,
+		getBookmarksTool,
 		createSceneTool,
 		switchSceneTool,
 		listScenesTool,
