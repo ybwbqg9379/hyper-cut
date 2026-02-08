@@ -8,6 +8,7 @@ import { getAssetTools } from "./asset-tools";
 import { getProjectTools } from "./project-tools";
 import { getVisionTools } from "./vision-tools";
 import { getHighlightTools } from "./highlight-tools";
+import { getFillerTools } from "./filler-tools";
 import { listWorkflows, resolveWorkflowFromParams } from "../workflows";
 import { toBooleanOrDefault, toNonEmptyString } from "../utils/values";
 
@@ -23,6 +24,7 @@ function buildExecutableToolMap(): Map<string, AgentTool> {
 		...getProjectTools(),
 		...getVisionTools(),
 		...getHighlightTools(),
+		...getFillerTools(),
 	];
 
 	for (const tool of tools) {

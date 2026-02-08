@@ -8,7 +8,10 @@
 import { useCallback, useState } from "react";
 import { useEditor } from "@/hooks/use-editor";
 import { FillerDetectorService } from "@/agent/services/filler-detector";
-import { buildTranscriptContext } from "@/agent/services/transcript-context-builder";
+import {
+	buildTranscriptContext,
+	type BuildTranscriptContextOptions,
+} from "@/agent/services/transcript-context-builder";
 import { FILLER_CUT_MARGIN_SECONDS } from "@/agent/constants/filler";
 import {
 	splitTracksAtTimes,
@@ -54,8 +57,11 @@ function mergeOverlapping(ranges: TimeRange[]): TimeRange[] {
 	return merged;
 }
 
-function runDetection(editor: ReturnType<typeof useEditor>): FillerHighlight[] {
-	const context = buildTranscriptContext(editor);
+function runDetection(
+	editor: ReturnType<typeof useEditor>,
+	options?: BuildTranscriptContextOptions,
+): FillerHighlight[] {
+	const context = buildTranscriptContext(editor, options);
 	if (!context) return [];
 	const result = service.detectFillerWords(context);
 	return result.matches.map((m) => ({
@@ -105,8 +111,8 @@ export function useTranscriptEditing(): UseTranscriptEditingResult {
 
 			editor.timeline.replaceTracks({ tracks, selection: previousSelection });
 
-			// Re-detect on the updated timeline so timestamps stay accurate
-			setFillers(runDetection(editor));
+			// Re-detect using captions only — whisper data is stale after ripple edits
+			setFillers(runDetection(editor, { skipWhisper: true }));
 		},
 		[editor],
 	);

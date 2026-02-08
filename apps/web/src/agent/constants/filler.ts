@@ -23,9 +23,10 @@ export const EN_FILLER_WORDS = new Set([
 ]);
 
 // Multi-word filler phrases (used by filler-detector's bigram matching)
+// All entries must be lowercase — isEnglishFillerPhrase normalizes input via toLowerCase()
 export const EN_FILLER_PHRASES = new Set([
 	"you know",
-	"I mean",
+	"i mean",
 	"sort of",
 	"kind of",
 	"you see",

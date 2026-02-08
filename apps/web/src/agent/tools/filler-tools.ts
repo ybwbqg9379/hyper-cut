@@ -6,12 +6,14 @@
  */
 
 import type { AgentTool, ToolExecutionContext, ToolResult } from "../types";
+import type { TranscriptContext } from "./highlight-types";
 import { EditorCore } from "@/core";
 import {
 	fillerDetectorService,
 	type FillerWordMatch,
 } from "../services/filler-detector";
 import { buildTranscriptContext } from "../services/transcript-context-builder";
+import { transcriptionService } from "@/services/transcription/service";
 import { FILLER_CUT_MARGIN_SECONDS } from "../constants/filler";
 import {
 	splitTracksAtTimes,
@@ -23,16 +25,39 @@ import type { TimelineTrack } from "@/types/timeline";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Reference to the whisper result that was current when we last edited the timeline.
+ * When non-null, whisper data matching this reference is stale and should be skipped.
+ * Automatically clears when transcriptionService produces a new result (re-transcription).
+ */
+let staleWhisperRef: object | null = null;
+
 function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
 }
 
 function resolveTranscriptContext() {
 	try {
-		return buildTranscriptContext(EditorCore.getInstance());
+		const currentWhisper = transcriptionService.getLastResult();
+		const skipWhisper = staleWhisperRef !== null && currentWhisper === staleWhisperRef;
+		return buildTranscriptContext(EditorCore.getInstance(), { skipWhisper });
 	} catch {
 		return null;
 	}
+}
+
+function transcriptDuration(context: TranscriptContext): number {
+	if (context.segments.length > 0) {
+		const first = context.segments[0];
+		const last = context.segments[context.segments.length - 1];
+		return Math.max(0, last.endTime - first.startTime);
+	}
+	if (context.words.length > 0) {
+		const first = context.words[0];
+		const last = context.words[context.words.length - 1];
+		return Math.max(0, last.endTime - first.startTime);
+	}
+	return 0;
 }
 
 function matchesToTimeRanges(
@@ -108,6 +133,17 @@ export const detectFillerWordsTool: AgentTool = {
 			0,
 		);
 
+		// Recompute stats from filtered matches (not the unfiltered result.stats)
+		const filteredByCategory = { filler: 0, hesitation: 0, repetition: 0 };
+		for (const m of filteredMatches) {
+			filteredByCategory[m.category] += 1;
+		}
+		const totalTranscriptDur = transcriptDuration(context);
+		const filteredPercentage =
+			totalTranscriptDur > 0
+				? Number(((filteredDuration / totalTranscriptDur) * 100).toFixed(1))
+				: 0;
+
 		const summary = filteredMatches
 			.slice(0, 10)
 			.map(
@@ -121,13 +157,13 @@ export const detectFillerWordsTool: AgentTool = {
 			message:
 				`检测到 ${filteredMatches.length} 个填充词，` +
 				`总时长 ${filteredDuration.toFixed(1)}s ` +
-				`(占比 ${result.stats.percentageOfDuration}%)\n` +
+				`(占比 ${filteredPercentage}%)\n` +
 				(summary ? `前 ${Math.min(10, filteredMatches.length)} 个:\n${summary}` : ""),
 			data: {
 				totalCount: filteredMatches.length,
 				totalDurationSeconds: Number(filteredDuration.toFixed(3)),
-				percentageOfDuration: result.stats.percentageOfDuration,
-				byCategory: result.stats.byCategory,
+				percentageOfDuration: filteredPercentage,
+				byCategory: filteredByCategory,
 				matches: filteredMatches.map((m) => ({
 					text: m.text,
 					startTime: m.startTime,
@@ -273,6 +309,9 @@ export const removeFillerWordsTool: AgentTool = {
 				selection: previousSelection,
 			});
 
+			// Mark current whisper result as stale — subsequent tool calls skip it
+			staleWhisperRef = transcriptionService.getLastResult();
+
 			return {
 				success: true,
 				message:
@@ -304,4 +343,9 @@ export const removeFillerWordsTool: AgentTool = {
 
 export function getFillerTools(): AgentTool[] {
 	return [detectFillerWordsTool, removeFillerWordsTool];
+}
+
+/** Reset module state for test isolation. */
+export function __resetFillerToolStateForTests(): void {
+	staleWhisperRef = null;
 }

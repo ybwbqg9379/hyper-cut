@@ -125,6 +125,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
 - **`full-cleanup` 工作流缺少确认门控**：`remove-fillers` 步骤补充 `requiresConfirmation`
 - **`TranscriptPanel` 缩进不一致**：修正词级视图 `<div>` 开闭标签缩进层级
 - **`useTranscriptEditing` hook 模块边界违规**：从 `@/hooks/` 移至 `components/agent/hooks/`，旧路径保留 re-export
+- **工作流无法执行 filler 工具**（SEVERE）：`buildExecutableToolMap` 未注册 `getFillerTools()`，导致 `filler-word-cleanup`/`full-cleanup` 等工作流运行时报 `WORKFLOW_TOOL_NOT_FOUND`
+- **`EN_FILLER_PHRASES` 大小写不匹配**：`"I mean"` 未小写，而 `normalizeEnglish()` 会将输入 `toLowerCase()`，导致短语永远无法命中。修正为 `"i mean"`
+- **`buildTranscriptContext` 收集非字幕文本元素**：未使用 `isCaptionTextElement` 过滤，装饰性文本（标题/水印）被误当作转录内容
+- **Whisper 时间戳在 ripple 编辑后漂移**：`useTranscriptEditing` 删除 filler 后重新检测仍读取缓存 whisper 数据（已被 ripple 压缩使时间偏移）。新增 `skipWhisper` 选项，编辑后强制走 captions 路径
+- **`detect_filler_words` 返回混合过滤/未过滤统计数据**：`percentageOfDuration` 和 `byCategory` 来自未过滤结果，但 `totalCount`/`matches` 已过滤。修正为全部从过滤后匹配重新计算
+- **`buildTranscriptContext` 未排序**：segments 和 whisperWords 未按 `startTime` 排序，影响总时长计算和重复词检测准确性
 
 ### Changed
 

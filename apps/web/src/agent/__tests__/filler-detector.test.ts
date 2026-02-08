@@ -185,6 +185,22 @@ describe("FillerDetectorService", () => {
 			}
 		});
 
+		it("detects 'I mean' as a filler phrase (case-insensitive)", () => {
+			const context = makeContext([
+				{ text: "I", start: 0, end: 0.2 },
+				{ text: "mean", start: 0.25, end: 0.5 },
+				{ text: "that's", start: 0.6, end: 0.9 },
+				{ text: "great", start: 1.0, end: 1.3 },
+			]);
+			const result = service.detectFillerWords(context);
+
+			const phraseMatch = result.matches.find((m) =>
+				m.text.toLowerCase().includes("i mean"),
+			);
+			expect(phraseMatch).toBeDefined();
+			expect(phraseMatch!.category).toBe("filler");
+		});
+
 		it("merges adjacent same-category matches", () => {
 			const context = makeContext([
 				{ text: "um", start: 0, end: 0.15 },
