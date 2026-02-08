@@ -92,4 +92,119 @@ export const WORKFLOWS: Workflow[] = [
 			},
 		],
 	},
+	{
+		name: "filler-word-cleanup",
+		description:
+			"检测并删除填充词（嗯/啊/um/uh/like等）。Detect and remove filler words.",
+		steps: [
+			{
+				id: "detect-fillers",
+				toolName: "detect_filler_words",
+				arguments: {
+					minConfidence: 0.5,
+				},
+				summary: "扫描转录文本中的填充词",
+			},
+			{
+				id: "remove-fillers",
+				toolName: "remove_filler_words",
+				arguments: {
+					minConfidence: 0.7,
+				},
+				summary: "删除检测到的填充词并收缩间隙",
+				requiresConfirmation: true,
+			},
+		],
+	},
+	{
+		name: "quick-social-clip",
+		description:
+			"自动从长视频提取60秒社交媒体精华片段并添加字幕。Auto-extract a 60s social clip with captions.",
+		steps: [
+			{
+				id: "score-highlights",
+				toolName: "score_highlights",
+				arguments: {},
+				summary: "分析视频内容并评分",
+			},
+			{
+				id: "visual-validation",
+				toolName: "validate_highlights_visual",
+				arguments: {
+					topN: 5,
+					frameConcurrency: 2,
+				},
+				summary: "视觉质量验证",
+			},
+			{
+				id: "generate-plan",
+				toolName: "generate_highlight_plan",
+				arguments: {
+					targetDuration: 60,
+				},
+				summary: "生成60秒精华计划",
+			},
+			{
+				id: "apply-cut",
+				toolName: "apply_highlight_cut",
+				arguments: {
+					addCaptions: false,
+					removeSilence: true,
+				},
+				summary: "应用社交媒体剪辑",
+				requiresConfirmation: true,
+			},
+			{
+				id: "add-captions",
+				toolName: "generate_captions",
+				arguments: {
+					source: "timeline",
+				},
+				summary: "为剪辑结果添加字幕",
+			},
+		],
+	},
+	{
+		name: "full-cleanup",
+		description:
+			"全面清理：删除填充词 + 删除静音 + 生成字幕。Full cleanup: remove fillers + silence + add captions.",
+		steps: [
+			{
+				id: "detect-fillers",
+				toolName: "detect_filler_words",
+				arguments: {
+					minConfidence: 0.5,
+				},
+				summary: "扫描填充词",
+			},
+			{
+				id: "remove-fillers",
+				toolName: "remove_filler_words",
+				arguments: {
+					minConfidence: 0.7,
+				},
+				summary: "删除填充词",
+				requiresConfirmation: true,
+			},
+			{
+				id: "remove-silence",
+				toolName: "remove_silence",
+				arguments: {
+					source: "timeline",
+					threshold: 0.02,
+					minDuration: 0.5,
+					windowSeconds: 0.1,
+				},
+				summary: "删除静音区间",
+			},
+			{
+				id: "generate-captions",
+				toolName: "generate_captions",
+				arguments: {
+					source: "timeline",
+				},
+				summary: "生成字幕",
+			},
+		],
+	},
 ];

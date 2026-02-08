@@ -103,6 +103,28 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `highlightCacheStore` 增加按项目 hydration + 持久化写回
   - `transcriptContextCache` 增加 IndexedDB 回填与失效清理
   - 非浏览器环境自动降级为内存缓存，不影响测试与 SSR
+- **填充词检测与删除（Agent Intelligence）**：新增 Descript 级填充词清理能力
+  - 新增 `FillerDetectorService`（`filler-detector.ts`）：三类检测 filler / hesitation / repetition，支持中英双语，含置信度评分与邻近合并
+  - 新增共享常量 `constants/filler.ts`：`EN_FILLER_WORDS`（单词级）+ `EN_FILLER_PHRASES`（短语级 bigram）+ `ZH_FILLER_WORDS` 及检测阈值
+  - 新增 Agent 工具：`detect_filler_words`（只读扫描）、`remove_filler_words`（手术式时间线删除，支持 `dryRun` 预览）
+  - 新增 `useTranscriptEditing` hook（`components/agent/hooks/`）：封装 filler 检测 + 时间线编辑逻辑供 React 组件调用
+  - `TranscriptPanel` 增强：词级填充词高亮（红=filler / 琥珀=hesitation / 蓝=repetition）、单词级点击删除、「检测填充词」+ 「全部删除」批量清理
+  - 新增工作流预设：`filler-word-cleanup`（检测→删除）、`quick-social-clip`（60s 社交精华）、`full-cleanup`（填充词+静音+字幕一键清理）
+  - 新增 `transcript-context-builder.ts`：agent 工具与 React hook 共享同一个 TranscriptContext 构建逻辑
+  - 新增 11 项 `filler-detector.test.ts` 单元测试（中英文、空转录、重复词、置信度边界等）
+  - `transcript-analyzer.ts` 重构为导入共享 `constants/filler.ts`，消除重复定义
+
+### Fixed
+
+- **填充词单次删除后时间戳失效**：`useTranscriptEditing` 删除一个 filler 后剩余高亮全部消失，因为 ripple 压缩后旧时间戳不再匹配。修复：删除后自动重新检测
+- **`EN_FILLER_WORDS` 重构丢失 "you"/"know" 独立词条**：拆分为 `EN_FILLER_WORDS`（单词级）和 `EN_FILLER_PHRASES`（短语级），恢复 `transcript-analyzer` 的 `computeContentDensity` 行为
+- **多词填充词检测死代码**：`isEnglishFiller` 的多词匹配循环无效。改为 bigram 双 pass 扫描（先检测相邻词短语，再检测单词）
+- **中文填充词 `includes` 误报**：`isChineseFiller` 改为精确匹配，避免"这个人"被"这个"误匹配
+- **`resolveTranscriptContext` source 字段不准确**：用共享 `buildTranscriptContext` 替换，正确区分 whisper vs captions
+- **`quick-social-clip` 工作流步骤顺序**：字幕生成移到裁剪之后，避免字幕被切碎
+- **`full-cleanup` 工作流缺少确认门控**：`remove-fillers` 步骤补充 `requiresConfirmation`
+- **`TranscriptPanel` 缩进不一致**：修正词级视图 `<div>` 开闭标签缩进层级
+- **`useTranscriptEditing` hook 模块边界违规**：从 `@/hooks/` 移至 `components/agent/hooks/`，旧路径保留 re-export
 
 ### Changed
 

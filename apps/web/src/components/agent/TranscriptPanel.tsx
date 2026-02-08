@@ -13,7 +13,11 @@ import {
 } from "@/lib/transcription/caption-metadata";
 import { transcriptionService } from "@/services/transcription/service";
 import { cn } from "@/utils/ui";
-import { Check, Trash2 } from "lucide-react";
+import { Check, Trash2, Sparkles, X, Loader2 } from "lucide-react";
+import {
+	useTranscriptEditing,
+	type FillerHighlight,
+} from "@/hooks/use-transcript-editing";
 
 interface CaptionSegment {
 	trackId: string;
@@ -139,6 +143,17 @@ export function TranscriptPanel() {
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
 	const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
 	const [showWordLevel, setShowWordLevel] = useState(false);
+
+	// Filler detection integration
+	const {
+		fillers,
+		isDetecting,
+		detectFillers,
+		removeFillerAtRange,
+		removeAllFillers,
+		clearFillers,
+		isFillerWord,
+	} = useTranscriptEditing();
 
 	const segments = useMemo<CaptionSegment[]>(() => {
 		const items: CaptionSegment[] = [];
@@ -331,16 +346,57 @@ export function TranscriptPanel() {
 							点击文字跳转时间线，拖选文本范围联动选中片段；下方支持逐条编辑并同步到时间线
 						</p>
 					</div>
-					<Button
-						variant="outline"
-						size="sm"
-						className="h-6 shrink-0 px-2 text-[11px]"
-						onClick={() => setShowWordLevel((value) => !value)}
-						disabled={wordItems.length === 0}
-					>
-						{showWordLevel ? "隐藏词级" : "显示词级"}
-					</Button>
+					<div className="flex items-center gap-1 shrink-0">
+						<Button
+							variant="outline"
+							size="sm"
+							className="h-6 px-2 text-[11px]"
+							onClick={() => setShowWordLevel((value) => !value)}
+							disabled={wordItems.length === 0}
+						>
+							{showWordLevel ? "隐藏词级" : "显示词级"}
+						</Button>
+						<Button
+							variant={fillers.length > 0 ? "destructive" : "outline"}
+							size="sm"
+							className="h-6 px-2 text-[11px]"
+							onClick={() => {
+								if (fillers.length > 0) {
+									clearFillers();
+								} else {
+									detectFillers();
+									if (!showWordLevel) setShowWordLevel(true);
+								}
+							}}
+							disabled={isDetecting || wordItems.length === 0}
+						>
+							{isDetecting ? (
+								<Loader2 className="size-3 mr-1 animate-spin" />
+							) : (
+								<Sparkles className="size-3 mr-1" />
+							)}
+							{fillers.length > 0
+								? `清除标记 (${fillers.length})`
+								: "检测填充词"}
+						</Button>
+					</div>
 				</div>
+				{fillers.length > 0 && (
+					<div className="mt-2 flex items-center justify-between rounded-md bg-destructive/10 px-2 py-1.5">
+						<span className="text-[11px] text-destructive">
+							检测到 {fillers.length} 个填充词
+						</span>
+						<Button
+							variant="destructive"
+							size="sm"
+							className="h-5 px-2 text-[10px]"
+							onClick={removeAllFillers}
+						>
+							<Trash2 className="size-3 mr-1" />
+							全部删除
+						</Button>
+					</div>
+				)}
 			</div>
 
 			<div className="p-3 border-b border-border">
@@ -371,17 +427,53 @@ export function TranscriptPanel() {
 							</div>
 						) : (
 							<div className="flex flex-wrap gap-1">
-								{wordItems.map((word, index) => (
-									<button
-										key={`${word.startTime}-${word.endTime}-${word.text}-${index}`}
-										type="button"
-										className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] hover:bg-accent"
-										title={`${formatTime(word.startTime)} - ${formatTime(word.endTime)}`}
-										onClick={() => focusWord(word)}
-									>
-										{word.text}
-									</button>
-								))}
+								{wordItems.map((word, index) => {
+									const filler = isFillerWord(
+										word.startTime,
+										word.endTime,
+									);
+									const fillerColor = filler
+										? filler.category === "filler"
+											? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400"
+											: filler.category === "hesitation"
+												? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+												: "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400"
+										: "";
+									const tooltipText = filler
+										? `${filler.category} (${(filler.confidence * 100).toFixed(0)}%) · ${formatTime(word.startTime)}-${formatTime(word.endTime)} · 点击删除`
+										: `${formatTime(word.startTime)} - ${formatTime(word.endTime)}`;
+									return (
+										<button
+											key={`${word.startTime}-${word.endTime}-${word.text}-${index}`}
+											type="button"
+											className={cn(
+												"rounded border px-1.5 py-0.5 text-[11px] transition-colors",
+												filler
+													? cn(
+															fillerColor,
+															"border-b-2 font-medium hover:opacity-70 cursor-pointer",
+														)
+													: "border-border bg-background hover:bg-accent",
+											)}
+											title={tooltipText}
+											onClick={() => {
+												if (filler) {
+													removeFillerAtRange(
+														filler.startTime,
+														filler.endTime,
+													);
+												} else {
+													focusWord(word);
+												}
+											}}
+										>
+											{word.text}
+											{filler && (
+												<X className="ml-0.5 inline-block size-2.5 opacity-60" />
+											)}
+										</button>
+									);
+								})}
 							</div>
 						)}
 					</div>

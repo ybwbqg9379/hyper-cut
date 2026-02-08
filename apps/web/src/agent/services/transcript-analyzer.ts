@@ -9,33 +9,12 @@ import {
 	DEFAULT_HIGHLIGHT_SEGMENT_MAX_SECONDS,
 	DEFAULT_HIGHLIGHT_SEGMENT_MIN_SECONDS,
 } from "../constants/highlight";
+import {
+	EN_FILLER_WORDS,
+	ZH_FILLER_WORDS,
+} from "../constants/filler";
 
 const MIN_SEGMENT_SECONDS = 2;
-
-const EN_FILLER_WORDS = new Set([
-	"um",
-	"uh",
-	"like",
-	"you",
-	"know",
-	"basically",
-	"actually",
-	"literally",
-	"right",
-	"so",
-	"well",
-]);
-
-const ZH_FILLER_WORDS = [
-	"嗯",
-	"啊",
-	"然后",
-	"就是",
-	"那个",
-	"这个",
-	"对吧",
-	"反正",
-];
 
 const EN_ENGAGEMENT_WORDS = [
 	"amazing",
