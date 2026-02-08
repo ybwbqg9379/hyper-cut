@@ -64,7 +64,10 @@ export interface ChatResponse {
 
 export interface LLMProvider {
 	name: string;
-	chat(params: ChatParams, options?: ProviderChatOptions): Promise<ChatResponse>;
+	chat(
+		params: ChatParams,
+		options?: ProviderChatOptions,
+	): Promise<ChatResponse>;
 	isAvailable(): Promise<boolean>;
 }
 
@@ -96,6 +99,11 @@ export interface WorkflowResumeHint {
 	workflowName: string;
 	startFromStepId: string;
 	confirmRequiredSteps: boolean;
+	stepOverrides?: Array<{
+		stepId?: string;
+		index?: number;
+		arguments: Record<string, unknown>;
+	}>;
 }
 
 export interface WorkflowNextStep {

@@ -184,6 +184,12 @@ export const runWorkflowTool: AgentTool = {
 			}
 
 			if (step.requiresConfirmation && !confirmRequiredSteps) {
+				const resumeStepOverrides = executableSteps
+					.slice(index)
+					.map((resumeStep) => ({
+						stepId: resumeStep.id,
+						arguments: { ...resumeStep.arguments },
+					}));
 				return {
 					success: true,
 					message:
@@ -204,6 +210,7 @@ export const runWorkflowTool: AgentTool = {
 							workflowName: resolved.resolved.workflow.name,
 							startFromStepId: step.id,
 							confirmRequiredSteps: true,
+							stepOverrides: resumeStepOverrides,
 						},
 					},
 				};

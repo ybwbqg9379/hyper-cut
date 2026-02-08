@@ -3,7 +3,10 @@ import {
 	type AutomaticSpeechRecognitionPipeline,
 	type AutomaticSpeechRecognitionOutput,
 } from "@huggingface/transformers";
-import type { TranscriptionSegment, TranscriptionWord } from "@/types/transcription";
+import type {
+	TranscriptionSegment,
+	TranscriptionWord,
+} from "@/types/transcription";
 import {
 	DEFAULT_CHUNK_LENGTH_SECONDS,
 	DEFAULT_STRIDE_SECONDS,
@@ -11,7 +14,12 @@ import {
 
 export type WorkerMessage =
 	| { type: "init"; modelId: string }
-	| { type: "transcribe"; audio: Float32Array; language: string }
+	| {
+			type: "transcribe";
+			audio: Float32Array;
+			sampleRate: number;
+			language: string;
+	  }
 	| { type: "cancel" };
 
 export type WorkerResponse =
@@ -32,6 +40,7 @@ let transcriber: AutomaticSpeechRecognitionPipeline | null = null;
 let cancelled = false;
 let lastReportedProgress = -1;
 const fileBytes = new Map<string, { loaded: number; total: number }>();
+const WHISPER_SAMPLE_RATE = 16_000;
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 	const message = event.data;
@@ -43,6 +52,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 		case "transcribe":
 			await handleTranscribe({
 				audio: message.audio,
+				sampleRate: message.sampleRate,
 				language: message.language,
 			});
 			break;
@@ -119,9 +129,11 @@ async function handleInit({ modelId }: { modelId: string }) {
 
 async function handleTranscribe({
 	audio,
+	sampleRate,
 	language,
 }: {
 	audio: Float32Array;
+	sampleRate: number;
 	language: string;
 }) {
 	if (!transcriber) {
@@ -137,6 +149,7 @@ async function handleTranscribe({
 	try {
 		const result = await runTranscription({
 			audio,
+			sampleRate,
 			language,
 		});
 
@@ -165,21 +178,28 @@ async function handleTranscribe({
 
 async function runTranscription({
 	audio,
+	sampleRate,
 	language,
 }: {
 	audio: Float32Array;
+	sampleRate: number;
 	language: string;
 }): Promise<AutomaticSpeechRecognitionOutput> {
 	try {
 		return await runTranscriptionWithTimestamps({
 			audio,
+			sampleRate,
 			language,
 			returnTimestamps: "word",
 		});
 	} catch (error) {
-		console.warn("Word-level timestamps unavailable, fallback to segment timestamps", error);
+		console.warn(
+			"Word-level timestamps unavailable, fallback to segment timestamps",
+			error,
+		);
 		return runTranscriptionWithTimestamps({
 			audio,
+			sampleRate,
 			language,
 			returnTimestamps: true,
 		});
@@ -188,10 +208,12 @@ async function runTranscription({
 
 async function runTranscriptionWithTimestamps({
 	audio,
+	sampleRate,
 	language,
 	returnTimestamps,
 }: {
 	audio: Float32Array;
+	sampleRate: number;
 	language: string;
 	returnTimestamps: boolean | "word";
 }): Promise<AutomaticSpeechRecognitionOutput> {
@@ -199,7 +221,13 @@ async function runTranscriptionWithTimestamps({
 		throw new Error("Model not initialized");
 	}
 
-	const rawResult = await transcriber(audio, {
+	const normalizedAudio = toWhisperSampleRate({
+		audio,
+		sampleRate,
+		targetSampleRate: WHISPER_SAMPLE_RATE,
+	});
+
+	const rawResult = await transcriber(normalizedAudio, {
 		chunk_length_s: DEFAULT_CHUNK_LENGTH_SECONDS,
 		stride_length_s: DEFAULT_STRIDE_SECONDS,
 		language: language === "auto" ? undefined : language,
@@ -207,6 +235,42 @@ async function runTranscriptionWithTimestamps({
 	});
 
 	return Array.isArray(rawResult) ? rawResult[0] : rawResult;
+}
+
+function toWhisperSampleRate({
+	audio,
+	sampleRate,
+	targetSampleRate,
+}: {
+	audio: Float32Array;
+	sampleRate: number;
+	targetSampleRate: number;
+}): Float32Array {
+	if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
+		return audio;
+	}
+	if (Math.abs(sampleRate - targetSampleRate) < 1e-6) {
+		return audio;
+	}
+
+	const nextLength = Math.max(
+		1,
+		Math.round((audio.length * targetSampleRate) / sampleRate),
+	);
+	const resampled = new Float32Array(nextLength);
+	const ratio = sampleRate / targetSampleRate;
+
+	for (let i = 0; i < nextLength; i += 1) {
+		const sourceIndex = i * ratio;
+		const left = Math.floor(sourceIndex);
+		const right = Math.min(left + 1, audio.length - 1);
+		const mix = sourceIndex - left;
+		const leftValue = audio[left] ?? 0;
+		const rightValue = audio[right] ?? leftValue;
+		resampled[i] = leftValue * (1 - mix) + rightValue * mix;
+	}
+
+	return resampled;
 }
 
 function normalizeChunkText(text: string): string {
@@ -219,7 +283,9 @@ function splitChunkToTokens(text: string): string[] {
 	return normalized.split(" ").filter(Boolean);
 }
 
-function buildWordsFromChunks(result: AutomaticSpeechRecognitionOutput): TranscriptionWord[] {
+function buildWordsFromChunks(
+	result: AutomaticSpeechRecognitionOutput,
+): TranscriptionWord[] {
 	const words: TranscriptionWord[] = [];
 	const chunks = result.chunks ?? [];
 
@@ -246,7 +312,8 @@ function buildWordsFromChunks(result: AutomaticSpeechRecognitionOutput): Transcr
 
 		for (let i = 0; i < tokens.length; i++) {
 			const tokenStart = start + tokenDuration * i;
-			const tokenEnd = i === tokens.length - 1 ? end : start + tokenDuration * (i + 1);
+			const tokenEnd =
+				i === tokens.length - 1 ? end : start + tokenDuration * (i + 1);
 			words.push({
 				text: tokens[i],
 				start: tokenStart,
@@ -258,7 +325,9 @@ function buildWordsFromChunks(result: AutomaticSpeechRecognitionOutput): Transcr
 	return words;
 }
 
-function buildSegmentsFromChunks(result: AutomaticSpeechRecognitionOutput): TranscriptionSegment[] {
+function buildSegmentsFromChunks(
+	result: AutomaticSpeechRecognitionOutput,
+): TranscriptionSegment[] {
 	const segments: TranscriptionSegment[] = [];
 	const chunks = result.chunks ?? [];
 
@@ -281,7 +350,9 @@ function buildSegmentsFromChunks(result: AutomaticSpeechRecognitionOutput): Tran
 	return segments;
 }
 
-function buildSegmentsFromWords(words: TranscriptionWord[]): TranscriptionSegment[] {
+function buildSegmentsFromWords(
+	words: TranscriptionWord[],
+): TranscriptionSegment[] {
 	if (words.length === 0) return [];
 
 	const segments: TranscriptionSegment[] = [];

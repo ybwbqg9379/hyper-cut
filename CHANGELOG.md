@@ -125,6 +125,10 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Fixed
 
+- **字幕时间轴错位**: 修复转录时间戳按错误采样率计算导致的字幕整体后移
+  - `TranscriptionService` 向 worker 透传解码音频的真实 `sampleRate`
+  - Whisper worker 在推理前统一将输入重采样到 `16kHz`，避免 44.1k/48k 音频产生时间比例拉伸
+  - `generate_captions`、长视频高光评分与字幕面板共用同一修复链路，确保时间戳一致
 - **Long-to-Short 内存占用**: 修复 Safari 因内存过高自动刷新（`this webpage was reloaded because it was using significant memory`）
   - `validate_highlights_visual` 不再将 `thumbnailDataUrl` 写入缓存/计划/返回结果
   - 视觉关键帧统一降采样到最大 `640x360`，降低 base64 体积与峰值内存

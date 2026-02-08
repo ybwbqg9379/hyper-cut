@@ -355,13 +355,14 @@ async function buildWhisperTranscriptContext({
 		mediaAssets,
 		totalDuration,
 	});
-	const { samples } = await decodeAudioToFloat32({ audioBlob });
+	const { samples, sampleRate } = await decodeAudioToFloat32({ audioBlob });
 	if (samples.length === 0) {
 		return null;
 	}
 
 	const result = await transcriptionService.transcribe({
 		audioData: samples,
+		sampleRate,
 		language: "auto",
 	});
 
@@ -402,7 +403,10 @@ async function getTranscriptContext({
 	const { transcriptContextCache } = getVisionProjectCache(projectId);
 	const cacheKey = buildTranscriptCacheKey({ projectId, tracks });
 	const cached = transcriptContextCache.get(cacheKey);
-	if (cached && (cached.context.segments.length > 0 || cached.context.words.length > 0)) {
+	if (
+		cached &&
+		(cached.context.segments.length > 0 || cached.context.words.length > 0)
+	) {
 		return cached.context;
 	}
 	if (cached) {

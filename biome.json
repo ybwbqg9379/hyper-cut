@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
 	"vcs": {
 		"enabled": false,
 		"clientKind": "git",
@@ -9,12 +9,12 @@
 		"ignoreUnknown": false,
 		"includes": [
 			"**",
-			"!**/.next/**",
-			"!**/node_modules/**",
-			"!**/dist/**",
-			"!**/build/**",
-			"!**/apps/web/public/ffmpeg/**",
-			"!**/apps/web/src/components/ui/**"
+			"!**/.next",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/build",
+			"!**/apps/web/public/ffmpeg",
+			"!**/apps/web/src/components/ui"
 		]
 	},
 	"formatter": {
@@ -31,7 +31,11 @@
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "double"
-			
+		}
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
 		}
 	},
 	"assist": {

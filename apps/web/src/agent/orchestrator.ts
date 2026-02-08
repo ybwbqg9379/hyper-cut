@@ -246,7 +246,9 @@ function compactGenerateHighlightPlanData(data: unknown): unknown {
 
 	const record = data as Record<string, unknown>;
 	const planRecord =
-		record.plan && typeof record.plan === "object" && !Array.isArray(record.plan)
+		record.plan &&
+		typeof record.plan === "object" &&
+		!Array.isArray(record.plan)
 			? (record.plan as Record<string, unknown>)
 			: null;
 	if (!planRecord) {
@@ -345,6 +347,57 @@ function asObjectRecord(value: unknown): Record<string, unknown> | null {
 	return value as Record<string, unknown>;
 }
 
+function asWorkflowStepOverrides(value: unknown):
+	| Array<{
+			stepId?: string;
+			index?: number;
+			arguments: Record<string, unknown>;
+	  }>
+	| undefined {
+	if (!Array.isArray(value)) {
+		return undefined;
+	}
+
+	const overrides: Array<{
+		stepId?: string;
+		index?: number;
+		arguments: Record<string, unknown>;
+	}> = [];
+
+	for (const item of value) {
+		const record = asObjectRecord(item);
+		if (!record) {
+			continue;
+		}
+
+		const argumentsRecord = asObjectRecord(record.arguments);
+		if (!argumentsRecord) {
+			continue;
+		}
+
+		const override: {
+			stepId?: string;
+			index?: number;
+			arguments: Record<string, unknown>;
+		} = {
+			arguments: argumentsRecord,
+		};
+		if (typeof record.stepId === "string" && record.stepId.trim().length > 0) {
+			override.stepId = record.stepId.trim();
+		}
+		if (typeof record.index === "number" && Number.isFinite(record.index)) {
+			override.index = Math.floor(record.index);
+		}
+		if (override.stepId === undefined && override.index === undefined) {
+			continue;
+		}
+
+		overrides.push(override);
+	}
+
+	return overrides.length > 0 ? overrides : undefined;
+}
+
 function asWorkflowResumeHint(value: unknown): WorkflowResumeHint | undefined {
 	const record = asObjectRecord(value);
 	if (!record) return undefined;
@@ -355,10 +408,13 @@ function asWorkflowResumeHint(value: unknown): WorkflowResumeHint | undefined {
 	) {
 		return undefined;
 	}
+	const stepOverrides = asWorkflowStepOverrides(record.stepOverrides);
+
 	return {
 		workflowName: record.workflowName,
 		startFromStepId: record.startFromStepId,
 		confirmRequiredSteps: record.confirmRequiredSteps,
+		...(stepOverrides ? { stepOverrides } : {}),
 	};
 }
 
@@ -504,7 +560,11 @@ export class AgentOrchestrator {
 	}
 
 	private isToolResultCancelled(result: ToolResult): boolean {
-		if (!result.data || typeof result.data !== "object" || Array.isArray(result.data)) {
+		if (
+			!result.data ||
+			typeof result.data !== "object" ||
+			Array.isArray(result.data)
+		) {
 			return false;
 		}
 		return (
@@ -786,7 +846,9 @@ export class AgentOrchestrator {
 			if (meta.signal.aborted) {
 				toolAbortController.abort();
 			} else {
-				meta.signal.addEventListener("abort", handleParentAbort, { once: true });
+				meta.signal.addEventListener("abort", handleParentAbort, {
+					once: true,
+				});
 			}
 		}
 
@@ -1180,16 +1242,16 @@ export class AgentOrchestrator {
 		}
 
 		const normalizedName = workflowName.trim();
-			if (!normalizedName) {
+		if (!normalizedName) {
 			return {
 				message: "workflowName 不能为空",
 				success: false,
 				status: "error",
-					requestId,
-				};
-			}
-			const executionSignal = this.beginExecution(requestId);
-			this.emitExecutionEvent({
+				requestId,
+			};
+		}
+		const executionSignal = this.beginExecution(requestId);
+		this.emitExecutionEvent({
 			type: "request_started",
 			requestId,
 			mode: "workflow",
@@ -1268,35 +1330,32 @@ export class AgentOrchestrator {
 			stepIndex: 1,
 			totalSteps: 1,
 		});
-			const toolResult = await this.executeToolCall(workflowCall, {
+		const toolResult = await this.executeToolCall(workflowCall, {
+			requestId,
+			mode: "workflow",
+			toolCallId: workflowCall.id,
+			stepIndex: 1,
+			totalSteps: 1,
+			signal: executionSignal,
+		});
+		if (this.isToolResultCancelled(toolResult)) {
+			return this.completeRequest({
 				requestId,
 				mode: "workflow",
-				toolCallId: workflowCall.id,
-				stepIndex: 1,
-				totalSteps: 1,
-				signal: executionSignal,
+				response: {
+					message: "执行已取消 (Execution cancelled)",
+					toolCalls: [
+						{
+							name: workflowCall.name,
+							result: compactToolResultForClient(workflowCall.name, toolResult),
+						},
+					],
+					success: false,
+					status: "cancelled",
+				},
 			});
-			if (this.isToolResultCancelled(toolResult)) {
-				return this.completeRequest({
-					requestId,
-					mode: "workflow",
-					response: {
-						message: "执行已取消 (Execution cancelled)",
-						toolCalls: [
-							{
-								name: workflowCall.name,
-								result: compactToolResultForClient(
-									workflowCall.name,
-									toolResult,
-								),
-							},
-						],
-						success: false,
-						status: "cancelled",
-					},
-				});
-			}
-			const pauseInfo = extractWorkflowPauseInfo(toolResult.data);
+		}
+		const pauseInfo = extractWorkflowPauseInfo(toolResult.data);
 		this.emitExecutionEvent({
 			type: "tool_completed",
 			requestId,
@@ -1539,7 +1598,10 @@ export class AgentOrchestrator {
 	}
 
 	cancelActiveExecution(): AgentResponse {
-		if (!this.activeExecutionAbortController || !this.activeExecutionRequestId) {
+		if (
+			!this.activeExecutionAbortController ||
+			!this.activeExecutionRequestId
+		) {
 			return {
 				message: "当前没有正在执行的请求。",
 				success: false,
@@ -1595,7 +1657,7 @@ export class AgentOrchestrator {
 			});
 
 			const executedTools: Array<{ name: string; result: ToolResult }> = [];
-				for (const [index, toolCall] of pendingPlan.toolCalls.entries()) {
+			for (const [index, toolCall] of pendingPlan.toolCalls.entries()) {
 				this.emitExecutionEvent({
 					type: "tool_started",
 					requestId,
@@ -1606,28 +1668,28 @@ export class AgentOrchestrator {
 					stepIndex: index + 1,
 					totalSteps: pendingPlan.toolCalls.length,
 				});
-					const result = await this.executeToolCall(toolCall, {
+				const result = await this.executeToolCall(toolCall, {
+					requestId,
+					mode: "plan_confirmation",
+					toolCallId: toolCall.id,
+					stepIndex: index + 1,
+					totalSteps: pendingPlan.toolCalls.length,
+					signal: executionSignal,
+				});
+				executedTools.push({ name: toolCall.name, result });
+				if (this.isToolResultCancelled(result)) {
+					return this.completeRequest({
 						requestId,
 						mode: "plan_confirmation",
-						toolCallId: toolCall.id,
-						stepIndex: index + 1,
-						totalSteps: pendingPlan.toolCalls.length,
-						signal: executionSignal,
+						response: {
+							message: "执行已取消 (Execution cancelled)",
+							toolCalls: this.toClientToolCalls(executedTools),
+							success: false,
+							status: "cancelled",
+						},
 					});
-					executedTools.push({ name: toolCall.name, result });
-					if (this.isToolResultCancelled(result)) {
-						return this.completeRequest({
-							requestId,
-							mode: "plan_confirmation",
-							response: {
-								message: "执行已取消 (Execution cancelled)",
-								toolCalls: this.toClientToolCalls(executedTools),
-								success: false,
-								status: "cancelled",
-							},
-						});
-					}
-					const pauseInfo = extractWorkflowPauseInfo(result.data);
+				}
+				const pauseInfo = extractWorkflowPauseInfo(result.data);
 				this.emitExecutionEvent({
 					type: "tool_completed",
 					requestId,

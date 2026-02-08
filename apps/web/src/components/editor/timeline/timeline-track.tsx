@@ -68,6 +68,7 @@ export function TimelineTrackContent({
 	);
 
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: Track lane must remain a div to avoid nested button hydration issues.
 		<div
 			role="button"
 			tabIndex={0}

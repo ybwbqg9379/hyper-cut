@@ -598,6 +598,12 @@ describe("AgentOrchestrator", () => {
 			workflowName: "long-to-short",
 			startFromStepId: "apply-cut",
 			confirmRequiredSteps: true,
+			stepOverrides: [
+				{
+					stepId: "apply-cut",
+					arguments: { addCaptions: false, removeSilence: false },
+				},
+			],
 		});
 
 		expect(runWorkflowExecute).toHaveBeenCalledWith(
@@ -605,6 +611,12 @@ describe("AgentOrchestrator", () => {
 				workflowName: "long-to-short",
 				startFromStepId: "apply-cut",
 				confirmRequiredSteps: true,
+				stepOverrides: [
+					{
+						stepId: "apply-cut",
+						arguments: { addCaptions: false, removeSilence: false },
+					},
+				],
 			},
 			expect.objectContaining({
 				mode: "workflow",
@@ -956,6 +968,12 @@ describe("AgentOrchestrator", () => {
 					workflowName: "long-to-short",
 					startFromStepId: "apply-cut",
 					confirmRequiredSteps: true,
+					stepOverrides: [
+						{
+							stepId: "apply-cut",
+							arguments: { addCaptions: false },
+						},
+					],
 				},
 			},
 		});
@@ -980,6 +998,12 @@ describe("AgentOrchestrator", () => {
 		expect(result.requiresConfirmation).toBe(true);
 		expect(result.nextStep?.id).toBe("apply-cut");
 		expect(result.resumeHint?.startFromStepId).toBe("apply-cut");
+		expect(result.resumeHint?.stepOverrides).toEqual([
+			{
+				stepId: "apply-cut",
+				arguments: { addCaptions: false },
+			},
+		]);
 		expect(result.requestId).toBeTruthy();
 	});
 

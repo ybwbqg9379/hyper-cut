@@ -236,7 +236,11 @@ function extractHighlightPlanPreviewFromToolCalls(
 				if (!segmentRecord) return null;
 				const startTime = toFiniteNumber(segmentRecord.startTime);
 				const endTime = toFiniteNumber(segmentRecord.endTime);
-				if (startTime === undefined || endTime === undefined || endTime <= startTime) {
+				if (
+					startTime === undefined ||
+					endTime === undefined ||
+					endTime <= startTime
+				) {
 					return null;
 				}
 				return {
@@ -418,7 +422,9 @@ export function AgentChatbox() {
 		}
 
 		const hasDedicatedSuccessToast =
-			Boolean(highlightPlanPreview) || applyHighlightCutSucceeded || removeSilenceSucceeded;
+			Boolean(highlightPlanPreview) ||
+			applyHighlightCutSucceeded ||
+			removeSilenceSucceeded;
 		if (response.status === "error" || response.success === false) {
 			toast.error(response.message);
 		} else if (response.status === "cancelled") {
@@ -686,6 +692,9 @@ export function AgentChatbox() {
 			workflowName: resumeHint.workflowName,
 			startFromStepId: resumeHint.startFromStepId,
 			confirmRequiredSteps: resumeHint.confirmRequiredSteps,
+			...(resumeHint.stepOverrides && resumeHint.stepOverrides.length > 0
+				? { stepOverrides: resumeHint.stepOverrides }
+				: {}),
 		});
 		appendAssistantResponse(response);
 	};
@@ -769,8 +778,7 @@ export function AgentChatbox() {
 								message={message}
 								executionEvents={
 									message.requestId
-										? (executionEventsByRequestId.get(message.requestId) ??
-											[])
+										? (executionEventsByRequestId.get(message.requestId) ?? [])
 										: undefined
 								}
 								isActivePlan={message.plan?.id === pendingPlanId}
@@ -789,31 +797,31 @@ export function AgentChatbox() {
 							/>
 						))}
 
-							{isProcessing && (
-								<div className="space-y-2">
-									<div className="flex items-center justify-between gap-2 text-muted-foreground text-sm px-3 py-2">
-										<div className="flex items-center gap-2">
-											<Loader2 className="size-4 animate-spin" />
-											<span>处理中...</span>
-										</div>
-										<Button
-											variant="outline"
-											size="sm"
-											className="h-7 px-2 text-xs"
-											onClick={handleCancelExecution}
-										>
-											<Ban className="size-3 mr-1" />
-											取消执行
-										</Button>
+						{isProcessing && (
+							<div className="space-y-2">
+								<div className="flex items-center justify-between gap-2 text-muted-foreground text-sm px-3 py-2">
+									<div className="flex items-center gap-2">
+										<Loader2 className="size-4 animate-spin" />
+										<span>处理中...</span>
 									</div>
-									{activeExecutionEvents.length > 0 ? (
+									<Button
+										variant="outline"
+										size="sm"
+										className="h-7 px-2 text-xs"
+										onClick={handleCancelExecution}
+									>
+										<Ban className="size-3 mr-1" />
+										取消执行
+									</Button>
+								</div>
+								{activeExecutionEvents.length > 0 ? (
 									<div className="rounded-md border border-border/50 bg-background/60 px-3 py-2">
 										<div className="text-xs font-medium mb-1">执行进度</div>
 										<ExecutionTimeline events={activeExecutionEvents} />
 									</div>
 								) : null}
-								</div>
-							)}
+							</div>
+						)}
 
 						{error && (
 							<div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-md px-3 py-2">
@@ -835,9 +843,7 @@ export function AgentChatbox() {
 							onChange={(e) => setInput(e.target.value)}
 							onKeyDown={handleKeyDown}
 							placeholder={
-								pendingPlanId
-									? "请先确认或取消当前计划..."
-									: "输入编辑指令..."
+								pendingPlanId ? "请先确认或取消当前计划..." : "输入编辑指令..."
 							}
 							disabled={inputDisabled}
 							className={cn(
@@ -861,13 +867,19 @@ export function AgentChatbox() {
 				</div>
 			</TabsContent>
 
-			<TabsContent value="transcript" className="mt-0 flex min-h-0 flex-1 flex-col">
+			<TabsContent
+				value="transcript"
+				className="mt-0 flex min-h-0 flex-1 flex-col"
+			>
 				<div className="flex-1 min-h-0">
 					<TranscriptPanel />
 				</div>
 			</TabsContent>
 
-			<TabsContent value="workflow" className="mt-0 flex min-h-0 flex-1 flex-col">
+			<TabsContent
+				value="workflow"
+				className="mt-0 flex min-h-0 flex-1 flex-col"
+			>
 				<div className="flex-1 min-h-0 flex flex-col">
 					<div className="px-3 py-2 border-b border-border">
 						<p className="text-xs font-medium">工作流管理</p>

@@ -21,11 +21,13 @@ class TranscriptionService {
 
 	async transcribe({
 		audioData,
+		sampleRate = 16_000,
 		language = "auto",
 		modelId = DEFAULT_TRANSCRIPTION_MODEL,
 		onProgress,
 	}: {
 		audioData: Float32Array;
+		sampleRate?: number;
 		language?: TranscriptionLanguage;
 		modelId?: TranscriptionModelId;
 		onProgress?: ProgressCallback;
@@ -78,6 +80,7 @@ class TranscriptionService {
 			this.worker.postMessage({
 				type: "transcribe",
 				audio: audioData,
+				sampleRate,
 				language,
 			} satisfies WorkerMessage);
 		});

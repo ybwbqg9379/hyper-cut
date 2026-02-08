@@ -576,7 +576,7 @@ export const addTrackTool: AgentTool = {
 		},
 		required: ["type"],
 	},
-		execute: async (params, context): Promise<ToolResult> => {
+	execute: async (params, _context): Promise<ToolResult> => {
 		try {
 			const type = params.type as string;
 			const allowedTypes = ["video", "audio", "text", "sticker"];
@@ -981,7 +981,7 @@ export const generateCaptionsTool: AgentTool = {
 				totalDuration,
 			});
 
-			const { samples } = await decodeAudioToFloat32({ audioBlob });
+			const { samples, sampleRate } = await decodeAudioToFloat32({ audioBlob });
 
 			if (samples.length === 0) {
 				return {
@@ -1015,6 +1015,7 @@ export const generateCaptionsTool: AgentTool = {
 
 			const transcription = await transcriptionService.transcribe({
 				audioData: samples,
+				sampleRate,
 				language:
 					languageParam === "auto"
 						? undefined

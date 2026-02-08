@@ -41,10 +41,7 @@ import type {
 	VisualScores,
 	ScoringWeights,
 } from "./highlight-types";
-import {
-	generateCaptionsTool,
-	removeSilenceTool,
-} from "./timeline-tools";
+import { generateCaptionsTool, removeSilenceTool } from "./timeline-tools";
 import {
 	splitTracksAtTimes,
 	deleteElementsFullyInRange,
@@ -83,8 +80,7 @@ const TRANSCRIPT_CACHE_STORE_NAME = "transcript-context-cache";
 
 function isIndexedDBAvailable(): boolean {
 	return (
-		typeof window !== "undefined" &&
-		typeof window.indexedDB !== "undefined"
+		typeof window !== "undefined" && typeof window.indexedDB !== "undefined"
 	);
 }
 
@@ -784,7 +780,10 @@ function isTranscriptAlignedWithTimeline({
 		return false;
 	}
 
-	if (bounds.minStart > totalDuration + TRANSCRIPT_ALIGNMENT_TOLERANCE_SECONDS) {
+	if (
+		bounds.minStart >
+		totalDuration + TRANSCRIPT_ALIGNMENT_TOLERANCE_SECONDS
+	) {
 		return false;
 	}
 	if (bounds.maxEnd > totalDuration + TRANSCRIPT_ALIGNMENT_TOLERANCE_SECONDS) {
@@ -822,7 +821,7 @@ async function buildWhisperTranscriptContext({
 		totalDuration,
 	});
 	throwIfExecutionCancelled(signal);
-	const { samples } = await decodeAudioToFloat32({ audioBlob });
+	const { samples, sampleRate } = await decodeAudioToFloat32({ audioBlob });
 	if (samples.length === 0) {
 		return null;
 	}
@@ -833,10 +832,13 @@ async function buildWhisperTranscriptContext({
 	if (signal) {
 		signal.addEventListener("abort", handleAbort, { once: true });
 	}
-	let transcription: Awaited<ReturnType<typeof transcriptionService.transcribe>>;
+	let transcription: Awaited<
+		ReturnType<typeof transcriptionService.transcribe>
+	>;
 	try {
 		transcription = await transcriptionService.transcribe({
 			audioData: samples,
+			sampleRate,
 			language: "auto",
 		});
 	} finally {
@@ -895,7 +897,10 @@ async function getTranscriptContext({
 			transcriptContextCache.set(cacheKey, cached);
 		}
 	}
-	if (cached && (cached.context.segments.length > 0 || cached.context.words.length > 0)) {
+	if (
+		cached &&
+		(cached.context.segments.length > 0 || cached.context.words.length > 0)
+	) {
 		return cached.context;
 	}
 	if (cached) {
@@ -1142,9 +1147,7 @@ async function createFrameExtractor(
 				() => {
 					clearTimeout(timeoutId);
 					reject(
-						new Error(
-							`Video load error: ${video.error?.message ?? "unknown"}`,
-						),
+						new Error(`Video load error: ${video.error?.message ?? "unknown"}`),
 					);
 				},
 				{ once: true },
@@ -1475,13 +1478,16 @@ export const scoreHighlightsTool: AgentTool = {
 			);
 			const useLLM = toBooleanOrDefault(params.useLLM, true);
 
-				context?.reportProgress?.({
-					message: "正在切分候选片段...",
-				});
-				const chunks = transcriptAnalyzerService.segmentTranscript(transcriptContext, {
+			context?.reportProgress?.({
+				message: "正在切分候选片段...",
+			});
+			const chunks = transcriptAnalyzerService.segmentTranscript(
+				transcriptContext,
+				{
 					minSeconds: segmentMinSeconds,
 					maxSeconds: segmentMaxSeconds,
-				});
+				},
+			);
 
 			if (chunks.length === 0) {
 				return {
@@ -1491,11 +1497,11 @@ export const scoreHighlightsTool: AgentTool = {
 				};
 			}
 
-				let scoredSegments: ScoredSegment[] = chunks.map((chunk) => {
-					const ruleScores = transcriptAnalyzerService.computeRuleScores(
-						chunk,
-						transcriptContext.words,
-					);
+			let scoredSegments: ScoredSegment[] = chunks.map((chunk) => {
+				const ruleScores = transcriptAnalyzerService.computeRuleScores(
+					chunk,
+					transcriptContext.words,
+				);
 				return {
 					chunk,
 					ruleScores,
@@ -1522,25 +1528,25 @@ export const scoreHighlightsTool: AgentTool = {
 				? "enabled"
 				: "disabled";
 
-				if (useLLM) {
-					const provider = createLocalProvider();
-					const available = await provider.isAvailable();
+			if (useLLM) {
+				const provider = createLocalProvider();
+				const available = await provider.isAvailable();
 
-					if (available) {
-						context?.reportProgress?.({
-							message: "正在进行语义评分...",
-						});
-						const scoringResult = await highlightScorerService.scoreWithLLM(
-							chunks,
-							provider,
-						);
-						semanticScoresMap = scoringResult.scores;
-						llmDiagnostics = scoringResult.diagnostics;
-					} else {
-						llmMode = "unavailable";
-					}
+				if (available) {
+					context?.reportProgress?.({
+						message: "正在进行语义评分...",
+					});
+					const scoringResult = await highlightScorerService.scoreWithLLM(
+						chunks,
+						provider,
+					);
+					semanticScoresMap = scoringResult.scores;
+					llmDiagnostics = scoringResult.diagnostics;
+				} else {
+					llmMode = "unavailable";
 				}
-				throwIfExecutionCancelled(context?.signal);
+			}
+			throwIfExecutionCancelled(context?.signal);
 
 			const hasSemantic = semanticScoresMap.size > 0;
 			const weights = getScoringWeights({ hasSemantic, hasVisual: false });
@@ -1579,9 +1585,9 @@ export const scoreHighlightsTool: AgentTool = {
 								? "（LLM 调用全部失败，已降级规则评分）"
 								: "（规则评分）"
 				}`,
-					data: {
-						assetId: asset.id,
-						transcriptSource: transcriptContext.source,
+				data: {
+					assetId: asset.id,
+					transcriptSource: transcriptContext.source,
 					segmentCount: cleanRanked.length,
 					hasSemantic,
 					llmMode,
@@ -1593,15 +1599,15 @@ export const scoreHighlightsTool: AgentTool = {
 					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
-			} catch (error) {
-				if (isExecutionCancelledError(error)) {
-					return {
-						success: false,
-						message: "高光评分已取消 (Highlight scoring cancelled)",
-						data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
-					};
-				}
+		} catch (error) {
+			if (isExecutionCancelledError(error)) {
 				return {
+					success: false,
+					message: "高光评分已取消 (Highlight scoring cancelled)",
+					data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
+				};
+			}
+			return {
 				success: false,
 				message: `高光评分失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "SCORE_HIGHLIGHTS_FAILED" },
@@ -1689,8 +1695,8 @@ export const validateHighlightsVisualTool: AgentTool = {
 				8,
 			);
 
-				const provider = createLocalProvider();
-				const providerAvailable = await provider.isAvailable();
+			const provider = createLocalProvider();
+			const providerAvailable = await provider.isAvailable();
 
 			if (!providerAvailable) {
 				const cleanCachedSegments = stripSegmentThumbnails(cachedSegments);
@@ -1718,23 +1724,23 @@ export const validateHighlightsVisualTool: AgentTool = {
 				assetId: asset.id,
 			});
 
-				const extractor = asset.file
-					? await createFrameExtractor(asset.file)
-					: null;
+			const extractor = asset.file
+				? await createFrameExtractor(asset.file)
+				: null;
 
-				let candidatesWithFrames: ScoredSegment[];
-				try {
-					context?.reportProgress?.({
-						message: "正在提取关键帧...",
-					});
-					candidatesWithFrames = extractor
-						? await mapWithConcurrency({
-								items: topCandidates,
-								limit: frameConcurrency,
-								worker: async (candidate) => {
-									throwIfExecutionCancelled(context?.signal);
-									const center =
-										(candidate.chunk.startTime + candidate.chunk.endTime) / 2;
+			let candidatesWithFrames: ScoredSegment[];
+			try {
+				context?.reportProgress?.({
+					message: "正在提取关键帧...",
+				});
+				candidatesWithFrames = extractor
+					? await mapWithConcurrency({
+							items: topCandidates,
+							limit: frameConcurrency,
+							worker: async (candidate) => {
+								throwIfExecutionCancelled(context?.signal);
+								const center =
+									(candidate.chunk.startTime + candidate.chunk.endTime) / 2;
 								const dataUrl = await extractFrameDataUrl({
 									extractor,
 									timelineTime: center,
@@ -1745,22 +1751,22 @@ export const validateHighlightsVisualTool: AgentTool = {
 									thumbnailDataUrl: dataUrl ?? undefined,
 								} satisfies ScoredSegment;
 							},
-							})
-						: topCandidates.map((c) => ({ ...c }));
-				} finally {
-					if (extractor) destroyFrameExtractor(extractor);
-				}
-				throwIfExecutionCancelled(context?.signal);
+						})
+					: topCandidates.map((c) => ({ ...c }));
+			} finally {
+				if (extractor) destroyFrameExtractor(extractor);
+			}
+			throwIfExecutionCancelled(context?.signal);
 
-				context?.reportProgress?.({
-					message: "正在进行视觉评分...",
-				});
-				const visualMap = await highlightScorerService.scoreWithVision(
-					candidatesWithFrames,
-					topN,
-					provider,
-				);
-				throwIfExecutionCancelled(context?.signal);
+			context?.reportProgress?.({
+				message: "正在进行视觉评分...",
+			});
+			const visualMap = await highlightScorerService.scoreWithVision(
+				candidatesWithFrames,
+				topN,
+				provider,
+			);
+			throwIfExecutionCancelled(context?.signal);
 
 			const hasSemantic = cachedSegments.some(
 				(segment) => segment.semanticScores !== null,
@@ -1774,7 +1780,10 @@ export const validateHighlightsVisualTool: AgentTool = {
 			}
 
 			for (const candidate of candidatesWithFrames) {
-				mergedByIndex.set(candidate.chunk.index, stripSegmentThumbnail(candidate));
+				mergedByIndex.set(
+					candidate.chunk.index,
+					stripSegmentThumbnail(candidate),
+				);
 			}
 
 			const rescored = Array.from(mergedByIndex.values()).map((segment) => {
@@ -1820,15 +1829,15 @@ export const validateHighlightsVisualTool: AgentTool = {
 					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
-			} catch (error) {
-				if (isExecutionCancelledError(error)) {
-					return {
-						success: false,
-						message: "视觉验证已取消 (Visual validation cancelled)",
-						data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
-					};
-				}
+		} catch (error) {
+			if (isExecutionCancelledError(error)) {
 				return {
+					success: false,
+					message: "视觉验证已取消 (Visual validation cancelled)",
+					data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
+				};
+			}
+			return {
 				success: false,
 				message: `视觉验证失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "VALIDATE_HIGHLIGHTS_VISUAL_FAILED" },
@@ -1911,13 +1920,13 @@ export const generateHighlightPlanTool: AgentTool = {
 				0,
 				0.5,
 			);
-				const includeHook = toBooleanOrDefault(params.includeHook, true);
-				context?.reportProgress?.({
-					message: "正在生成精华计划...",
-				});
+			const includeHook = toBooleanOrDefault(params.includeHook, true);
+			context?.reportProgress?.({
+				message: "正在生成精华计划...",
+			});
 
-				const plan = segmentSelectorService.selectSegments(
-					scoredSegments,
+			const plan = segmentSelectorService.selectSegments(
+				scoredSegments,
 				targetDuration,
 				tolerance,
 				{
@@ -1933,7 +1942,7 @@ export const generateHighlightPlanTool: AgentTool = {
 				};
 			}
 
-				updateHighlightCache({ highlightPlan: plan, timelineFingerprint });
+			updateHighlightCache({ highlightPlan: plan, timelineFingerprint });
 
 			return {
 				success: true,
@@ -1944,15 +1953,15 @@ export const generateHighlightPlanTool: AgentTool = {
 					timelineFingerprint: highlightCache.timelineFingerprint,
 				},
 			};
-			} catch (error) {
-				if (isExecutionCancelledError(error)) {
-					return {
-						success: false,
-						message: "精华计划生成已取消 (Highlight plan cancelled)",
-						data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
-					};
-				}
+		} catch (error) {
+			if (isExecutionCancelledError(error)) {
 				return {
+					success: false,
+					message: "精华计划生成已取消 (Highlight plan cancelled)",
+					data: { errorCode: EXECUTION_CANCELLED_ERROR_CODE },
+				};
+			}
+			return {
 				success: false,
 				message: `生成精华计划失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "GENERATE_HIGHLIGHT_PLAN_FAILED" },
@@ -2074,7 +2083,10 @@ export const applyHighlightCutTool: AgentTool = {
 				(sum, range) => sum + (range.end - range.start),
 				0,
 			);
-			const expectedDuration = Math.max(0, totalDuration - totalDeletedDuration);
+			const expectedDuration = Math.max(
+				0,
+				totalDuration - totalDeletedDuration,
+			);
 
 			let deletedRangeCount = 0;
 			let deletedElementCount = 0;
@@ -2084,8 +2096,8 @@ export const applyHighlightCutTool: AgentTool = {
 					deleteRanges
 						.flatMap((range) => [range.start, range.end])
 						.map((time) => Number(time.toFixed(4))),
-					),
-				).sort((a, b) => b - a);
+				),
+			).sort((a, b) => b - a);
 
 			const splitResult = splitTracksAtTimes({
 				tracks: tracksSnapshot,
@@ -2121,7 +2133,10 @@ export const applyHighlightCutTool: AgentTool = {
 				(sum, track) => sum + track.elements.length,
 				0,
 			);
-			if (finalDuration <= MIN_INTERVAL_SECONDS || remainingElementCount === 0) {
+			if (
+				finalDuration <= MIN_INTERVAL_SECONDS ||
+				remainingElementCount === 0
+			) {
 				return {
 					success: false,
 					message:
