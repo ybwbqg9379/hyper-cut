@@ -202,6 +202,19 @@ interface HighlightPlanPreviewPayload {
 	actualDuration?: number;
 }
 
+interface OperationDiffPayload {
+	affectedElements: {
+		added: string[];
+		removed: string[];
+		moved: string[];
+	};
+	duration: {
+		beforeSeconds: number;
+		afterSeconds: number;
+		deltaSeconds: number;
+	};
+}
+
 function asObjectRecord(value: unknown): Record<string, unknown> | null {
 	if (!value || typeof value !== "object" || Array.isArray(value)) {
 		return null;
@@ -266,6 +279,62 @@ function extractHighlightPlanPreviewFromToolCalls(
 	return null;
 }
 
+function asOperationDiffPayload(data: unknown): OperationDiffPayload | null {
+	const record = asObjectRecord(data);
+	if (!record) return null;
+	const affected = asObjectRecord(record.affectedElements);
+	const duration = asObjectRecord(record.duration);
+	if (!affected || !duration) return null;
+	const beforeSeconds = toFiniteNumber(duration.beforeSeconds);
+	const afterSeconds = toFiniteNumber(duration.afterSeconds);
+	const deltaSeconds = toFiniteNumber(duration.deltaSeconds);
+	if (
+		beforeSeconds === undefined ||
+		afterSeconds === undefined ||
+		deltaSeconds === undefined
+	) {
+		return null;
+	}
+
+	return {
+		affectedElements: {
+			added: Array.isArray(affected.added)
+				? affected.added.filter((v): v is string => typeof v === "string")
+				: [],
+			removed: Array.isArray(affected.removed)
+				? affected.removed.filter((v): v is string => typeof v === "string")
+				: [],
+			moved: Array.isArray(affected.moved)
+				? affected.moved.filter((v): v is string => typeof v === "string")
+				: [],
+		},
+		duration: {
+			beforeSeconds,
+			afterSeconds,
+			deltaSeconds,
+		},
+	};
+}
+
+function extractOperationDiffFromToolCalls(
+	toolCalls: AgentResponse["toolCalls"] | undefined,
+): { toolName: string; diff: OperationDiffPayload } | null {
+	if (!toolCalls || toolCalls.length === 0) return null;
+
+	for (const toolCall of toolCalls) {
+		if (!toolCall.result.success) continue;
+		const dataRecord = asObjectRecord(toolCall.result.data);
+		const diff = asOperationDiffPayload(dataRecord?.diff);
+		if (!diff) continue;
+		return {
+			toolName: toolCall.name,
+			diff,
+		};
+	}
+
+	return null;
+}
+
 function hasSuccessfulToolCall({
 	toolCalls,
 	toolName,
@@ -314,6 +383,12 @@ export function AgentChatbox() {
 	);
 	const setHighlightPreviewPlaybackEnabled = useAgentUiStore(
 		(state) => state.setHighlightPreviewPlaybackEnabled,
+	);
+	const setOperationDiffPreview = useAgentUiStore(
+		(state) => state.setOperationDiffPreview,
+	);
+	const clearOperationDiffPreview = useAgentUiStore(
+		(state) => state.clearOperationDiffPreview,
 	);
 
 	const {
@@ -390,6 +465,9 @@ export function AgentChatbox() {
 		const highlightPlanPreview = extractHighlightPlanPreviewFromToolCalls(
 			response.toolCalls,
 		);
+		const operationDiffPreview = extractOperationDiffFromToolCalls(
+			response.toolCalls,
+		);
 		const applyHighlightCutSucceeded = hasSuccessfulToolCall({
 			toolCalls: response.toolCalls,
 			toolName: "apply_highlight_cut",
@@ -419,6 +497,15 @@ export function AgentChatbox() {
 			toast.success("精华剪辑已应用到时间线");
 		} else if (removeSilenceSucceeded) {
 			toast.success("静音删除已完成");
+		}
+		if (operationDiffPreview) {
+			setOperationDiffPreview({
+				toolName: operationDiffPreview.toolName,
+				diff: operationDiffPreview.diff,
+				sourceRequestId: response.requestId,
+			});
+		} else if (response.status === "completed") {
+			clearOperationDiffPreview();
 		}
 
 		const hasDedicatedSuccessToast =
@@ -561,6 +648,7 @@ export function AgentChatbox() {
 		setStepErrors({});
 		setHighlightPreviewPlaybackEnabled({ enabled: false });
 		clearHighlightPreview();
+		clearOperationDiffPreview();
 		clearHistory();
 	};
 
@@ -1342,6 +1430,18 @@ function MessageBubble({
 									<X className="size-3" />
 								)}
 								<span className="font-mono">{tc.name}</span>
+								{(() => {
+									const dataRecord = asObjectRecord(tc.result.data);
+									const diff = asOperationDiffPayload(dataRecord?.diff);
+									if (!diff) return null;
+									return (
+										<span className="text-[10px] opacity-80">
+											Δ{diff.duration.deltaSeconds.toFixed(2)}s · 删除
+											{diff.affectedElements.removed.length} · 移动
+											{diff.affectedElements.moved.length}
+										</span>
+									);
+								})()}
 							</div>
 						))}
 					</div>

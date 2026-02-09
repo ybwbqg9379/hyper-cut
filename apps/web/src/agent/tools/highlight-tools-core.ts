@@ -43,6 +43,7 @@ import type {
 } from "./highlight-types";
 import { generateCaptionsTool, removeSilenceTool } from "./timeline-tools";
 import {
+	buildTimelineOperationDiff,
 	splitTracksAtTimes,
 	deleteElementsFullyInRange,
 	rippleCompressTracks,
@@ -1988,6 +1989,10 @@ export const applyHighlightCutTool: AgentTool = {
 				description:
 					"是否追加静音删除（默认 false）(Remove silence after cutting)",
 			},
+			dryRun: {
+				type: "boolean",
+				description: "仅预览剪辑差异，不应用 (Preview diff only)",
+			},
 		},
 		required: [],
 	},
@@ -2008,6 +2013,7 @@ export const applyHighlightCutTool: AgentTool = {
 
 			const addCaptions = toBooleanOrDefault(params.addCaptions, false);
 			const removeSilence = toBooleanOrDefault(params.removeSilence, false);
+			const dryRun = toBooleanOrDefault(params.dryRun, false);
 
 			const editor = EditorCore.getInstance();
 			const tracksSnapshot = editor.timeline.getTracks();
@@ -2130,6 +2136,12 @@ export const applyHighlightCutTool: AgentTool = {
 			throwIfExecutionCancelled(context?.signal);
 			const finalTracks = ripple.tracks;
 			const finalDuration = calculateTotalDuration({ tracks: finalTracks });
+			const diff = buildTimelineOperationDiff({
+				beforeTracks: tracksSnapshot,
+				afterTracks: finalTracks,
+				keepRanges,
+				deleteRanges,
+			});
 			const remainingElementCount = finalTracks.reduce(
 				(sum, track) => sum + track.elements.length,
 				0,
@@ -2176,6 +2188,31 @@ export const applyHighlightCutTool: AgentTool = {
 						finalDuration: Number(finalDuration.toFixed(4)),
 						deletedRangeCount,
 						splitCount: splitResult.splitCount,
+					},
+				};
+			}
+
+			if (dryRun) {
+				return {
+					success: true,
+					message:
+						`[预览] 将删除区间 ${deletedRangeCount} 个，` +
+						`预计时长 ${totalDuration.toFixed(2)}s → ${finalDuration.toFixed(2)}s`,
+					data: {
+						deleteRanges,
+						keepRanges,
+						splitTimes,
+						deletedRangeCount,
+						deletedElementCount,
+						splitCount: splitResult.splitCount,
+						totalDurationBefore: Number(totalDuration.toFixed(4)),
+						expectedDuration: Number(expectedDuration.toFixed(4)),
+						finalDuration: Number(finalDuration.toFixed(4)),
+						rippleMovedElementCount: ripple.movedElementCount,
+						plan,
+						timelineFingerprint: highlightCache.timelineFingerprint,
+						dryRun: true,
+						diff,
 					},
 				};
 			}
@@ -2253,6 +2290,8 @@ export const applyHighlightCutTool: AgentTool = {
 					followUps,
 					plan,
 					timelineFingerprint: highlightCache.timelineFingerprint,
+					dryRun: false,
+					diff,
 				},
 			};
 		} catch (error) {

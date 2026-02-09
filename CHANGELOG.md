@@ -25,6 +25,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Orchestrator 新增 `executeToolCallsAsDag`，`process` 与 `confirmPendingPlan` 接入 DAG 调度
   - 新增 workflow `timeline-diagnostics`，提供并行 read-only 步骤样例
   - 新增测试：`dag-planner.test.ts`；增强 `orchestrator.test.ts` 的 DAG 并行执行覆盖
+- **Agent Dry-run + Diff（Phase 4）**：关键改动工具支持仿真预览与统一 diff 输出
+  - 在 `timeline-edit-ops.ts` 新增统一 diff schema 与 `buildTimelineOperationDiff`
+  - `remove_silence`、`remove_filler_words`、`apply_highlight_cut` 新增 `dryRun` 协议
+  - dryRun 返回 diff 且不落盘，real-run 返回实际 diff 并执行写入
+  - `agent-ui-store` 与 `AgentChatbox` 新增 operation diff 预览与摘要展示
+  - 新增测试：`timeline-diff.test.ts`；增强 `integration-registry-timeline.ts` 覆盖 dryRun 行为
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

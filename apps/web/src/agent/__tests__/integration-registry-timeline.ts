@@ -493,9 +493,54 @@ export function registerRegistryTimelineTests() {
 				minDuration: 0.00001,
 			});
 			expect(result.success).toBe(true);
+			expect((result.data as { diff?: unknown })?.diff).toBeDefined();
 			// After P0/P1 refactor, remove_silence uses pure split/delete/ripple functions
 			// then atomically replaces tracks via replaceTracks
 			expect(editor.timeline.replaceTracks).toHaveBeenCalled();
+		});
+
+		it("remove_silence dryRun should return diff without mutating timeline", async () => {
+			const tool = getToolByName("remove_silence");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: {
+					replaceTracks: ReturnType<typeof vi.fn>;
+					getTracks: ReturnType<typeof vi.fn>;
+				};
+			};
+
+			editor.timeline.getTracks.mockImplementation(() => [
+				{
+					id: "track-audio",
+					type: "audio",
+					muted: false,
+					elements: [
+						{
+							id: "audio-1",
+							type: "audio",
+							sourceType: "upload",
+							mediaId: "asset4",
+							startTime: 0,
+							duration: 10,
+							trimStart: 0,
+							trimEnd: 0,
+							volume: 1,
+						},
+					],
+				},
+			]);
+
+			const result = await tool.execute({
+				source: "timeline",
+				dryRun: true,
+				threshold: 0.5,
+				minDuration: 0.00001,
+			});
+
+			expect(result.success).toBe(true);
+			expect((result.data as { dryRun?: boolean })?.dryRun).toBe(true);
+			expect((result.data as { diff?: unknown })?.diff).toBeDefined();
+			expect(editor.timeline.replaceTracks).not.toHaveBeenCalled();
 		});
 
 		it("remove_silence should fail with no audio source", async () => {

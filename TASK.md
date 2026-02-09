@@ -104,7 +104,7 @@ Commit message 约定：
 
 ### Phase 4: 通用 Dry-run + Diff 仿真
 
-- **Status**: 🔄 In Progress
+- **Status**: ✅ Completed
 - **Description**: 所有改动型工具先仿真输出 diff，再确认应用。
 - **Implementation Scope**:
   - 扩展工具参数协议：`dryRun?: boolean`
@@ -114,16 +114,16 @@ Commit message 约定：
     - keep/delete ranges
   - `agent-ui-store` + `AgentChatbox` 增加通用 diff 可视化（不只 highlight）
 - **Acceptance Criteria**:
-  - [ ] 关键改动工具支持 dryRun
-  - [ ] dryRun 与真实执行结果统计一致（误差在允许范围）
-  - [ ] UI 可预览并支持“确认执行”
+  - [x] 关键改动工具支持 dryRun
+  - [x] dryRun 与真实执行结果统计一致（误差在允许范围）
+  - [x] UI 可预览并支持“确认执行”
 - **Tests**:
-  - [ ] dryRun/real-run 一致性测试
-  - [ ] diff schema 序列化测试
-  - [ ] UI 交互测试（确认/取消）
+  - [x] dryRun/real-run 一致性测试
+  - [x] diff schema 序列化测试
+  - [x] UI 交互测试（确认/取消）
 - **Docs**:
-  - [ ] `CHANGELOG.md`
-  - [ ] `docs/plans/agent-dryrun-diff.md`
+  - [x] `CHANGELOG.md`
+  - [x] `docs/plans/agent-dryrun-diff.md`
 
 ### Phase 5: Recovery Policy（失败自恢复）
 

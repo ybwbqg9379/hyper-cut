@@ -37,6 +37,7 @@ import {
 } from "./action-utils";
 import { executeMutationWithUndoGuard } from "./execution-policy";
 import {
+	buildTimelineOperationDiff,
 	splitTracksAtTime,
 	deleteElementsFullyInRange,
 	rippleCompressTracks,
@@ -2274,6 +2275,10 @@ export const removeSilenceTool: AgentTool = {
 				type: "number",
 				description: "分析窗口长度（秒）(Analysis window seconds)",
 			},
+			dryRun: {
+				type: "boolean",
+				description: "仅预览差异，不执行变更 (Preview diff only)",
+			},
 		},
 		required: [],
 	},
@@ -2361,6 +2366,7 @@ export const removeSilenceTool: AgentTool = {
 				isFiniteNumber(params.windowSeconds) && params.windowSeconds > 0
 					? params.windowSeconds
 					: 0.1;
+			const dryRun = params.dryRun === true;
 
 			const audioBlob = await extractTimelineAudio({
 				tracks: tracksToUse,
@@ -2455,6 +2461,33 @@ export const removeSilenceTool: AgentTool = {
 				deleteRanges: filteredIntervals,
 				shouldShift: source === "selection" ? includePredicate : undefined,
 			});
+			const diff = buildTimelineOperationDiff({
+				beforeTracks: allTracks,
+				afterTracks: ripple.tracks,
+				deleteRanges: filteredIntervals,
+			});
+
+			if (dryRun) {
+				return {
+					success: true,
+					message:
+						`[预览] 将删除 ${totalDeleted} 个静音片段，` +
+						`预计时长变化 ${diff.duration.deltaSeconds.toFixed(2)} 秒。`,
+					data: {
+						silenceCount: filteredIntervals.length,
+						intervals: filteredIntervals,
+						deletedCount: totalDeleted,
+						splitCount: totalSplits,
+						rippleMovedCount: ripple.movedElementCount,
+						source,
+						threshold,
+						minDuration,
+						dryRun: true,
+						diff,
+					},
+				};
+			}
+
 			throwIfExecutionCancelled(context?.signal);
 			await executeMutationWithUndoGuard({
 				label: "remove_silence",
@@ -2478,6 +2511,8 @@ export const removeSilenceTool: AgentTool = {
 					source,
 					threshold,
 					minDuration,
+					dryRun: false,
+					diff,
 				},
 			};
 		} catch (error) {

@@ -16,6 +16,7 @@ import { buildTranscriptContext } from "../services/transcript-context-builder";
 import { transcriptionService } from "@/services/transcription/service";
 import { FILLER_CUT_MARGIN_SECONDS } from "../constants/filler";
 import {
+	buildTimelineOperationDiff,
 	splitTracksAtTimes,
 	deleteElementsFullyInRange,
 	rippleCompressTracks,
@@ -262,27 +263,10 @@ export const removeFillerWordsTool: AgentTool = {
 			0,
 		);
 
-		if (dryRun) {
-			return {
-				success: true,
-				message:
-					`[预览] 将删除 ${matches.length} 个填充词，` +
-					`共 ${cutRanges.length} 个区间，` +
-					`总时长 ${totalCutDuration.toFixed(1)}s。` +
-					"(Dry run — no changes made.)",
-				data: {
-					removedCount: matches.length,
-					cutRanges: cutRanges.length,
-					totalCutDurationSeconds: Number(totalCutDuration.toFixed(3)),
-					dryRun: true,
-				},
-			};
-		}
-
-		// Perform actual timeline edits
 		try {
 			const editor = EditorCore.getInstance();
-			let tracks = editor.timeline.getTracks() as TimelineTrack[];
+			const beforeTracks = editor.timeline.getTracks() as TimelineTrack[];
+			let tracks = beforeTracks;
 
 			// Collect all split times from cut ranges
 			const splitTimes = cutRanges.flatMap((r) => [r.start, r.end]);
@@ -305,6 +289,32 @@ export const removeFillerWordsTool: AgentTool = {
 			const { tracks: compressedTracks, movedElementCount } =
 				rippleCompressTracks({ tracks, deleteRanges: cutRanges });
 			tracks = compressedTracks;
+			const diff = buildTimelineOperationDiff({
+				beforeTracks,
+				afterTracks: tracks,
+				deleteRanges: cutRanges,
+			});
+
+			if (dryRun) {
+				return {
+					success: true,
+					message:
+						`[预览] 将删除 ${matches.length} 个填充词，` +
+						`共 ${cutRanges.length} 个区间，` +
+						`总时长 ${totalCutDuration.toFixed(1)}s。` +
+						"(Dry run — no changes made.)",
+					data: {
+						removedCount: matches.length,
+						cutRanges: cutRanges.length,
+						totalCutDurationSeconds: Number(totalCutDuration.toFixed(3)),
+						splitCount,
+						deletedElementCount: totalDeleted,
+						movedElementCount,
+						dryRun: true,
+						diff,
+					},
+				};
+			}
 
 			// Apply to editor (same pattern as removeSilenceTool)
 			const previousSelection = editor.selection.getSelectedElements();
@@ -336,6 +346,7 @@ export const removeFillerWordsTool: AgentTool = {
 					movedElementCount,
 					totalCutDurationSeconds: Number(totalCutDuration.toFixed(3)),
 					dryRun: false,
+					diff,
 				},
 			};
 		} catch (error) {

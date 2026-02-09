@@ -29,9 +29,30 @@ export interface AgentExecutionProgressState {
 	updatedAt: string;
 }
 
+export interface AgentOperationDiffPreviewState {
+	toolName: string;
+	diff: {
+		affectedElements: {
+			added: string[];
+			removed: string[];
+			moved: string[];
+		};
+		duration: {
+			beforeSeconds: number;
+			afterSeconds: number;
+			deltaSeconds: number;
+		};
+		keepRanges?: TimeRange[];
+		deleteRanges?: TimeRange[];
+	};
+	sourceRequestId?: string;
+	updatedAt: string;
+}
+
 interface AgentUiStore {
 	highlightPreview: HighlightPreviewState | null;
 	highlightPreviewPlaybackEnabled: boolean;
+	operationDiffPreview: AgentOperationDiffPreviewState | null;
 	executionProgress: AgentExecutionProgressState | null;
 	setHighlightPreviewFromPlan: (payload: {
 		segments: Array<{
@@ -46,6 +67,12 @@ interface AgentUiStore {
 		sourceRequestId?: string;
 	}) => void;
 	clearHighlightPreview: () => void;
+	setOperationDiffPreview: (payload: {
+		toolName: string;
+		diff: AgentOperationDiffPreviewState["diff"];
+		sourceRequestId?: string;
+	}) => void;
+	clearOperationDiffPreview: () => void;
 	setHighlightPreviewPlaybackEnabled: ({
 		enabled,
 	}: {
@@ -123,6 +150,7 @@ function isHighlightPreviewRange(
 export const useAgentUiStore = create<AgentUiStore>((set) => ({
 	highlightPreview: null,
 	highlightPreviewPlaybackEnabled: false,
+	operationDiffPreview: null,
 	executionProgress: null,
 
 	setHighlightPreviewFromPlan: ({
@@ -198,6 +226,21 @@ export const useAgentUiStore = create<AgentUiStore>((set) => ({
 		});
 	},
 
+	setOperationDiffPreview: ({ toolName, diff, sourceRequestId }) => {
+		set({
+			operationDiffPreview: {
+				toolName,
+				diff,
+				sourceRequestId,
+				updatedAt: new Date().toISOString(),
+			},
+		});
+	},
+
+	clearOperationDiffPreview: () => {
+		set({ operationDiffPreview: null });
+	},
+
 	setHighlightPreviewPlaybackEnabled: ({ enabled }) => {
 		set({ highlightPreviewPlaybackEnabled: enabled });
 	},
@@ -218,6 +261,7 @@ export const useAgentUiStore = create<AgentUiStore>((set) => ({
 		set({
 			highlightPreview: null,
 			highlightPreviewPlaybackEnabled: false,
+			operationDiffPreview: null,
 			executionProgress: null,
 		});
 	},
