@@ -132,6 +132,105 @@ function findElementByRef({
 	return track.elements.find((item) => item.id === elementId) ?? null;
 }
 
+function isPositionableElement(
+	element: TimelineElement,
+): element is Exclude<TimelineElement, { type: "audio" }> {
+	return "transform" in element;
+}
+
+function collectPositionableElements({
+	tracks,
+}: {
+	tracks: TimelineTrack[];
+}): Array<{
+	track: TimelineTrack;
+	element: Exclude<TimelineElement, { type: "audio" }>;
+}> {
+	return tracks
+		.flatMap((track) =>
+			track.elements
+				.filter(isPositionableElement)
+				.map((element) => ({ track, element })),
+		)
+		.sort((a, b) => a.element.startTime - b.element.startTime);
+}
+
+function containsLogoKeyword(value: string): boolean {
+	return /logo|watermark|brand|badge/i.test(value);
+}
+
+function resolveTargetElementForLayout({
+	tracks,
+	target,
+}: {
+	tracks: TimelineTrack[];
+	target: SpatialLayoutTarget;
+}):
+	| {
+			trackId: string;
+			elementId: string;
+			matchReason: string;
+	  }
+	| null {
+	const positionableElements = collectPositionableElements({ tracks });
+	const stickerCandidates = positionableElements.filter(
+		(item) => item.element.type === "sticker",
+	);
+	const captionCandidates = positionableElements.filter(
+		(item) =>
+			item.element.type === "text" &&
+			isCaptionTextElement(item.element as Extract<TimelineElement, { type: "text" }>),
+	);
+
+	if (target === "caption") {
+		const matched = captionCandidates[0];
+		return matched
+			? {
+					trackId: matched.track.id,
+					elementId: matched.element.id,
+					matchReason: "auto-caption-first",
+				}
+			: null;
+	}
+
+	if (target === "sticker") {
+		const matched = stickerCandidates[0];
+		return matched
+			? {
+					trackId: matched.track.id,
+					elementId: matched.element.id,
+					matchReason: "auto-sticker-first",
+				}
+			: null;
+	}
+
+	const namedLogo = positionableElements.find((item) => {
+		const textCandidates = [
+			item.element.name,
+			item.element.type === "text" ? item.element.content : "",
+			item.element.type === "sticker" ? item.element.iconName : "",
+		];
+		return textCandidates.some((value) => value && containsLogoKeyword(value));
+	});
+	if (namedLogo) {
+		return {
+			trackId: namedLogo.track.id,
+			elementId: namedLogo.element.id,
+			matchReason: "auto-logo-keyword",
+		};
+	}
+
+	const stickerFallback = stickerCandidates[0];
+	if (stickerFallback) {
+		return {
+			trackId: stickerFallback.track.id,
+			elementId: stickerFallback.element.id,
+			matchReason: "auto-logo-sticker-fallback",
+		};
+	}
+	return null;
+}
+
 function findVideoAssetIdFromSelection({
 	tracks,
 	selectedElements,
@@ -1319,14 +1418,31 @@ export const applyLayoutSuggestionTool: AgentTool = {
 				};
 			}
 
-			const elementId =
+			let elementId =
 				typeof params.elementId === "string" && params.elementId.trim().length > 0
 					? params.elementId.trim()
 					: undefined;
-			const trackId =
+			let trackId =
 				typeof params.trackId === "string" && params.trackId.trim().length > 0
 					? params.trackId.trim()
 					: undefined;
+			let autoMatchedElement:
+				| { trackId: string; elementId: string; matchReason: string }
+				| null = null;
+			if (!elementId) {
+				const editor = EditorCore.getInstance();
+				const tracks = editor.timeline.getTracks();
+				const autoMatched = resolveTargetElementForLayout({
+					tracks,
+					target: selectedSuggestion.target,
+				});
+				if (autoMatched) {
+					elementId = autoMatched.elementId;
+					trackId = trackId ?? autoMatched.trackId;
+					autoMatchedElement = autoMatched;
+				}
+			}
+
 			const positionResult = await positionElementTool.execute({
 				elementId,
 				trackId,
@@ -1353,6 +1469,7 @@ export const applyLayoutSuggestionTool: AgentTool = {
 					videoAssetId: sourceVideoAssetId || undefined,
 					suggestionIndex: selectedIndex,
 					suggestion: selectedSuggestion,
+					autoMatchedElement: autoMatchedElement ?? undefined,
 					positionResult: positionResult.data,
 				},
 			};

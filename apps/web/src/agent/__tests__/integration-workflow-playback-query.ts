@@ -142,6 +142,39 @@ export function registerWorkflowPlaybackQueryTests() {
 				optionalFailures?.some((failure) => failure.stepId === "add-sfx"),
 			).toBe(true);
 		});
+
+		it("run_workflow should execute apply-caption-layout with inline suggestion override", async () => {
+			const tool = getToolByName("run_workflow");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: {
+					updateElements: ReturnType<typeof vi.fn>;
+				};
+			};
+
+			const result = await tool.execute({
+				workflowName: "one-click-masterpiece",
+				startFromStepId: "apply-caption-layout",
+				stepOverrides: [
+					{
+						stepId: "apply-caption-layout",
+						arguments: {
+							target: "caption",
+							suggestion: {
+								target: "caption",
+								anchor: "bottom-center",
+								marginX: 0,
+								marginY: 0.1,
+							},
+						},
+					},
+				],
+				confirmRequiredSteps: true,
+			});
+
+			expect(result.success).toBe(true);
+			expect(editor.timeline.updateElements).toHaveBeenCalled();
+		});
 	});
 
 	describe("Vision Tools", () => {

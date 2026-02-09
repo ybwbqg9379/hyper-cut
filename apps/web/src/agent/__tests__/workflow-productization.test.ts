@@ -129,7 +129,30 @@ describe("workflow productization", () => {
 		expect(applyCut?.arguments).toMatchObject({
 			dryRun: true,
 		});
+		const applyCaptionLayout = oneClick?.steps.find(
+			(step) => step.id === "apply-caption-layout",
+		);
+		expect(applyCaptionLayout?.toolName).toBe("apply_layout_suggestion");
+		expect(applyCaptionLayout?.requiresConfirmation).toBe(true);
 		const addSfx = oneClick?.steps.find((step) => step.id === "add-sfx");
 		expect(addSfx?.optional).toBe(true);
+	});
+
+	it("should include caption layout step for talking-head workflow", () => {
+		const workflows = listWorkflows();
+		const talkingHead = workflows.find(
+			(workflow) => workflow.name === "talking-head-polish",
+		);
+		const analyzeFrames = talkingHead?.steps.find(
+			(step) => step.id === "analyze-frames",
+		);
+		const applyCaptionLayout = talkingHead?.steps.find(
+			(step) => step.id === "apply-caption-layout",
+		);
+
+		expect(analyzeFrames?.toolName).toBe("analyze_frames");
+		expect(analyzeFrames?.optional).toBe(true);
+		expect(applyCaptionLayout?.toolName).toBe("apply_layout_suggestion");
+		expect(applyCaptionLayout?.requiresConfirmation).toBe(true);
 	});
 });

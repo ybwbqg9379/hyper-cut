@@ -792,6 +792,25 @@ export const WORKFLOWS: Workflow[] = [
 				summary: "应用字幕风格模板",
 			},
 			{
+				id: "apply-caption-layout",
+				toolName: "apply_layout_suggestion",
+				arguments: {
+					target: "caption",
+				},
+				argumentSchema: [
+					{
+						key: "target",
+						type: "string",
+						description: "布局建议目标类型",
+						defaultValue: "caption",
+						enum: ["caption", "logo", "sticker"],
+					},
+				],
+				summary: "基于视觉建议自动调整字幕位置",
+				requiresConfirmation: true,
+				optional: true,
+			},
+			{
 				id: "search-sfx",
 				toolName: "search_sound_effect",
 				arguments: {
@@ -1150,6 +1169,27 @@ export const WORKFLOWS: Workflow[] = [
 				requiresConfirmation: true,
 			},
 			{
+				id: "analyze-frames",
+				toolName: "analyze_frames",
+				arguments: {
+					maxFrames: 8,
+					prompt: "关注人物位置与字幕安全区，输出适合字幕布局的观察。",
+				},
+				argumentSchema: [
+					{
+						key: "maxFrames",
+						type: "number",
+						description: "分析帧数上限",
+						defaultValue: 8,
+						min: 1,
+						max: 30,
+					},
+				],
+				summary: "分析口播画面构图，为字幕布局提供依据",
+				optional: true,
+				operation: "read",
+			},
+			{
 				id: "generate-captions",
 				toolName: "generate_captions",
 				arguments: {
@@ -1183,6 +1223,25 @@ export const WORKFLOWS: Workflow[] = [
 					},
 				],
 				summary: "生成可读性更好的字幕",
+			},
+			{
+				id: "apply-caption-layout",
+				toolName: "apply_layout_suggestion",
+				arguments: {
+					target: "caption",
+				},
+				argumentSchema: [
+					{
+						key: "target",
+						type: "string",
+						description: "布局建议目标类型",
+						defaultValue: "caption",
+						enum: ["caption", "logo", "sticker"],
+					},
+				],
+				summary: "根据视觉分析建议调整字幕位置",
+				requiresConfirmation: true,
+				optional: true,
 			},
 		],
 	},
