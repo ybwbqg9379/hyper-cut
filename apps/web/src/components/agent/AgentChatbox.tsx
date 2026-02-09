@@ -223,6 +223,7 @@ const AGENT_CHATBOX_TEXT = {
  * Design follows existing panel patterns (PanelBaseView, ScenesView)
  */
 export function AgentChatbox() {
+	const CHAT_AUTO_SCROLL_THRESHOLD_PX = 48;
 	const { locale, setLocale } = useAgentLocale();
 	const text = AGENT_CHATBOX_TEXT[locale];
 	const editor = useEditor();
@@ -246,6 +247,8 @@ export function AgentChatbox() {
 	);
 
 	const messagesEndRef = useRef<HTMLDivElement>(null);
+	const chatScrollAreaRef = useRef<HTMLDivElement>(null);
+	const shouldAutoScrollRef = useRef(true);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const setHighlightPreviewFromPlan = useAgentUiStore(
 		(state) => state.setHighlightPreviewFromPlan,
@@ -376,12 +379,57 @@ export function AgentChatbox() {
 		checkProvider().then(setProviderStatus);
 	}, [checkProvider]);
 
-	// Scroll to bottom when messages change
+	// Track whether user keeps chat near bottom; only then auto-follow progress updates.
+	useEffect(() => {
+		const container = chatScrollAreaRef.current;
+		if (!container) return;
+
+		const updateShouldAutoScroll = () => {
+			const distanceToBottom =
+				container.scrollHeight - container.scrollTop - container.clientHeight;
+			shouldAutoScrollRef.current =
+				distanceToBottom <= CHAT_AUTO_SCROLL_THRESHOLD_PX;
+		};
+
+		updateShouldAutoScroll();
+		container.addEventListener("scroll", updateShouldAutoScroll, {
+			passive: true,
+		});
+
+		return () => {
+			container.removeEventListener("scroll", updateShouldAutoScroll);
+		};
+	}, []);
+
+	// Scroll to bottom when messages change.
 	const messageCount = messages.length;
 	useEffect(() => {
 		void messageCount;
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, [messageCount]);
+
+	// Auto-follow execution timeline updates while processing if user stays near bottom.
+	useEffect(() => {
+		if (activeView !== "chat" || !isProcessing) return;
+		if (activeExecutionEvents.length === 0) return;
+		if (!shouldAutoScrollRef.current) return;
+
+		const frame = window.requestAnimationFrame(() => {
+			const container = chatScrollAreaRef.current;
+			if (container) {
+				container.scrollTo({
+					top: container.scrollHeight,
+					behavior: "smooth",
+				});
+				return;
+			}
+			messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+		});
+
+		return () => {
+			window.cancelAnimationFrame(frame);
+		};
+	}, [activeExecutionEvents, activeView, isProcessing]);
 
 	const appendAssistantResponse = (response: AgentResponse) => {
 		const highlightPlanPreview = extractHighlightPlanPreviewFromToolCalls(
@@ -904,7 +952,7 @@ export function AgentChatbox() {
 
 			<TabsContent value="chat" className="mt-0 flex min-h-0 flex-1 flex-col">
 				{/* Messages - uses ScrollArea like PanelBaseView */}
-				<ScrollArea className="flex-1">
+				<ScrollArea ref={chatScrollAreaRef} className="flex-1">
 					<div className="p-4 space-y-3">
 						{messages.length === 0 && (
 							<div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
