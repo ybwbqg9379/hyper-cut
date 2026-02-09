@@ -51,7 +51,10 @@ jobs:
         working-directory: apps/web
         run: bun run build
 
-      - name: Run tests
+      - name: Run upstream guard
         working-directory: apps/web
-        run: echo "No tests implemented yet"
-        continue-on-error: true
+        run: bun run agent:upstream-guard:ci
+
+      - name: Run agent compatibility smoke tests
+        working-directory: apps/web
+        run: bun run test:agent-smoke

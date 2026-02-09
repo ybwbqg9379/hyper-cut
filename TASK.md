@@ -218,22 +218,22 @@ Commit message 约定：
 
 ### Phase 9: Upstream 同步护栏 + 兼容回归
 
-- **Status**: ⏳ Pending
+- **Status**: ✅ Completed
 - **Description**: 建立 upstream 变更自动 diff 与 Agent 兼容检查。
 - **Implementation Scope**:
   - 新增脚本 `apps/web/scripts/agent-upstream-guard.ts`
   - 对比 actions/managers/commands 的能力差异报告
   - 在 CI 增加 agent 兼容回归任务（工具注册、关键 workflow、恢复链路）
 - **Acceptance Criteria**:
-  - [ ] 每次上游同步后可自动产出差异报告
-  - [ ] 报告可定位“新增能力未映射”清单
-  - [ ] CI 阻断严重兼容回归
+  - [x] 每次上游同步后可自动产出差异报告
+  - [x] 报告可定位“新增能力未映射”清单
+  - [x] CI 阻断严重兼容回归
 - **Tests**:
-  - [ ] guard 脚本单测
-  - [ ] 兼容性 smoke tests
+  - [x] guard 脚本单测
+  - [x] 兼容性 smoke tests
 - **Docs**:
-  - [ ] `CHANGELOG.md`
-  - [ ] `docs/plans/agent-upstream-guard.md`
+  - [x] `CHANGELOG.md`
+  - [x] `docs/plans/agent-upstream-guard.md`
 
 ### Phase 10: 全链路代码审查与硬化收尾
 

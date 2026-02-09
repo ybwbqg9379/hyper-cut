@@ -57,6 +57,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - Orchestrator、语义高光与视觉分析链路改用任务型 provider 路由
   - 新增配置 `NEXT_PUBLIC_AGENT_PROVIDER_PRIVACY_MODE`，支持本地优先/混合/云端优先模式
   - 新增测试：`providers/__tests__/router.test.ts`、`providers/__tests__/routed-provider.test.ts`
+- **Agent Upstream Guard（Phase 9）**：新增上游同步护栏与兼容回归门禁
+  - 新增 `src/agent/compat/upstream-guard.ts`，自动对比 actions/managers/commands baseline 差异
+  - 新增 `scripts/agent-upstream-guard.ts`，支持 baseline 生成、报告输出和 blocking 阻断
+  - 新增 baseline：`src/agent/compat/upstream-baseline.json`
+  - 新增测试：`upstream-guard.test.ts`（护栏单测）与 `compat-smoke.test.ts`（工具/工作流/恢复链路 smoke）
+  - CI `bun-ci.yml` 新增 `agent:upstream-guard:ci` 与 `test:agent-smoke`，替换原测试占位步骤
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support
