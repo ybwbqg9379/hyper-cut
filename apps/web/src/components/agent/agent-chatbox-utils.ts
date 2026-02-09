@@ -52,6 +52,16 @@ export interface OperationDiffPayload {
 	};
 }
 
+export interface TranscriptSuggestionPayload {
+	id: string;
+	startWordIndex: number;
+	endWordIndex: number;
+	reason: string;
+	accepted: boolean;
+	estimatedDurationSeconds?: number;
+	source?: "llm" | "rule" | "filler";
+}
+
 function detectWorkflowFieldKind(value: unknown): WorkflowFieldKind {
 	if (typeof value === "number") return "number";
 	if (typeof value === "boolean") return "boolean";
@@ -338,6 +348,78 @@ export function extractOperationDiffFromToolCalls(
 			toolName: toolCall.name,
 			diff,
 		};
+	}
+
+	return null;
+}
+
+export function extractTranscriptSuggestionsFromToolCalls(
+	toolCalls: AgentResponse["toolCalls"] | undefined,
+): TranscriptSuggestionPayload[] | null {
+	if (!toolCalls || toolCalls.length === 0) return null;
+
+	for (const toolCall of toolCalls) {
+		if (!toolCall.result.success) continue;
+		if (
+			toolCall.name !== "suggest_transcript_cuts" &&
+			toolCall.name !== "transcript_smart_trim"
+		) {
+			continue;
+		}
+		const dataRecord = asObjectRecord(toolCall.result.data);
+		if (dataRecord?.dryRun === false) {
+			continue;
+		}
+		const suggestionsRaw = Array.isArray(dataRecord?.suggestions)
+			? dataRecord.suggestions
+			: null;
+		if (!suggestionsRaw || suggestionsRaw.length === 0) continue;
+
+		const suggestions = suggestionsRaw
+			.map((item) => {
+				const record = asObjectRecord(item);
+				if (!record) return null;
+				const id = typeof record.id === "string" ? record.id : null;
+				const startWordIndex = Number(record.startWordIndex);
+				const endWordIndex = Number(record.endWordIndex);
+				const reason = typeof record.reason === "string" ? record.reason : "";
+				const accepted =
+					typeof record.accepted === "boolean" ? record.accepted : true;
+				if (
+					!id ||
+					!Number.isInteger(startWordIndex) ||
+					!Number.isInteger(endWordIndex) ||
+					endWordIndex < startWordIndex ||
+					reason.trim().length === 0
+				) {
+					return null;
+				}
+				const source =
+					record.source === "llm" ||
+					record.source === "rule" ||
+					record.source === "filler"
+						? record.source
+						: undefined;
+				const estimatedDurationSeconds = toFiniteNumber(
+					record.estimatedDurationSeconds,
+				);
+				return {
+					id,
+					startWordIndex,
+					endWordIndex,
+					reason,
+					accepted,
+					...(estimatedDurationSeconds !== undefined
+						? { estimatedDurationSeconds }
+						: {}),
+					...(source ? { source } : {}),
+				} satisfies TranscriptSuggestionPayload;
+			})
+			.filter((item): item is TranscriptSuggestionPayload => item !== null);
+
+		if (suggestions.length > 0) {
+			return suggestions;
+		}
 	}
 
 	return null;

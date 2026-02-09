@@ -15,6 +15,8 @@ import { transcriptionService } from "@/services/transcription/service";
 import { cn } from "@/utils/ui";
 import { Check, Trash2, Sparkles, X, Loader2 } from "lucide-react";
 import { useTranscriptEditing } from "@/hooks/use-transcript-editing";
+import { useAgentUiStore } from "@/stores/agent-ui-store";
+import { TranscriptEditView } from "./TranscriptEditView";
 
 interface CaptionSegment {
 	trackId: string;
@@ -137,6 +139,12 @@ export function TranscriptPanel() {
 	const tracks = editor.timeline.getTracks();
 	const timelineDuration = editor.timeline.getTotalDuration();
 	const selectedElements = editor.selection.getSelectedElements();
+	const editModeEnabled = useAgentUiStore(
+		(state) => state.transcriptEditing.editModeEnabled,
+	);
+	const setTranscriptEditMode = useAgentUiStore(
+		(state) => state.setTranscriptEditMode,
+	);
 	const [drafts, setDrafts] = useState<Record<string, string>>({});
 	const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
 	const [showWordLevel, setShowWordLevel] = useState(false);
@@ -346,11 +354,21 @@ export function TranscriptPanel() {
 					</div>
 					<div className="flex items-center gap-1 shrink-0">
 						<Button
+							variant={editModeEnabled ? "default" : "outline"}
+							size="sm"
+							className="h-6 px-2 text-[11px]"
+							onClick={() =>
+								setTranscriptEditMode({ enabled: !editModeEnabled })
+							}
+						>
+							{editModeEnabled ? "退出编辑" : "编辑模式"}
+						</Button>
+						<Button
 							variant="outline"
 							size="sm"
 							className="h-6 px-2 text-[11px]"
 							onClick={() => setShowWordLevel((value) => !value)}
-							disabled={wordItems.length === 0}
+							disabled={wordItems.length === 0 || editModeEnabled}
 						>
 							{showWordLevel ? "隐藏词级" : "显示词级"}
 						</Button>
@@ -366,7 +384,9 @@ export function TranscriptPanel() {
 									if (!showWordLevel) setShowWordLevel(true);
 								}
 							}}
-							disabled={isDetecting || wordItems.length === 0}
+							disabled={
+								isDetecting || wordItems.length === 0 || editModeEnabled
+							}
 						>
 							{isDetecting ? (
 								<Loader2 className="size-3 mr-1 animate-spin" />
@@ -379,7 +399,7 @@ export function TranscriptPanel() {
 						</Button>
 					</div>
 				</div>
-				{fillers.length > 0 && (
+				{!editModeEnabled && fillers.length > 0 && (
 					<div className="mt-2 flex items-center justify-between rounded-md bg-destructive/10 px-2 py-1.5">
 						<span className="text-[11px] text-destructive">
 							检测到 {fillers.length} 个填充词
@@ -397,172 +417,183 @@ export function TranscriptPanel() {
 				)}
 			</div>
 
-			<div className="p-3 border-b border-border">
-				<textarea
-					value={transcriptText}
-					onSelect={handleTranscriptSelect}
-					onClick={handleTranscriptSelect}
-					readOnly
-					placeholder="尚未找到字幕片段，请先生成 captions。"
-					className={cn(
-						"w-full min-h-[120px] max-h-[220px] resize-y rounded-md border border-border bg-background px-2 py-1.5",
-						"text-xs leading-5",
-						"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-					)}
-				/>
-				{showWordLevel && (
-					<div className="mt-2 rounded-md border border-border bg-muted/20 p-2">
-						<div className="mb-1 text-[11px] text-muted-foreground">
-							词级时间戳
-							{hasRealWordLevel
-								? "（来源：Whisper）"
-								: "（来源：基于字幕段估算）"}
-							，hover 可查看起止时间
-						</div>
-						{wordItems.length === 0 ? (
-							<div className="text-[11px] text-muted-foreground">
-								暂无词级数据，请先执行一次转录。
-							</div>
-						) : (
-							<div className="flex flex-wrap gap-1">
-								{wordItems.map((word, index) => {
-									const filler = isFillerWord(word.startTime, word.endTime);
-									const fillerColor = filler
-										? filler.category === "filler"
-											? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400"
-											: filler.category === "hesitation"
-												? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-												: "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400"
-										: "";
-									const tooltipText = filler
-										? `${filler.category} (${(filler.confidence * 100).toFixed(0)}%) · ${formatTime(word.startTime)}-${formatTime(word.endTime)} · 点击删除`
-										: `${formatTime(word.startTime)} - ${formatTime(word.endTime)}`;
-									return (
-										<button
-											key={`${word.startTime}-${word.endTime}-${word.text}-${index}`}
-											type="button"
-											className={cn(
-												"rounded border px-1.5 py-0.5 text-[11px] transition-colors",
-												filler
-													? cn(
-															fillerColor,
-															"border-b-2 font-medium hover:opacity-70 cursor-pointer",
-														)
-													: "border-border bg-background hover:bg-accent",
-											)}
-											title={tooltipText}
-											onClick={() => {
-												if (filler) {
-													removeFillerAtRange(filler.startTime, filler.endTime);
-												} else {
-													focusWord(word);
-												}
-											}}
-										>
-											{word.text}
-											{filler && (
-												<X className="ml-0.5 inline-block size-2.5 opacity-60" />
-											)}
-										</button>
-									);
-								})}
+			{editModeEnabled ? (
+				<TranscriptEditView />
+			) : (
+				<>
+					<div className="p-3 border-b border-border">
+						<textarea
+							value={transcriptText}
+							onSelect={handleTranscriptSelect}
+							onClick={handleTranscriptSelect}
+							readOnly
+							placeholder="尚未找到字幕片段，请先生成 captions。"
+							className={cn(
+								"w-full min-h-[120px] max-h-[220px] resize-y rounded-md border border-border bg-background px-2 py-1.5",
+								"text-xs leading-5",
+								"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+							)}
+						/>
+						{showWordLevel && (
+							<div className="mt-2 rounded-md border border-border bg-muted/20 p-2">
+								<div className="mb-1 text-[11px] text-muted-foreground">
+									词级时间戳
+									{hasRealWordLevel
+										? "（来源：Whisper）"
+										: "（来源：基于字幕段估算）"}
+									，hover 可查看起止时间
+								</div>
+								{wordItems.length === 0 ? (
+									<div className="text-[11px] text-muted-foreground">
+										暂无词级数据，请先执行一次转录。
+									</div>
+								) : (
+									<div className="flex flex-wrap gap-1">
+										{wordItems.map((word, index) => {
+											const filler = isFillerWord(word.startTime, word.endTime);
+											const fillerColor = filler
+												? filler.category === "filler"
+													? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400"
+													: filler.category === "hesitation"
+														? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+														: "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400"
+												: "";
+											const tooltipText = filler
+												? `${filler.category} (${(filler.confidence * 100).toFixed(0)}%) · ${formatTime(word.startTime)}-${formatTime(word.endTime)} · 点击删除`
+												: `${formatTime(word.startTime)} - ${formatTime(word.endTime)}`;
+											return (
+												<button
+													key={`${word.startTime}-${word.endTime}-${word.text}-${index}`}
+													type="button"
+													className={cn(
+														"rounded border px-1.5 py-0.5 text-[11px] transition-colors",
+														filler
+															? cn(
+																	fillerColor,
+																	"border-b-2 font-medium hover:opacity-70 cursor-pointer",
+																)
+															: "border-border bg-background hover:bg-accent",
+													)}
+													title={tooltipText}
+													onClick={() => {
+														if (filler) {
+															removeFillerAtRange(
+																filler.startTime,
+																filler.endTime,
+															);
+														} else {
+															focusWord(word);
+														}
+													}}
+												>
+													{word.text}
+													{filler && (
+														<X className="ml-0.5 inline-block size-2.5 opacity-60" />
+													)}
+												</button>
+											);
+										})}
+									</div>
+								)}
 							</div>
 						)}
 					</div>
-				)}
-			</div>
 
-			<ScrollArea className="flex-1 min-h-0">
-				<div className="p-3 space-y-2">
-					{segments.length === 0 ? (
-						<div className="text-xs text-muted-foreground rounded-md border border-dashed border-border p-3">
-							暂无可联动的字幕片段（Caption）。
-						</div>
-					) : (
-						segments.map((segment) => {
-							const key = `${segment.trackId}:${segment.elementId}`;
-							const isSelected = selectedSet.has(key);
-							const draft = drafts[key] ?? segment.content;
-							const hasChanges = draft !== segment.content;
-							const hasMetadata = segment.metadata?.kind === "caption";
-							const error = saveErrors[key];
-							const canSave =
-								(hasChanges || !hasMetadata) &&
-								draft.trim().length > 0 &&
-								draft.length <= MAX_SEGMENT_TEXT_LENGTH;
-							return (
-								<div
-									key={key}
-									className={cn(
-										"rounded-md border px-2 py-2 transition-colors",
-										isSelected
-											? "border-primary bg-primary/10"
-											: "border-border hover:bg-accent",
-									)}
-								>
-									<button
-										type="button"
-										onClick={() => focusSegment(segment)}
-										className="w-full text-left"
-									>
-										<div className="text-[11px] text-muted-foreground">
-											{formatTime(segment.startTime)} -{" "}
-											{formatTime(segment.endTime)}
-										</div>
-										<div className="mt-1 text-[11px] text-muted-foreground">
-											{segment.name}
-											{!hasMetadata ? "（旧字幕，保存时将补充 metadata）" : ""}
-										</div>
-									</button>
-
-									<div className="mt-2">
-										<textarea
-											value={draft}
-											onChange={(event) => {
-												const value = event.currentTarget.value;
-												setDrafts((prev) => ({ ...prev, [key]: value }));
-											}}
-											className={cn(
-												"w-full min-h-[56px] resize-y rounded-md border border-border bg-background px-2 py-1.5",
-												"text-xs leading-5",
-												"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-											)}
-										/>
-
-										{error && (
-											<p className="mt-1 text-[11px] text-destructive">
-												{error}
-											</p>
-										)}
-
-										<div className="mt-2 flex items-center justify-end gap-1">
-											<Button
-												variant="text"
-												size="icon"
-												className="size-6 shrink-0"
-												onClick={() => saveSegmentContent(segment)}
-												disabled={!canSave}
-												title="保存字幕修改"
-											>
-												<Check className="size-3.5" />
-											</Button>
-											<Button
-												variant="text"
-												size="icon"
-												className="size-6 shrink-0"
-												onClick={() => deleteSegment(segment)}
-												title="删除该字幕片段"
-											>
-												<Trash2 className="size-3.5" />
-											</Button>
-										</div>
-									</div>
+					<ScrollArea className="flex-1 min-h-0">
+						<div className="p-3 space-y-2">
+							{segments.length === 0 ? (
+								<div className="text-xs text-muted-foreground rounded-md border border-dashed border-border p-3">
+									暂无可联动的字幕片段（Caption）。
 								</div>
-							);
-						})
-					)}
-				</div>
-			</ScrollArea>
+							) : (
+								segments.map((segment) => {
+									const key = `${segment.trackId}:${segment.elementId}`;
+									const isSelected = selectedSet.has(key);
+									const draft = drafts[key] ?? segment.content;
+									const hasChanges = draft !== segment.content;
+									const hasMetadata = segment.metadata?.kind === "caption";
+									const error = saveErrors[key];
+									const canSave =
+										(hasChanges || !hasMetadata) &&
+										draft.trim().length > 0 &&
+										draft.length <= MAX_SEGMENT_TEXT_LENGTH;
+									return (
+										<div
+											key={key}
+											className={cn(
+												"rounded-md border px-2 py-2 transition-colors",
+												isSelected
+													? "border-primary bg-primary/10"
+													: "border-border hover:bg-accent",
+											)}
+										>
+											<button
+												type="button"
+												onClick={() => focusSegment(segment)}
+												className="w-full text-left"
+											>
+												<div className="text-[11px] text-muted-foreground">
+													{formatTime(segment.startTime)} -{" "}
+													{formatTime(segment.endTime)}
+												</div>
+												<div className="mt-1 text-[11px] text-muted-foreground">
+													{segment.name}
+													{!hasMetadata
+														? "（旧字幕，保存时将补充 metadata）"
+														: ""}
+												</div>
+											</button>
+
+											<div className="mt-2">
+												<textarea
+													value={draft}
+													onChange={(event) => {
+														const value = event.currentTarget.value;
+														setDrafts((prev) => ({ ...prev, [key]: value }));
+													}}
+													className={cn(
+														"w-full min-h-[56px] resize-y rounded-md border border-border bg-background px-2 py-1.5",
+														"text-xs leading-5",
+														"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+													)}
+												/>
+
+												{error && (
+													<p className="mt-1 text-[11px] text-destructive">
+														{error}
+													</p>
+												)}
+
+												<div className="mt-2 flex items-center justify-end gap-1">
+													<Button
+														variant="text"
+														size="icon"
+														className="size-6 shrink-0"
+														onClick={() => saveSegmentContent(segment)}
+														disabled={!canSave}
+														title="保存字幕修改"
+													>
+														<Check className="size-3.5" />
+													</Button>
+													<Button
+														variant="text"
+														size="icon"
+														className="size-6 shrink-0"
+														onClick={() => deleteSegment(segment)}
+														title="删除该字幕片段"
+													>
+														<Trash2 className="size-3.5" />
+													</Button>
+												</div>
+											</div>
+										</div>
+									);
+								})
+							)}
+						</div>
+					</ScrollArea>
+				</>
+			)}
 		</div>
 	);
 }

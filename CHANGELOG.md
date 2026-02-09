@@ -6,6 +6,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **Text-Based Editing（Phase 1-4）**：转录面板支持“编辑文字即编辑视频”
+  - 新增 `transcript-document` 与 `transcript-edit-operations`：构建词级文档、词删除映射时间线 split/delete/ripple，并通过命令链路支持 undo/redo
+  - 新增 `TranscriptEditView`、`use-transcript-document`、`use-transcript-word-selection`：支持词级选中删除、Shift 范围选择、Delete/Ctrl+A/Escape 快捷键、播放高亮同步
+  - 新增 Agent 工具：`suggest_transcript_cuts`、`transcript_smart_trim`，支持 dryRun 建议预览与直接应用
+  - `AgentChatbox` 与 `agent-ui-store` 新增 transcript suggestions 状态与联动：工具返回建议后自动切换到转录页并进入编辑模式
+  - 新增工作流 `text-based-cleanup`（填充词检测 → 语义建议 → 智能缩时）
+  - 新增测试：`transcript-document.test.ts`、`transcript-edit-operations.test.ts`、`transcript-edit-tools.test.ts`
 - **Agent Capability Registry（Phase 1）**：新增能力镜像层与工具能力绑定
   - 新增 `src/agent/capabilities/`：`types`、`collect-from-actions`、`collect-from-managers`、`registry`、`tool-bindings`、`index`
   - 新增只读工具 `list_capabilities`，支持按 `source/risk` 过滤能力定义

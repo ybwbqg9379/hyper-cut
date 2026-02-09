@@ -37,6 +37,7 @@ import {
 	buildWorkflowStepFieldConfigs,
 	extractHighlightPlanPreviewFromToolCalls,
 	extractOperationDiffFromToolCalls,
+	extractTranscriptSuggestionsFromToolCalls,
 	formatWorkflowScenarioLabel,
 	formatWorkflowValueForHint,
 	hasSuccessfulToolCall,
@@ -110,6 +111,15 @@ export function AgentChatbox() {
 	);
 	const clearOperationDiffPreview = useAgentUiStore(
 		(state) => state.clearOperationDiffPreview,
+	);
+	const setTranscriptEditMode = useAgentUiStore(
+		(state) => state.setTranscriptEditMode,
+	);
+	const setTranscriptSuggestions = useAgentUiStore(
+		(state) => state.setTranscriptSuggestions,
+	);
+	const clearTranscriptSuggestions = useAgentUiStore(
+		(state) => state.clearTranscriptSuggestions,
 	);
 
 	const {
@@ -217,6 +227,9 @@ export function AgentChatbox() {
 		const operationDiffPreview = extractOperationDiffFromToolCalls(
 			response.toolCalls,
 		);
+		const transcriptSuggestions = extractTranscriptSuggestionsFromToolCalls(
+			response.toolCalls,
+		);
 		const applyHighlightCutSucceeded = hasSuccessfulToolCall({
 			toolCalls: response.toolCalls,
 			toolName: "apply_highlight_cut",
@@ -256,11 +269,20 @@ export function AgentChatbox() {
 		} else if (response.status === "completed") {
 			clearOperationDiffPreview();
 		}
+		if (transcriptSuggestions && transcriptSuggestions.length > 0) {
+			setTranscriptEditMode({ enabled: true });
+			setTranscriptSuggestions({ suggestions: transcriptSuggestions });
+			setActiveView("transcript");
+			toast.info("已生成文本裁剪建议", {
+				description: "请在转录面板中审阅并应用建议。",
+			});
+		}
 
 		const hasDedicatedSuccessToast =
 			Boolean(highlightPlanPreview) ||
 			applyHighlightCutSucceeded ||
-			removeSilenceSucceeded;
+			removeSilenceSucceeded ||
+			Boolean(transcriptSuggestions && transcriptSuggestions.length > 0);
 		if (response.status === "error" || response.success === false) {
 			toast.error(response.message);
 		} else if (response.status === "cancelled") {
@@ -398,6 +420,8 @@ export function AgentChatbox() {
 		setHighlightPreviewPlaybackEnabled({ enabled: false });
 		clearHighlightPreview();
 		clearOperationDiffPreview();
+		clearTranscriptSuggestions();
+		setTranscriptEditMode({ enabled: false });
 		clearHistory();
 	};
 

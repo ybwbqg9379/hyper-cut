@@ -49,11 +49,28 @@ export interface AgentOperationDiffPreviewState {
 	updatedAt: string;
 }
 
+export interface TranscriptCutSuggestion {
+	id: string;
+	startWordIndex: number;
+	endWordIndex: number;
+	reason: string;
+	accepted: boolean;
+	estimatedDurationSeconds?: number;
+	source?: "llm" | "rule" | "filler";
+}
+
+export interface TranscriptEditingState {
+	editModeEnabled: boolean;
+	selectedWordIndices: Set<number>;
+	pendingSuggestions: TranscriptCutSuggestion[] | null;
+}
+
 interface AgentUiStore {
 	highlightPreview: HighlightPreviewState | null;
 	highlightPreviewPlaybackEnabled: boolean;
 	operationDiffPreview: AgentOperationDiffPreviewState | null;
 	executionProgress: AgentExecutionProgressState | null;
+	transcriptEditing: TranscriptEditingState;
 	setHighlightPreviewFromPlan: (payload: {
 		segments: Array<{
 			startTime: number;
@@ -84,6 +101,26 @@ interface AgentUiStore {
 	}: {
 		requestId: string;
 	}) => void;
+	setTranscriptEditMode: ({ enabled }: { enabled: boolean }) => void;
+	setSelectedTranscriptWordIndices: ({
+		indices,
+	}: {
+		indices: Iterable<number>;
+	}) => void;
+	clearSelectedTranscriptWordIndices: () => void;
+	setTranscriptSuggestions: ({
+		suggestions,
+	}: {
+		suggestions: TranscriptCutSuggestion[] | null;
+	}) => void;
+	updateTranscriptSuggestionDecision: ({
+		id,
+		accepted,
+	}: {
+		id: string;
+		accepted: boolean;
+	}) => void;
+	clearTranscriptSuggestions: () => void;
 	clearAllAgentUiState: () => void;
 }
 
@@ -147,11 +184,30 @@ function isHighlightPreviewRange(
 	return value !== null;
 }
 
+function createDefaultTranscriptEditingState(): TranscriptEditingState {
+	return {
+		editModeEnabled: false,
+		selectedWordIndices: new Set<number>(),
+		pendingSuggestions: null,
+	};
+}
+
+function normalizeWordIndices(indices: Iterable<number>): Set<number> {
+	const next = new Set<number>();
+	for (const index of indices) {
+		if (Number.isInteger(index) && index >= 0) {
+			next.add(index);
+		}
+	}
+	return next;
+}
+
 export const useAgentUiStore = create<AgentUiStore>((set) => ({
 	highlightPreview: null,
 	highlightPreviewPlaybackEnabled: false,
 	operationDiffPreview: null,
 	executionProgress: null,
+	transcriptEditing: createDefaultTranscriptEditingState(),
 
 	setHighlightPreviewFromPlan: ({
 		segments,
@@ -257,12 +313,84 @@ export const useAgentUiStore = create<AgentUiStore>((set) => ({
 		});
 	},
 
+	setTranscriptEditMode: ({ enabled }) => {
+		set((state) => ({
+			transcriptEditing: {
+				...state.transcriptEditing,
+				editModeEnabled: enabled,
+				selectedWordIndices: enabled
+					? state.transcriptEditing.selectedWordIndices
+					: new Set<number>(),
+				pendingSuggestions: enabled
+					? state.transcriptEditing.pendingSuggestions
+					: null,
+			},
+		}));
+	},
+
+	setSelectedTranscriptWordIndices: ({ indices }) => {
+		const nextIndices = normalizeWordIndices(indices);
+		set((state) => ({
+			transcriptEditing: {
+				...state.transcriptEditing,
+				selectedWordIndices: nextIndices,
+			},
+		}));
+	},
+
+	clearSelectedTranscriptWordIndices: () => {
+		set((state) => ({
+			transcriptEditing: {
+				...state.transcriptEditing,
+				selectedWordIndices: new Set<number>(),
+			},
+		}));
+	},
+
+	setTranscriptSuggestions: ({ suggestions }) => {
+		set((state) => ({
+			transcriptEditing: {
+				...state.transcriptEditing,
+				pendingSuggestions: suggestions
+					? suggestions.map((suggestion) => ({
+							...suggestion,
+						}))
+					: null,
+			},
+		}));
+	},
+
+	updateTranscriptSuggestionDecision: ({ id, accepted }) => {
+		set((state) => {
+			const current = state.transcriptEditing.pendingSuggestions;
+			if (!current) return state;
+			return {
+				transcriptEditing: {
+					...state.transcriptEditing,
+					pendingSuggestions: current.map((suggestion) =>
+						suggestion.id === id ? { ...suggestion, accepted } : suggestion,
+					),
+				},
+			};
+		});
+	},
+
+	clearTranscriptSuggestions: () => {
+		set((state) => ({
+			transcriptEditing: {
+				...state.transcriptEditing,
+				pendingSuggestions: null,
+			},
+		}));
+	},
+
 	clearAllAgentUiState: () => {
 		set({
 			highlightPreview: null,
 			highlightPreviewPlaybackEnabled: false,
 			operationDiffPreview: null,
 			executionProgress: null,
+			transcriptEditing: createDefaultTranscriptEditingState(),
 		});
 	},
 }));

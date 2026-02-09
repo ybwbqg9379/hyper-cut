@@ -52,6 +52,7 @@ export { getProjectTools } from "./tools/project-tools";
 export { getVisionTools } from "./tools/vision-tools";
 export { getWorkflowTools } from "./tools/workflow-tools";
 export { getHighlightTools } from "./tools/highlight-tools";
+export { getTranscriptEditTools } from "./tools/transcript-edit-tools";
 export { getCapabilityTools } from "./tools/capability-tools";
 
 // Capabilities

@@ -313,6 +313,92 @@ export const WORKFLOWS: Workflow[] = [
 		],
 	},
 	{
+		name: "text-based-cleanup",
+		description:
+			"基于文本的视频精编：去填充词 → 语义裁剪 → 智能缩时。Text-based cleanup and trimming workflow.",
+		scenario: "general",
+		templateDescription: "面向口播与访谈素材的文本驱动精编模板。",
+		tags: ["transcript", "cleanup", "smart-trim"],
+		steps: [
+			{
+				id: "detect-fillers",
+				toolName: "detect_filler_words",
+				arguments: {
+					minConfidence: 0.5,
+				},
+				argumentSchema: [
+					{
+						key: "minConfidence",
+						type: "number",
+						description: "填充词检测最低置信度",
+						defaultValue: 0.5,
+						min: 0,
+						max: 1,
+					},
+				],
+				summary: "先扫描填充词，为后续删减提供参考",
+			},
+			{
+				id: "suggest-semantic-cuts",
+				toolName: "suggest_transcript_cuts",
+				arguments: {
+					goal: "tighten",
+					dryRun: true,
+				},
+				argumentSchema: [
+					{
+						key: "goal",
+						type: "string",
+						description: "语义裁剪目标",
+						defaultValue: "tighten",
+						enum: ["tighten", "remove-tangents", "remove-repetition", "custom"],
+					},
+					{
+						key: "dryRun",
+						type: "boolean",
+						description: "是否只生成建议",
+						defaultValue: true,
+					},
+				],
+				summary: "生成语义裁剪建议并等待确认",
+				requiresConfirmation: true,
+			},
+			{
+				id: "smart-trim",
+				toolName: "transcript_smart_trim",
+				arguments: {
+					targetDurationSeconds: 60,
+					strategy: "balanced",
+					dryRun: false,
+				},
+				argumentSchema: [
+					{
+						key: "targetDurationSeconds",
+						type: "number",
+						description: "目标时长（秒）",
+						defaultValue: 60,
+						min: 5,
+						max: 600,
+					},
+					{
+						key: "strategy",
+						type: "string",
+						description: "缩时策略",
+						defaultValue: "balanced",
+						enum: ["score-based", "filler-first", "balanced"],
+					},
+					{
+						key: "dryRun",
+						type: "boolean",
+						description: "是否只预览不执行",
+						defaultValue: false,
+					},
+				],
+				summary: "按目标时长执行智能缩时",
+			},
+		],
+	},
+	{
 		name: "quick-social-clip",
 		description:
 			"自动从长视频提取60秒社交媒体精华片段并添加字幕。Auto-extract a 60s social clip with captions.",
