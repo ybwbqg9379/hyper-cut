@@ -63,6 +63,21 @@ export function useAgent() {
 			});
 			return;
 		}
+		if (
+			event.type === "recovery_started" ||
+			event.type === "recovery_prerequisite_started" ||
+			event.type === "recovery_retrying"
+		) {
+			useAgentUiStore.getState().setExecutionProgress({
+				requestId: event.requestId,
+				message: event.message ?? "正在自动恢复...",
+				toolName: event.toolName,
+				stepIndex: event.stepIndex,
+				totalSteps: event.totalSteps,
+				updatedAt: event.timestamp,
+			});
+			return;
+		}
 		if (event.type === "request_completed") {
 			setActiveExecutionRequestId((prev) =>
 				prev === event.requestId ? null : prev,

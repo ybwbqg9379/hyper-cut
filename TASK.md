@@ -127,27 +127,27 @@ Commit message 约定：
 
 ### Phase 5: Recovery Policy（失败自恢复）
 
-- **Status**: ⏳ Pending
+- **Status**: ✅ Completed
 - **Description**: 对常见错误码进行自动补救与重试策略。
 - **Implementation Scope**:
   - 新增 `apps/web/src/agent/recovery/policies.ts`
   - Orchestrator 在工具失败后按 errorCode 匹配补救路径
   - 支持最大重试次数、指数退避、可观测事件
 - **Acceptance Criteria**:
-  - [ ] `NO_TRANSCRIPT`、`PROVIDER_UNAVAILABLE`、`HIGHLIGHT_CACHE_STALE` 等有策略
-  - [ ] 不产生无限重试
-  - [ ] 用户可看到“失败->恢复->结果”完整轨迹
+  - [x] `NO_TRANSCRIPT`、`PROVIDER_UNAVAILABLE`、`HIGHLIGHT_CACHE_STALE` 等有策略
+  - [x] 不产生无限重试
+  - [x] 用户可看到“失败->恢复->结果”完整轨迹
 - **Tests**:
-  - [ ] 策略匹配测试
-  - [ ] 重试上限测试
-  - [ ] 恢复成功/失败集成测试
+  - [x] 策略匹配测试
+  - [x] 重试上限测试
+  - [x] 恢复成功/失败集成测试
 - **Docs**:
-  - [ ] `CHANGELOG.md`
-  - [ ] `docs/plans/agent-recovery-policy.md`
+  - [x] `CHANGELOG.md`
+  - [x] `docs/plans/agent-recovery-policy.md`
 
 ### Phase 6: Workflow 产品化（场景包）
 
-- **Status**: ⏳ Pending
+- **Status**: 🔄 In Progress
 - **Description**: 从“技术工作流”升级到“场景工作流”。
 - **Implementation Scope**:
   - 在 `workflows/definitions.ts` 增加场景向工作流：

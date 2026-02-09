@@ -1220,6 +1220,16 @@ function ExecutionTimeline({ events }: { events: AgentExecutionEvent[] }) {
 					text =
 						event.message ??
 						`${event.toolName ?? "unknown_tool"} 执行中 (${event.stepIndex ?? "?"}/${event.totalSteps ?? "?"})`;
+				} else if (event.type === "recovery_started") {
+					text = event.message ?? "已启动自动恢复";
+				} else if (event.type === "recovery_prerequisite_started") {
+					text = event.message ?? "正在执行恢复前置步骤";
+				} else if (event.type === "recovery_prerequisite_completed") {
+					text = event.message ?? "恢复前置步骤已完成";
+				} else if (event.type === "recovery_retrying") {
+					text = event.message ?? "正在重试";
+				} else if (event.type === "recovery_exhausted") {
+					text = event.message ?? "恢复重试已耗尽";
 				} else if (event.type === "tool_completed") {
 					const resultText = event.result?.success ? "成功" : "失败";
 					text = `${event.toolName ?? "unknown_tool"} ${resultText}`;
@@ -1228,11 +1238,14 @@ function ExecutionTimeline({ events }: { events: AgentExecutionEvent[] }) {
 				}
 
 				const isErrorEvent =
-					event.type === "tool_completed"
+					event.type === "tool_completed" ||
+					event.type === "recovery_prerequisite_completed"
 						? event.result?.success === false
-						: event.type === "request_completed"
-							? event.status === "error"
-							: false;
+						: event.type === "recovery_exhausted"
+							? true
+							: event.type === "request_completed"
+								? event.status === "error"
+								: false;
 
 				return (
 					<div

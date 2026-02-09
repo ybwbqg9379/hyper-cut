@@ -973,6 +973,162 @@ describe("AgentOrchestrator", () => {
 		expect(events[3]?.status).toBe("completed");
 	});
 
+	it("should recover NO_TRANSCRIPT by generating captions and retrying", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [
+					{ id: "call-1", name: "remove_filler_words", arguments: {} },
+				],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "done",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		let attempt = 0;
+		const removeFillerExecute = vi.fn().mockImplementation(async () => {
+			attempt += 1;
+			if (attempt === 1) {
+				return {
+					success: false,
+					message: "no transcript",
+					data: { errorCode: "NO_TRANSCRIPT" },
+				};
+			}
+			return { success: true, message: "removed" };
+		});
+		const generateCaptionsExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "captions ready" });
+
+		const events: string[] = [];
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "remove_filler_words",
+					description: "remove filler",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: removeFillerExecute,
+				},
+				{
+					name: "generate_captions",
+					description: "generate captions",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: generateCaptionsExecute,
+				},
+			],
+			{
+				onExecutionEvent: (event) => events.push(event.type),
+			},
+		);
+
+		const result = await orchestrator.process("clean fillers");
+
+		expect(result.success).toBe(true);
+		expect(removeFillerExecute).toHaveBeenCalledTimes(2);
+		expect(generateCaptionsExecute).toHaveBeenCalledTimes(1);
+		expect(events).toContain("recovery_started");
+		expect(events).toContain("recovery_prerequisite_started");
+		expect(events).toContain("recovery_prerequisite_completed");
+		expect(events).toContain("recovery_retrying");
+	});
+
+	it("should enforce provider retry limit and emit recovery_exhausted", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [{ id: "call-1", name: "analyze_frames", arguments: {} }],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "done",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const analyzeFramesExecute = vi.fn().mockResolvedValue({
+			success: false,
+			message: "provider down",
+			data: { errorCode: "PROVIDER_UNAVAILABLE" },
+		});
+		const events: string[] = [];
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "analyze_frames",
+					description: "analyze frames",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: analyzeFramesExecute,
+				},
+			],
+			{
+				onExecutionEvent: (event) => events.push(event.type),
+			},
+		);
+
+		const result = await orchestrator.process("analyze");
+
+		expect(result.success).toBe(false);
+		expect(analyzeFramesExecute).toHaveBeenCalledTimes(3);
+		expect(events).toContain("recovery_exhausted");
+	});
+
+	it("should fail when recovery prerequisite fails", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [
+					{ id: "call-1", name: "remove_filler_words", arguments: {} },
+				],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "done",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const removeFillerExecute = vi.fn().mockResolvedValue({
+			success: false,
+			message: "no transcript",
+			data: { errorCode: "NO_TRANSCRIPT" },
+		});
+		const generateCaptionsExecute = vi.fn().mockResolvedValue({
+			success: false,
+			message: "caption failed",
+			data: { errorCode: "GENERATE_CAPTIONS_FAILED" },
+		});
+
+		const orchestrator = new AgentOrchestrator([
+			{
+				name: "remove_filler_words",
+				description: "remove filler",
+				parameters: { type: "object", properties: {}, required: [] },
+				execute: removeFillerExecute,
+			},
+			{
+				name: "generate_captions",
+				description: "generate captions",
+				parameters: { type: "object", properties: {}, required: [] },
+				execute: generateCaptionsExecute,
+			},
+		]);
+
+		const result = await orchestrator.process("clean fillers");
+
+		expect(result.success).toBe(false);
+		expect(result.toolCalls?.[0]?.result.message).toContain("自动恢复失败");
+	});
+
 	it("should not emit execution events for blocked process guard", async () => {
 		const provider = buildProvider();
 		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({

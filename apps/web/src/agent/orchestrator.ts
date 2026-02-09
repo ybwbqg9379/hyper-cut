@@ -26,6 +26,10 @@ import {
 	getTopologicalOrder,
 	type DagNodeState,
 } from "./planner/dag";
+import {
+	extractToolErrorCode,
+	resolveRecoveryPolicyDecision,
+} from "./recovery/policies";
 
 /**
  * System prompt for the video editing agent
@@ -963,6 +967,262 @@ export class AgentOrchestrator {
 		}
 	}
 
+	private async delayWithSignal(
+		delayMs: number,
+		signal?: AbortSignal,
+	): Promise<boolean> {
+		if (delayMs <= 0) {
+			return true;
+		}
+		if (signal?.aborted) {
+			return false;
+		}
+
+		return await new Promise<boolean>((resolve) => {
+			const timeoutId = setTimeout(() => {
+				if (signal) {
+					signal.removeEventListener("abort", onAbort);
+				}
+				resolve(true);
+			}, delayMs);
+			const onAbort = () => {
+				clearTimeout(timeoutId);
+				resolve(false);
+			};
+			if (signal) {
+				signal.addEventListener("abort", onAbort, { once: true });
+			}
+		});
+	}
+
+	private async executeToolCallWithRecovery(
+		toolCall: PlannedToolCall,
+		meta: ToolExecutionMeta,
+	): Promise<ToolResult> {
+		let retryCount = 0;
+		let currentToolCall: PlannedToolCall = toolCall;
+		while (true) {
+			const result = await this.executeToolCall(currentToolCall, meta);
+			if (result.success || this.isToolResultCancelled(result)) {
+				return result;
+			}
+
+			const errorCode = extractToolErrorCode(result.data);
+			if (!errorCode) {
+				return result;
+			}
+
+			const decision = resolveRecoveryPolicyDecision({
+				toolCall: {
+					id: currentToolCall.id,
+					name: currentToolCall.name,
+					arguments: currentToolCall.arguments ?? {},
+				},
+				errorCode,
+				retryCount,
+			});
+			if (!decision) {
+				if (retryCount > 0) {
+					this.emitExecutionEvent({
+						type: "recovery_exhausted",
+						requestId: meta.requestId,
+						mode: meta.mode,
+						status: "error",
+						toolName: currentToolCall.name,
+						toolCallId: meta.toolCallId,
+						planStepId: meta.planStepId,
+						stepIndex: meta.stepIndex,
+						totalSteps: meta.totalSteps,
+						dagState: "failed",
+						message: `恢复策略重试已耗尽（${errorCode}）`,
+						recovery: {
+							policyId: "none",
+							errorCode,
+							attempt: retryCount,
+							maxRetries: retryCount,
+							toolName: currentToolCall.name,
+						},
+					});
+				}
+				return result;
+			}
+
+			const attempt = retryCount + 1;
+			this.emitExecutionEvent({
+				type: "recovery_started",
+				requestId: meta.requestId,
+				mode: meta.mode,
+				status: "running",
+				toolName: currentToolCall.name,
+				toolCallId: meta.toolCallId,
+				planStepId: meta.planStepId,
+				stepIndex: meta.stepIndex,
+				totalSteps: meta.totalSteps,
+				dagState: "running",
+				message: `检测到 ${errorCode}，启动恢复策略 ${decision.policyId}（第 ${attempt}/${decision.maxRetries} 次）`,
+				recovery: {
+					policyId: decision.policyId,
+					errorCode,
+					attempt,
+					maxRetries: decision.maxRetries,
+					toolName: currentToolCall.name,
+				},
+			});
+
+			if (decision.delayMs > 0) {
+				this.emitExecutionEvent({
+					type: "recovery_retrying",
+					requestId: meta.requestId,
+					mode: meta.mode,
+					status: "running",
+					toolName: currentToolCall.name,
+					toolCallId: meta.toolCallId,
+					planStepId: meta.planStepId,
+					stepIndex: meta.stepIndex,
+					totalSteps: meta.totalSteps,
+					dagState: "running",
+					message: `等待 ${decision.delayMs}ms 后重试 ${currentToolCall.name}`,
+					recovery: {
+						policyId: decision.policyId,
+						errorCode,
+						attempt,
+						maxRetries: decision.maxRetries,
+						toolName: currentToolCall.name,
+					},
+				});
+				const waited = await this.delayWithSignal(
+					decision.delayMs,
+					meta.signal,
+				);
+				if (!waited) {
+					return buildExecutionCancelledResult({
+						toolName: currentToolCall.name,
+					});
+				}
+			}
+
+			for (let index = 0; index < decision.prerequisiteCalls.length; index++) {
+				if (meta.signal?.aborted) {
+					return buildExecutionCancelledResult({
+						toolName: currentToolCall.name,
+					});
+				}
+				const prerequisiteCall = decision.prerequisiteCalls[index];
+				const prerequisiteToolCallId = `${meta.toolCallId}:recovery:${attempt}:${index + 1}`;
+				this.emitExecutionEvent({
+					type: "recovery_prerequisite_started",
+					requestId: meta.requestId,
+					mode: meta.mode,
+					status: "running",
+					toolName: currentToolCall.name,
+					toolCallId: meta.toolCallId,
+					planStepId: meta.planStepId,
+					stepIndex: meta.stepIndex,
+					totalSteps: meta.totalSteps,
+					dagState: "running",
+					message: `恢复步骤：执行 ${prerequisiteCall.name}`,
+					recovery: {
+						policyId: decision.policyId,
+						errorCode,
+						attempt,
+						maxRetries: decision.maxRetries,
+						toolName: currentToolCall.name,
+						prerequisiteToolName: prerequisiteCall.name,
+					},
+				});
+				const prerequisiteResult = await this.executeToolCall(
+					{
+						...prerequisiteCall,
+						id: prerequisiteToolCallId,
+					},
+					{
+						...meta,
+						toolCallId: prerequisiteToolCallId,
+					},
+				);
+
+				this.emitExecutionEvent({
+					type: "recovery_prerequisite_completed",
+					requestId: meta.requestId,
+					mode: meta.mode,
+					status: prerequisiteResult.success ? "running" : "error",
+					toolName: currentToolCall.name,
+					toolCallId: meta.toolCallId,
+					planStepId: meta.planStepId,
+					stepIndex: meta.stepIndex,
+					totalSteps: meta.totalSteps,
+					dagState: prerequisiteResult.success ? "running" : "failed",
+					message: `恢复步骤 ${prerequisiteCall.name}${prerequisiteResult.success ? " 成功" : " 失败"}`,
+					result: {
+						success: prerequisiteResult.success,
+						message: prerequisiteResult.message,
+					},
+					recovery: {
+						policyId: decision.policyId,
+						errorCode,
+						attempt,
+						maxRetries: decision.maxRetries,
+						toolName: currentToolCall.name,
+						prerequisiteToolName: prerequisiteCall.name,
+					},
+				});
+				this.appendHistory({
+					role: "tool",
+					content: this.buildToolHistoryContent(
+						{
+							id: prerequisiteToolCallId,
+							name: prerequisiteCall.name,
+							arguments: prerequisiteCall.arguments,
+						},
+						prerequisiteResult,
+					),
+					toolCallId: prerequisiteToolCallId,
+					name: prerequisiteCall.name,
+				});
+
+				if (!prerequisiteResult.success) {
+					return {
+						success: false,
+						message: `自动恢复失败：${prerequisiteCall.name} 执行失败 (${prerequisiteResult.message})`,
+						data: {
+							errorCode: "RECOVERY_PREREQUISITE_FAILED",
+							policyId: decision.policyId,
+							originalErrorCode: errorCode,
+							prerequisiteTool: prerequisiteCall.name,
+						},
+					};
+				}
+			}
+
+			retryCount = attempt;
+			currentToolCall = {
+				...currentToolCall,
+				name: decision.retryCall.name,
+				arguments: decision.retryCall.arguments,
+			};
+			this.emitExecutionEvent({
+				type: "recovery_retrying",
+				requestId: meta.requestId,
+				mode: meta.mode,
+				status: "running",
+				toolName: currentToolCall.name,
+				toolCallId: meta.toolCallId,
+				planStepId: meta.planStepId,
+				stepIndex: meta.stepIndex,
+				totalSteps: meta.totalSteps,
+				dagState: "running",
+				message: `恢复完成，重试 ${currentToolCall.name}（第 ${retryCount}/${decision.maxRetries} 次）`,
+				recovery: {
+					policyId: decision.policyId,
+					errorCode,
+					attempt: retryCount,
+					maxRetries: decision.maxRetries,
+					toolName: currentToolCall.name,
+				},
+			});
+		}
+	}
+
 	private async executeToolCallsAsDag({
 		requestId,
 		mode,
@@ -1051,7 +1311,7 @@ export class AgentOrchestrator {
 						dagState: "running",
 					});
 
-					const promise = this.executeToolCall(toolCall, {
+					const promise = this.executeToolCallWithRecovery(toolCall, {
 						requestId,
 						mode,
 						toolCallId: toolCall.id,

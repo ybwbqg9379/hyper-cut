@@ -31,6 +31,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - dryRun 返回 diff 且不落盘，real-run 返回实际 diff 并执行写入
   - `agent-ui-store` 与 `AgentChatbox` 新增 operation diff 预览与摘要展示
   - 新增测试：`timeline-diff.test.ts`；增强 `integration-registry-timeline.ts` 覆盖 dryRun 行为
+- **Agent Recovery Policy（Phase 5）**：新增失败自恢复策略与可观测恢复轨迹
+  - 新增 `src/agent/recovery/policies.ts`：错误码策略匹配、前置补救、指数退避与重试上限
+  - Orchestrator 新增恢复执行链路：工具失败后按策略自动补救并重试
+  - 新增恢复事件：`recovery_started`、`recovery_prerequisite_started`、`recovery_prerequisite_completed`、`recovery_retrying`、`recovery_exhausted`
+  - `AgentChatbox` 执行轨迹与 `useAgent` 执行进度接入恢复事件展示
+  - 新增测试：`recovery-policies.test.ts`；增强 `orchestrator.test.ts` 覆盖恢复成功/失败与重试上限
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

@@ -215,6 +215,11 @@ export interface AgentExecutionEvent {
 		| "tool_started"
 		| "tool_progress"
 		| "tool_completed"
+		| "recovery_started"
+		| "recovery_prerequisite_started"
+		| "recovery_prerequisite_completed"
+		| "recovery_retrying"
+		| "recovery_exhausted"
 		| "plan_created"
 		| "request_completed";
 	requestId: string;
@@ -240,6 +245,14 @@ export interface AgentExecutionEvent {
 	result?: {
 		success: boolean;
 		message: string;
+	};
+	recovery?: {
+		policyId: string;
+		errorCode: string;
+		attempt: number;
+		maxRetries: number;
+		toolName: string;
+		prerequisiteToolName?: string;
 	};
 	plan?: AgentExecutionPlan;
 	timestamp: string;
