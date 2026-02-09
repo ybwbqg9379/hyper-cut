@@ -292,7 +292,7 @@ vi.mock("@/core", () => {
 			insertElement: vi.fn(),
 			splitElements: vi.fn(),
 			replaceTracks: vi.fn(),
-			updateTextElement: vi.fn(),
+			updateElements: vi.fn(),
 			updateElementTrim: vi.fn(),
 			updateElementDuration: vi.fn(),
 			updateElementStartTime: vi.fn(),

@@ -1409,10 +1409,12 @@ export const updateTextStyleTool: AgentTool = {
 				};
 			}
 
-			editor.timeline.updateTextElement({
-				trackId: resolved.track.id,
-				elementId: resolved.element.id,
-				updates,
+			editor.timeline.updateElements({
+				updates: [{
+					trackId: resolved.track.id,
+					elementId: resolved.element.id,
+					updates,
+				}],
 			});
 
 			return {

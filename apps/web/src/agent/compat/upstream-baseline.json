@@ -135,7 +135,7 @@
 		"manager.timeline.updateElementDuration",
 		"manager.timeline.updateElementStartTime",
 		"manager.timeline.updateElementTrim",
-		"manager.timeline.updateTextElement",
+		"manager.timeline.updateElements",
 		"manager.timeline.updateTracks"
 	],
 	"commands": [

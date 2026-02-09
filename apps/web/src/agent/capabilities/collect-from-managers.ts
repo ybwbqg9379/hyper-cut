@@ -211,8 +211,8 @@ const MANAGER_METHODS: ManagerMethodDescriptor[] = [
 	},
 	{
 		manager: "timeline",
-		method: "updateTextElement",
-		description: "Update text element style/content",
+		method: "updateElements",
+		description: "Update element properties (batch)",
 		sourceRef: "@/core/managers/timeline-manager.ts",
 	},
 	{

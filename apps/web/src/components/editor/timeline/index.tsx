@@ -367,6 +367,7 @@ export function Timeline() {
 										zoomLevel={zoomLevel}
 										dynamicTimelineWidth={dynamicTimelineWidth}
 										rulerRef={rulerRef}
+										tracksScrollRef={tracksScrollRef}
 										handleWheel={handleWheel}
 										handleTimelineContentClick={handleRulerClick}
 										handleRulerTrackingMouseDown={handleRulerMouseDown}

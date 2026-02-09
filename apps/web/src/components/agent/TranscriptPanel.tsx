@@ -357,19 +357,21 @@ export function TranscriptPanel({ locale = "zh" }: { locale?: AgentLocale }) {
 			return;
 		}
 
-		editor.timeline.updateTextElement({
-			trackId: segment.trackId,
-			elementId: segment.elementId,
-			updates: {
-				content: draft,
-				metadata:
-					segment.metadata?.kind === "caption"
-						? segment.metadata
-						: createCaptionMetadata({
-								origin: "legacy-upgrade",
-								segmentIndex: segment.sortIndex,
-							}),
-			},
+		editor.timeline.updateElements({
+			updates: [{
+				trackId: segment.trackId,
+				elementId: segment.elementId,
+				updates: {
+					content: draft,
+					metadata:
+						segment.metadata?.kind === "caption"
+							? segment.metadata
+							: createCaptionMetadata({
+									origin: "legacy-upgrade",
+									segmentIndex: segment.sortIndex,
+								}),
+				},
+			}],
 		});
 
 		setSaveErrors((prev) => ({ ...prev, [key]: "" }));

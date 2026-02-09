@@ -64,6 +64,8 @@ export function buildScene(params: BuildSceneParams) {
 							timeOffset: element.startTime,
 							trimStart: element.trimStart,
 							trimEnd: element.trimEnd,
+							transform: element.transform,
+							opacity: element.opacity,
 						}),
 					);
 				}
@@ -75,6 +77,8 @@ export function buildScene(params: BuildSceneParams) {
 							timeOffset: element.startTime,
 							trimStart: element.trimStart,
 							trimEnd: element.trimEnd,
+							transform: element.transform,
+							opacity: element.opacity,
 						}),
 					);
 				}
@@ -85,6 +89,7 @@ export function buildScene(params: BuildSceneParams) {
 					new TextNode({
 						...element,
 						canvasCenter: { x: canvasSize.width / 2, y: canvasSize.height / 2 },
+						canvasHeight: canvasSize.height,
 						textBaseline: "middle",
 					}),
 				);

@@ -11,6 +11,7 @@ import { getLastFrameTime } from "@/lib/time";
 import { useAgentUiStore } from "@/stores/agent-ui-store";
 import { Button } from "@/components/ui/button";
 import { Ban, Loader2, Pause, Play } from "lucide-react";
+import { PreviewInteractionOverlay } from "./preview-interaction-overlay";
 
 function usePreviewSize() {
 	const editor = useEditor();
@@ -158,7 +159,7 @@ function AgentPreviewOverlay() {
 }
 
 function PreviewCanvas() {
-	const ref = useRef<HTMLCanvasElement>(null);
+	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const lastFrameRef = useRef(-1);
 	const lastSceneRef = useRef<RootNode | null>(null);
 	const renderingRef = useRef(false);
@@ -210,7 +211,7 @@ function PreviewCanvas() {
 			}
 		}
 
-		if (ref.current && renderTree && !renderingRef.current) {
+		if (canvasRef.current && renderTree && !renderingRef.current) {
 			const time = editor.playback.getCurrentTime();
 			const lastFrameTime = getLastFrameTime({
 				duration: renderTree.duration,
@@ -230,7 +231,7 @@ function PreviewCanvas() {
 					.renderToCanvas({
 						node: renderTree,
 						time: renderTime,
-						targetCanvas: ref.current,
+						targetCanvas: canvasRef.current,
 					})
 					.then(() => {
 						renderingRef.current = false;
@@ -255,17 +256,20 @@ function PreviewCanvas() {
 	useRafLoop(render);
 
 	return (
-		<canvas
-			ref={ref}
-			width={width}
-			height={height}
-			className="block max-h-full max-w-full border"
-			style={{
-				background:
-					activeProject.settings.background.type === "blur"
-						? "transparent"
-						: activeProject?.settings.background.color,
-			}}
-		/>
+		<div className="relative">
+			<canvas
+				ref={canvasRef}
+				width={width}
+				height={height}
+				className="block max-h-full max-w-full border"
+				style={{
+					background:
+						activeProject.settings.background.type === "blur"
+							? "transparent"
+							: activeProject?.settings.background.color,
+				}}
+			/>
+			<PreviewInteractionOverlay canvasRef={canvasRef} />
+		</div>
 	);
 }

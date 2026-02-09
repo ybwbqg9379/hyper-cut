@@ -327,7 +327,7 @@ export const TOOL_CAPABILITY_BINDINGS: Record<string, string[]> = {
 	toggle_track_mute: ["manager.timeline.toggleTrackMute"],
 	toggle_track_visibility: ["manager.timeline.toggleTrackVisibility"],
 	generate_captions: ["tool.transcription.generate_captions"],
-	update_text_style: ["manager.timeline.updateTextElement"],
+	update_text_style: ["manager.timeline.updateElements"],
 	move_element: ["manager.timeline.moveElement"],
 	move_elements: ["manager.timeline.updateElementStartTime"],
 	trim_element: ["manager.timeline.updateElementTrim"],

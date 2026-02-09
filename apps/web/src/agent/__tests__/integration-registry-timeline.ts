@@ -199,7 +199,7 @@ export function registerRegistryTimelineTests() {
 			const { EditorCore } = await import("@/core");
 			const editor = EditorCore.getInstance() as unknown as {
 				selection: { getSelectedElements: ReturnType<typeof vi.fn> };
-				timeline: { updateTextElement: ReturnType<typeof vi.fn> };
+				timeline: { updateElements: ReturnType<typeof vi.fn> };
 			};
 
 			editor.selection.getSelectedElements.mockReturnValueOnce([
@@ -208,10 +208,14 @@ export function registerRegistryTimelineTests() {
 
 			const result = await tool.execute({ content: "Updated" });
 			expect(result.success).toBe(true);
-			expect(editor.timeline.updateTextElement).toHaveBeenCalledWith({
-				trackId: "track3",
-				elementId: "text1",
-				updates: expect.objectContaining({ content: "Updated" }),
+			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
+				updates: [
+					{
+						trackId: "track3",
+						elementId: "text1",
+						updates: expect.objectContaining({ content: "Updated" }),
+					},
+				],
 			});
 		});
 

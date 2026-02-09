@@ -2,7 +2,6 @@ import type { EditorCore } from "@/core";
 import type {
 	TrackType,
 	TimelineTrack,
-	TextElement,
 	TimelineElement,
 	ClipboardItem,
 } from "@/types/timeline";
@@ -20,12 +19,13 @@ import {
 	DuplicateElementsCommand,
 	ToggleElementsVisibilityCommand,
 	ToggleElementsMutedCommand,
-	UpdateTextElementCommand,
+	UpdateElementCommand,
 	SplitElementsCommand,
 	PasteCommand,
 	UpdateElementStartTimeCommand,
 	MoveElementCommand,
 } from "@/lib/commands/timeline";
+import { BatchCommand } from "@/lib/commands";
 import type { InsertElementParams } from "@/lib/commands/timeline/element/insert-element";
 
 export class TimelineManager {
@@ -200,33 +200,27 @@ export class TimelineManager {
 		this.editor.command.execute({ command });
 	}
 
-	updateTextElement({
-		trackId,
-		elementId,
+	updateElements({
 		updates,
+		pushHistory = true,
 	}: {
-		trackId: string;
-		elementId: string;
-		updates: Partial<
-			Pick<
-				TextElement,
-				| "content"
-				| "fontSize"
-				| "fontFamily"
-				| "color"
-				| "backgroundColor"
-				| "textAlign"
-				| "fontWeight"
-				| "fontStyle"
-				| "textDecoration"
-				| "transform"
-				| "opacity"
-				| "metadata"
-			>
-		>;
+		updates: Array<{
+			trackId: string;
+			elementId: string;
+			updates: Partial<Record<string, unknown>>;
+		}>;
+		pushHistory?: boolean;
 	}): void {
-		const command = new UpdateTextElementCommand(trackId, elementId, updates);
-		this.editor.command.execute({ command });
+		const commands = updates.map(
+			({ trackId, elementId, updates: elementUpdates }) =>
+				new UpdateElementCommand(trackId, elementId, elementUpdates),
+		);
+		const command = commands.length === 1 ? commands[0] : new BatchCommand(commands);
+		if (pushHistory) {
+			this.editor.command.execute({ command });
+		} else {
+			command.execute();
+		}
 	}
 
 	duplicateElements({
