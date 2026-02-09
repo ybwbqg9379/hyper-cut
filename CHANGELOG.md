@@ -6,6 +6,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **Agent Vision → Layout 产品化收尾**
+  - 空间分析英文关键词已使用 `\b` 词边界匹配，新增覆盖 bright/copyright/stop/desktop/context/texture 等误报防护测试及显式关键词命中验证
+  - 自动匹配失败时候选列表升级为完整可选列表（不再仅显示第一个候选），用户可选择任意候选 #1/#2/#3 重试
+  - 新增 `extractAllLayoutCandidatesFromToolCalls` 返回所有候选元素，`AgentChatMessage.layoutCandidateRetries` 改为数组类型
+  - 补齐端到端回归测试：多候选排名验证与非首选候选重试闭环
+  - `lint:web` 脚本改用 `bunx --bun @biomejs/biome`，干净环境可直接执行
+
 - **Agent Vision → Layout 闭环（P1-b）**：`analyze_frames` 直接产出可执行布局建议，并支持一键应用到元素定位
   - `analyze_frames` 新增 `layoutSuggestions` 输出，包含 `target/anchor/margin/confidence/reason/positionElementArgs`
   - 新增 `apply_layout_suggestion` 工具：支持读取 `analyze_frames` 缓存建议，或直接传入 suggestion 对象后一键调用 `position_element`

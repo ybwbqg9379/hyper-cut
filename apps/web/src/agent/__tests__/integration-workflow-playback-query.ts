@@ -366,9 +366,9 @@ export function registerWorkflowPlaybackQueryTests() {
 					}
 				).candidateElements;
 				expect(Array.isArray(candidates)).toBe(true);
-				expect(candidates!.length).toBeGreaterThanOrEqual(2);
-				expect(candidates![0].rank).toBe(1);
-				expect(candidates![1].rank).toBe(2);
+				expect(candidates?.length).toBeGreaterThanOrEqual(2);
+				expect(candidates?.[0].rank).toBe(1);
+				expect(candidates?.[1].rank).toBe(2);
 			});
 
 			it("apply_layout_suggestion should succeed when retrying with a non-first candidate", async () => {
@@ -400,12 +400,13 @@ export function registerWorkflowPlaybackQueryTests() {
 						}>;
 					}
 				).candidateElements;
-				expect(candidates!.length).toBeGreaterThanOrEqual(2);
+				expect(candidates?.length).toBeGreaterThanOrEqual(2);
 
-				const second = candidates![1];
+				const second = candidates?.[1];
+				expect(second).toBeDefined();
 				const retryResult = await tool.execute({
-					elementId: second.elementId,
-					trackId: second.trackId,
+					elementId: second?.elementId,
+					trackId: second?.trackId,
 					confirmLowConfidence: true,
 					suggestion: {
 						target: "caption",
