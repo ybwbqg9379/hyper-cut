@@ -37,6 +37,8 @@ import {
 	buildWorkflowStepDefaultArguments,
 	buildWorkflowStepFieldConfigs,
 	extractHighlightPlanPreviewFromToolCalls,
+	extractLayoutCandidateRetryFromToolCalls,
+	extractLayoutConfirmationFromToolCalls,
 	extractOperationDiffFromToolCalls,
 	extractTranscriptSuggestionsFromToolCalls,
 	formatWorkflowScenarioLabel,
@@ -147,10 +149,12 @@ const AGENT_CHATBOX_TEXT = {
 		toastSilenceRemoved: "静音删除已完成",
 		toastTranscriptSuggestionTitle: "已生成文本裁剪建议",
 		toastTranscriptSuggestionDesc: "请在转录面板中审阅并应用建议。",
-		toastExecutionCancelled: "执行已取消",
-		toastAwaitingConfirmation: "等待确认",
-		toastOperationCompleted: "操作完成",
-	},
+			toastExecutionCancelled: "执行已取消",
+			toastAwaitingConfirmation: "等待确认",
+			toastOperationCompleted: "操作完成",
+			confirmLayoutMessagePrefix: "确认布局应用",
+			retryLayoutCandidateMessagePrefix: "使用候选重试布局",
+		},
 	en: {
 		tabChat: "Chat",
 		tabTranscript: "Transcript",
@@ -211,11 +215,13 @@ const AGENT_CHATBOX_TEXT = {
 		toastTranscriptSuggestionTitle: "Transcript trim suggestions generated",
 		toastTranscriptSuggestionDesc:
 			"Review and apply suggestions in the transcript panel.",
-		toastExecutionCancelled: "Execution cancelled",
-		toastAwaitingConfirmation: "Awaiting confirmation",
-		toastOperationCompleted: "Operation completed",
-	},
-} as const;
+			toastExecutionCancelled: "Execution cancelled",
+			toastAwaitingConfirmation: "Awaiting confirmation",
+			toastOperationCompleted: "Operation completed",
+			confirmLayoutMessagePrefix: "Confirm layout apply",
+			retryLayoutCandidateMessagePrefix: "Retry layout with candidate",
+		},
+	} as const;
 
 /**
  * AgentChatbox
@@ -281,10 +287,11 @@ export function AgentChatbox() {
 		cancelPlan,
 		cancelExecution,
 		updatePlanStep,
-		removePlanStep,
-		runWorkflow,
-		clearHistory,
-		checkProvider,
+			removePlanStep,
+			runWorkflow,
+			executeTool,
+			clearHistory,
+			checkProvider,
 		isProcessing,
 		error,
 		executionEvents,
@@ -441,6 +448,12 @@ export function AgentChatbox() {
 		const transcriptSuggestions = extractTranscriptSuggestionsFromToolCalls(
 			response.toolCalls,
 		);
+		const layoutConfirmation = extractLayoutConfirmationFromToolCalls(
+			response.toolCalls,
+		);
+		const layoutCandidateRetry = extractLayoutCandidateRetryFromToolCalls(
+			response.toolCalls,
+		);
 		const applyHighlightCutSucceeded = hasSuccessfulToolCall({
 			toolCalls: response.toolCalls,
 			toolName: "apply_highlight_cut",
@@ -519,11 +532,13 @@ export function AgentChatbox() {
 			status: response.status,
 			nextStep: response.nextStep,
 			resumeHint: response.resumeHint,
-			toolCalls: response.toolCalls,
-			plan: response.plan,
-			requiresConfirmation: response.requiresConfirmation,
-		};
-		setMessages((prev) => [...prev, assistantMessage]);
+				toolCalls: response.toolCalls,
+				plan: response.plan,
+				requiresConfirmation: response.requiresConfirmation,
+				layoutConfirmation: layoutConfirmation ?? undefined,
+				layoutCandidateRetry: layoutCandidateRetry ?? undefined,
+			};
+			setMessages((prev) => [...prev, assistantMessage]);
 
 		if (response.requiresConfirmation && response.plan) {
 			setPendingPlanId(response.plan.id);
@@ -876,6 +891,50 @@ export function AgentChatbox() {
 		appendAssistantResponse(response);
 	};
 
+	const handleConfirmLayoutSuggestion = async (
+		argumentsValue: Record<string, unknown>,
+	) => {
+		if (isProcessing) return;
+		const userMessage: AgentChatMessage = {
+			id: crypto.randomUUID(),
+			role: "user",
+			content:
+				`[${text.confirmLayoutMessagePrefix}] apply_layout_suggestion\n` +
+				JSON.stringify(argumentsValue),
+			timestamp: new Date(),
+		};
+		setMessages((prev) => [...prev, userMessage]);
+		setActiveView("chat");
+
+		const response = await executeTool({
+			toolName: "apply_layout_suggestion",
+			arguments: argumentsValue,
+		});
+		appendAssistantResponse(response);
+	};
+
+	const handleRetryLayoutWithCandidate = async (
+		argumentsValue: Record<string, unknown>,
+	) => {
+		if (isProcessing) return;
+		const userMessage: AgentChatMessage = {
+			id: crypto.randomUUID(),
+			role: "user",
+			content:
+				`[${text.retryLayoutCandidateMessagePrefix}] apply_layout_suggestion\n` +
+				JSON.stringify(argumentsValue),
+			timestamp: new Date(),
+		};
+		setMessages((prev) => [...prev, userMessage]);
+		setActiveView("chat");
+
+		const response = await executeTool({
+			toolName: "apply_layout_suggestion",
+			arguments: argumentsValue,
+		});
+		appendAssistantResponse(response);
+	};
+
 	const inputDisabled =
 		activeView !== "chat" || isProcessing || Boolean(pendingPlanId);
 	const workflowActionDisabled = isProcessing || Boolean(pendingPlanId);
@@ -981,12 +1040,14 @@ export function AgentChatbox() {
 								}}
 								onUpdateStep={handleUpdateStep}
 								onRemoveStep={handleRemoveStep}
-								onConfirmPlan={handleConfirmPlan}
-								onCancelPlan={handleCancelPlan}
-								onResumeWorkflow={handleResumeWorkflow}
-								controlsDisabled={isProcessing}
-								resumeDisabled={isProcessing || Boolean(pendingPlanId)}
-								locale={locale}
+									onConfirmPlan={handleConfirmPlan}
+									onCancelPlan={handleCancelPlan}
+									onResumeWorkflow={handleResumeWorkflow}
+									onConfirmLayoutSuggestion={handleConfirmLayoutSuggestion}
+									onRetryLayoutWithCandidate={handleRetryLayoutWithCandidate}
+									controlsDisabled={isProcessing}
+									resumeDisabled={isProcessing || Boolean(pendingPlanId)}
+									locale={locale}
 							/>
 						))}
 

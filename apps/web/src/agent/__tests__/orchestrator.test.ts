@@ -1781,6 +1781,153 @@ describe("AgentOrchestrator", () => {
 		expect(result.requestId).toBeTruthy();
 	});
 
+	it("process should expose awaiting_confirmation when tool returns REQUIRES_CONFIRMATION state", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [
+					{ id: "call-1", name: "apply_layout_suggestion", arguments: {} },
+				],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "should-not-reach",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "apply_layout_suggestion",
+					description: "apply layout",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: vi.fn().mockResolvedValue({
+						success: true,
+						message: "需要确认",
+						data: {
+							stateCode: "REQUIRES_CONFIRMATION",
+							confirmationReason: "LOW_CONFIDENCE",
+							plannedPositionElementArgs: {
+								elementId: "caption-1",
+								trackId: "text-track-1",
+								anchor: "bottom-center",
+								marginX: 0,
+								marginY: 0.08,
+							},
+							suggestion: {
+								target: "caption",
+								anchor: "bottom-center",
+								marginX: 0,
+								marginY: 0.08,
+								confidence: 0.6,
+								reason: "test",
+							},
+						},
+					}),
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.process("应用布局");
+
+		expect(result.success).toBe(false);
+		expect(result.status).toBe("awaiting_confirmation");
+		expect(result.requiresConfirmation).toBe(true);
+	});
+
+	it("executeTool should execute tool directly and return completed status", async () => {
+		const provider = buildProvider();
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
+		const toolExecute = vi.fn().mockResolvedValue({
+			success: true,
+			message: "布局已应用",
+		});
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "apply_layout_suggestion",
+					description: "apply layout",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: toolExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.executeTool({
+			toolName: "apply_layout_suggestion",
+			arguments: { elementId: "caption-1", trackId: "text-track-1" },
+		});
+
+		expect(toolExecute).toHaveBeenCalledWith(
+			{ elementId: "caption-1", trackId: "text-track-1" },
+			expect.objectContaining({
+				mode: "chat",
+				toolName: "apply_layout_suggestion",
+			}),
+		);
+		expect(result.success).toBe(true);
+		expect(result.status).toBe("completed");
+		expect(result.requiresConfirmation).toBe(false);
+	});
+
+	it("executeTool should return awaiting_confirmation for REQUIRES_CONFIRMATION state", async () => {
+		const provider = buildProvider();
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "apply_layout_suggestion",
+					description: "apply layout",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: vi.fn().mockResolvedValue({
+						success: true,
+						message: "低置信度，等待确认",
+						data: {
+							stateCode: "REQUIRES_CONFIRMATION",
+							confirmationReason: "LOW_CONFIDENCE",
+							plannedPositionElementArgs: {
+								elementId: "caption-1",
+								trackId: "text-track-1",
+								anchor: "bottom-center",
+								marginX: 0,
+								marginY: 0.08,
+							},
+							suggestion: {
+								target: "caption",
+								anchor: "bottom-center",
+								marginX: 0,
+								marginY: 0.08,
+								confidence: 0.6,
+								reason: "test",
+							},
+						},
+					}),
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.executeTool({
+			toolName: "apply_layout_suggestion",
+			arguments: {},
+		});
+
+		expect(result.success).toBe(false);
+		expect(result.status).toBe("awaiting_confirmation");
+		expect(result.requiresConfirmation).toBe(true);
+	});
+
 	it("confirmPendingPlan should preserve awaiting_confirmation state", async () => {
 		const provider = buildProvider();
 		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({

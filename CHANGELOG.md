@@ -15,6 +15,9 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 低置信度预览返回新增语义状态字段：`stateCode=REQUIRES_CONFIRMATION`、`confirmationReason=LOW_CONFIDENCE`
   - `suggestion.confidence` 明确按安全范围归一化：输入会 clamp 到 `[0.55, 0.95]`
   - `candidateElements` 新增 `rank` 字段（1 开始），便于前端与 Agent 稳定选择候选目标
+  - 编排层已消费 `stateCode=REQUIRES_CONFIRMATION`，低置信度布局建议会进入统一 `awaiting_confirmation` 状态
+  - Agent Chat 新增布局确认交互：低置信度时可一键“确认应用布局”，自动匹配失败时可一键“使用候选重试布局”
+  - 新增 `AgentOrchestrator.executeTool()` 与 `useAgent.executeTool()`，用于 UI 确认步骤的确定性工具执行（避免二次模型改写）
   - `one-click-masterpiece` 与 `talking-head-polish` 工作流接入 `apply-caption-layout` 步骤，默认 `requiresConfirmation`
   - `src/agent/utils/spatial.ts` 新增视觉观察到布局建议的推荐逻辑（caption/logo/sticker 多目标）
   - 新增 capability 定义与绑定：`tool.vision.apply_layout_suggestion`

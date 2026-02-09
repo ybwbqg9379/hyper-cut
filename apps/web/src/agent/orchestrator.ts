@@ -109,6 +109,7 @@ const TOOL_NAME_ALIASES = new Map<string, string>([
 ]);
 const WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE =
 	"WORKFLOW_CONFIRMATION_REQUIRED";
+const TOOL_CONFIRMATION_REQUIRED_STATE_CODE = "REQUIRES_CONFIRMATION";
 const TOOL_EXECUTION_TIMEOUT_ERROR_CODE = "TOOL_EXECUTION_TIMEOUT";
 const QUALITY_TARGET_NOT_MET_ERROR_CODE = "QUALITY_TARGET_NOT_MET";
 const DEFAULT_WORKFLOW_QUALITY_MAX_ITERATIONS = 2;
@@ -504,9 +505,11 @@ function extractWorkflowPauseInfo(data: unknown): WorkflowPauseInfo | null {
 
 	const status = record.status;
 	const errorCode = record.errorCode;
+	const stateCode = record.stateCode;
 	const isAwaiting =
 		status === "awaiting_confirmation" ||
-		errorCode === WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE;
+		errorCode === WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE ||
+		stateCode === TOOL_CONFIRMATION_REQUIRED_STATE_CODE;
 	if (!isAwaiting) return null;
 
 	return {
@@ -2374,6 +2377,110 @@ export class AgentOrchestrator {
 			requiresConfirmation: true,
 			plan: this.pendingPlanState.plan,
 		};
+	}
+
+	async executeTool({
+		toolName,
+		arguments: argumentsValue,
+	}: {
+		toolName: string;
+		arguments?: Record<string, unknown>;
+	}): Promise<AgentResponse> {
+		const requestId = this.createRequestId("chat");
+		if (this.isExecutingPlan) {
+			return {
+				message: "计划正在执行中，请稍候。",
+				success: false,
+				status: "error",
+				requestId,
+			};
+		}
+
+		if (this.planningEnabled && this.pendingPlanState) {
+			return this.buildPendingPlanBlockedResponse(requestId);
+		}
+
+		const normalizedName = toolName.trim();
+		if (!normalizedName) {
+			return {
+				message: "toolName 不能为空",
+				success: false,
+				status: "error",
+				requestId,
+			};
+		}
+
+		const executionSignal = this.beginExecution(requestId);
+		this.emitExecutionEvent({
+			type: "request_started",
+			requestId,
+			mode: "chat",
+			status: "running",
+			message: `[direct-tool] ${normalizedName}`,
+		});
+
+		this.appendHistory({
+			role: "user",
+			content: `[直接执行工具] ${normalizedName}`,
+		});
+
+		const toolCall: ToolCall = {
+			id: `direct-tool-${Date.now()}`,
+			name: normalizedName,
+			arguments: argumentsValue ?? {},
+		};
+
+		const dagExecution = await this.executeToolCallsAsDag({
+			requestId,
+			mode: "chat",
+			toolCalls: [toolCall],
+			signal: executionSignal,
+		});
+		if (dagExecution.cancelled) {
+			return this.completeRequest({
+				requestId,
+				mode: "chat",
+				response: {
+					message: "执行已取消 (Execution cancelled)",
+					toolCalls: this.toClientToolCalls(dagExecution.executedTools),
+					success: false,
+					status: "cancelled",
+				},
+			});
+		}
+		const executedTools = dagExecution.executedTools;
+		const { hasAwaitingConfirmation, hasToolFailure, pauseInfo } =
+			this.analyzeExecutedTools(executedTools);
+		const toolResult = executedTools[0]?.result ?? {
+			success: false,
+			message: `工具 ${normalizedName} 执行失败：未返回结果`,
+		};
+		this.appendHistory({
+			role: "assistant",
+			content: toolResult.message,
+		});
+		const status = hasAwaitingConfirmation
+			? "awaiting_confirmation"
+			: hasToolFailure
+				? "error"
+				: toolResult.success
+					? "completed"
+					: "error";
+
+		return this.completeRequest({
+			requestId,
+			mode: "chat",
+			response: {
+				message: toolResult.message,
+				toolCalls: this.toClientToolCalls(executedTools),
+				success:
+					toolResult.success && !hasAwaitingConfirmation && !hasToolFailure,
+				status,
+				requiresConfirmation: status === "awaiting_confirmation",
+				nextStep: pauseInfo?.nextStep,
+				resumeHint: pauseInfo?.resumeHint,
+			},
+		});
 	}
 
 	cancelPendingPlan(): AgentResponse {

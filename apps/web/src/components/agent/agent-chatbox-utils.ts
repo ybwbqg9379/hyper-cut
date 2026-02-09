@@ -63,6 +63,20 @@ export interface TranscriptSuggestionPayload {
 	source?: "llm" | "rule" | "filler";
 }
 
+export interface LayoutConfirmationPayload {
+	arguments: Record<string, unknown>;
+	confidence?: number;
+	minConfidence?: number;
+}
+
+export interface LayoutCandidateRetryPayload {
+	arguments: Record<string, unknown>;
+	rank: number;
+	elementId: string;
+	trackId: string;
+	elementName?: string;
+}
+
 function detectWorkflowFieldKind(value: unknown): WorkflowFieldKind {
 	if (typeof value === "number") return "number";
 	if (typeof value === "boolean") return "boolean";
@@ -478,4 +492,98 @@ export function hasSuccessfulToolCall({
 			(toolCall) => toolCall.name === toolName && toolCall.result.success,
 		),
 	);
+}
+
+export function extractLayoutConfirmationFromToolCalls(
+	toolCalls: AgentResponse["toolCalls"] | undefined,
+): LayoutConfirmationPayload | null {
+	if (!toolCalls || toolCalls.length === 0) return null;
+
+	for (const toolCall of toolCalls) {
+		if (toolCall.name !== "apply_layout_suggestion") continue;
+		const dataRecord = asObjectRecord(toolCall.result.data);
+		if (!dataRecord) continue;
+		if (
+			dataRecord.stateCode !== "REQUIRES_CONFIRMATION" ||
+			dataRecord.confirmationReason !== "LOW_CONFIDENCE"
+		) {
+			continue;
+		}
+
+		const suggestionRecord = asObjectRecord(dataRecord.suggestion);
+		const plannedArgsRecord = asObjectRecord(dataRecord.plannedPositionElementArgs);
+		if (!suggestionRecord || !plannedArgsRecord) continue;
+
+		const minConfidence = toFiniteNumber(dataRecord.minConfidence);
+		const confidence = toFiniteNumber(suggestionRecord.confidence);
+
+		const argumentsPayload: Record<string, unknown> = {
+			...plannedArgsRecord,
+			suggestion: suggestionRecord,
+			confirmLowConfidence: true,
+		};
+		if (minConfidence !== undefined) {
+			argumentsPayload.minConfidence = minConfidence;
+		}
+
+		return {
+			arguments: argumentsPayload,
+			...(confidence !== undefined ? { confidence } : {}),
+			...(minConfidence !== undefined ? { minConfidence } : {}),
+		};
+	}
+
+	return null;
+}
+
+export function extractLayoutCandidateRetryFromToolCalls(
+	toolCalls: AgentResponse["toolCalls"] | undefined,
+): LayoutCandidateRetryPayload | null {
+	if (!toolCalls || toolCalls.length === 0) return null;
+
+	for (const toolCall of toolCalls) {
+		if (toolCall.name !== "apply_layout_suggestion") continue;
+		const dataRecord = asObjectRecord(toolCall.result.data);
+		if (!dataRecord || dataRecord.errorCode !== "AUTO_TARGET_NOT_FOUND") {
+			continue;
+		}
+
+		const suggestionRecord = asObjectRecord(dataRecord.suggestion);
+		const candidateElements = Array.isArray(dataRecord.candidateElements)
+			? dataRecord.candidateElements
+			: [];
+		if (!suggestionRecord || candidateElements.length === 0) continue;
+
+		const candidateRecord = asObjectRecord(candidateElements[0]);
+		if (!candidateRecord) continue;
+		if (
+			typeof candidateRecord.elementId !== "string" ||
+			typeof candidateRecord.trackId !== "string"
+		) {
+			continue;
+		}
+
+		const rank = Number(candidateRecord.rank);
+		const argumentsPayload: Record<string, unknown> = {
+			elementId: candidateRecord.elementId,
+			trackId: candidateRecord.trackId,
+			suggestion: suggestionRecord,
+			confirmLowConfidence: true,
+		};
+		if (typeof dataRecord.target === "string") {
+			argumentsPayload.target = dataRecord.target;
+		}
+
+		return {
+			arguments: argumentsPayload,
+			rank: Number.isInteger(rank) && rank > 0 ? rank : 1,
+			elementId: candidateRecord.elementId,
+			trackId: candidateRecord.trackId,
+			...(typeof candidateRecord.elementName === "string"
+				? { elementName: candidateRecord.elementName }
+				: {}),
+		};
+	}
+
+	return null;
 }

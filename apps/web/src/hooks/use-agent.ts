@@ -270,6 +270,39 @@ export function useAgent() {
 		[agent],
 	);
 
+	const executeTool = useCallback(
+		async ({
+			toolName,
+			arguments: argumentsValue,
+		}: {
+			toolName: string;
+			arguments?: Record<string, unknown>;
+		}): Promise<AgentResponse> => {
+			setIsProcessing(true);
+			setError(null);
+			try {
+				const response = await agent.executeTool({
+					toolName,
+					arguments: argumentsValue,
+				});
+				setLastResponse(response);
+				return response;
+			} catch (err) {
+				const errorMessage =
+					err instanceof Error ? err.message : "Unknown error";
+				setError(errorMessage);
+				return {
+					message: errorMessage,
+					success: false,
+					status: "error",
+				};
+			} finally {
+				setIsProcessing(false);
+			}
+		},
+		[agent],
+	);
+
 	// Clear conversation history
 	const clearHistory = useCallback(() => {
 		agent.clearHistory();
@@ -293,6 +326,7 @@ export function useAgent() {
 		updatePlanStep,
 		removePlanStep,
 		runWorkflow,
+		executeTool,
 		clearHistory,
 		checkProvider,
 		isProcessing,
