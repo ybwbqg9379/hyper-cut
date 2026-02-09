@@ -112,7 +112,7 @@ const AGENT_CHATBOX_TEXT = {
 		sendToRunWorkflow: "发送到 run_workflow",
 		oneClickTitle: "一键成片",
 		oneClickDescription:
-			"自动执行全链路（字幕/文本精简/高光/质检/导出计划），默认目标时长=当前视频 1/2。",
+			"自动执行全链路（分镜分析/字幕/文本精简/高光/质检/导出计划），默认目标时长=当前视频 1/2，并避免二次硬裁剪。",
 		oneClickButton: "立即一键成片",
 		oneClickWorkflowError: "一键成片失败：当前时间线时长无效",
 		oneClickMessagePrefix: "一键成片",
@@ -173,7 +173,7 @@ const AGENT_CHATBOX_TEXT = {
 		sendToRunWorkflow: "Send to run_workflow",
 		oneClickTitle: "One-Click Masterpiece",
 		oneClickDescription:
-			"Run full pipeline automatically (captions/trim/highlights/quality/export plan), target duration defaults to 1/2 of current timeline.",
+			"Run full pipeline automatically (scene analysis/captions/trim/highlights/quality/export plan), target duration defaults to 1/2 and avoids a second hard cut.",
 		oneClickButton: "Run One-Click Pipeline",
 		oneClickWorkflowError:
 			"One-click pipeline failed: invalid timeline duration",

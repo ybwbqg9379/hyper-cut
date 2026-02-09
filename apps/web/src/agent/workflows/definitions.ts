@@ -645,6 +645,36 @@ export const WORKFLOWS: Workflow[] = [
 				operation: "read",
 			},
 			{
+				id: "detect-scenes",
+				toolName: "detect_scenes",
+				arguments: {
+					sampleInterval: 1,
+					threshold: 0.3,
+					maxFrames: 500,
+				},
+				summary: "检测分镜边界",
+				operation: "read",
+			},
+			{
+				id: "analyze-frames",
+				toolName: "analyze_frames",
+				arguments: {
+					maxFrames: 12,
+					prompt: "总结镜头构图、主体动作与可剪辑节点，输出简洁结论。",
+				},
+				summary: "执行关键帧视觉分析",
+				operation: "read",
+			},
+			{
+				id: "suggest-edits",
+				toolName: "suggest_edits",
+				arguments: {
+					strategy: "auto",
+				},
+				summary: "结合分镜与字幕给出剪辑建议",
+				operation: "read",
+			},
+			{
 				id: "generate-captions",
 				toolName: "generate_captions",
 				arguments: {
@@ -695,7 +725,7 @@ export const WORKFLOWS: Workflow[] = [
 				toolName: "score_highlights",
 				arguments: {
 					useLLM: true,
-					segmentMinSeconds: 8,
+					segmentMinSeconds: 5,
 					segmentMaxSeconds: 35,
 				},
 				summary: "计算高光评分",
@@ -735,16 +765,17 @@ export const WORKFLOWS: Workflow[] = [
 				arguments: {
 					addCaptions: false,
 					removeSilence: false,
+					dryRun: true,
 				},
-				summary: "应用高光剪辑计划",
+				summary: "预览高光剪辑差异（安全模式，不直接二次裁剪）",
 			},
 			{
 				id: "remove-silence",
 				toolName: "remove_silence",
 				arguments: {
 					source: "timeline",
-					threshold: 0.02,
-					minDuration: 0.28,
+					threshold: 0.018,
+					minDuration: 0.35,
 					windowSeconds: 0.08,
 				},
 				summary: "执行静音压缩",

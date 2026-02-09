@@ -114,4 +114,20 @@ describe("workflow productization", () => {
 		expect(generatePlan?.arguments.targetDuration).toBe(22.5);
 		expect(quality?.arguments.targetDurationSeconds).toBe(22.5);
 	});
+
+	it("should keep one-click highlight apply step in dry-run safety mode", () => {
+		const workflows = listWorkflows();
+		const oneClick = workflows.find(
+			(workflow) => workflow.name === "one-click-masterpiece",
+		);
+		expect(oneClick).toBeTruthy();
+		const detectScenes = oneClick?.steps.find(
+			(step) => step.id === "detect-scenes",
+		);
+		const applyCut = oneClick?.steps.find((step) => step.id === "apply-cut");
+		expect(detectScenes?.toolName).toBe("detect_scenes");
+		expect(applyCut?.arguments).toMatchObject({
+			dryRun: true,
+		});
+	});
 });
