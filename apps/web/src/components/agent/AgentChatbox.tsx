@@ -677,6 +677,10 @@ export function AgentChatbox() {
 			confirmRequiredSteps: true,
 		});
 		appendAssistantResponse(response);
+		if (response.requiresConfirmation && response.status === "planned") {
+			const confirmed = await confirmPlan();
+			appendAssistantResponse(confirmed);
+		}
 	};
 
 	const handleRunWorkflow = async () => {
