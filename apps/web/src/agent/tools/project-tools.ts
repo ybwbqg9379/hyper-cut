@@ -81,6 +81,10 @@ export const exportVideoTool: AgentTool = {
 				type: "boolean",
 				description: "是否包含音频 (Include audio)",
 			},
+			fileName: {
+				type: "string",
+				description: "导出文件名（可选，不含扩展名）(Optional file name)",
+			},
 		},
 		required: [],
 	},
@@ -162,7 +166,11 @@ export const exportVideoTool: AgentTool = {
 			try {
 				const mimeType = getExportMimeType({ format });
 				const extension = getExportFileExtension({ format });
-				fileName = `${activeProject.metadata.name}${extension}`;
+				const customName =
+					typeof params.fileName === "string" && params.fileName.trim().length > 0
+						? params.fileName.trim()
+						: activeProject.metadata.name;
+				fileName = `${customName}${extension}`;
 
 				const blob = new Blob([result.buffer], { type: mimeType });
 				const url = URL.createObjectURL(blob);

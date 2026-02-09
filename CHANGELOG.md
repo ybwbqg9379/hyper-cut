@@ -6,6 +6,20 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **Agent 内容智能化（P0 + P1）**：新增内容策划、自动剪辑、多版本分发与质量评估工具链
+  - 新增 `content-tools-core.ts` 与 `content-tools.ts`，提供内容导向工具集合
+  - 新增 6 个工具：
+    - `generate_edit_brief`（生成可执行剪辑 brief）
+    - `auto_edit_from_prompt`（基于提示词自动执行粗剪流程）
+    - `generate_hook_variants`（生成多开场 hook 方案）
+    - `apply_caption_preset`（批量应用字幕样式预设）
+    - `export_multi_ratio`（按多画幅批量导出）
+    - `evaluate_timeline_quality`（输出结构化时间线质量报告）
+  - `tools/index.ts` 注册 `getContentTools()`，并在 `getToolsSummary()` 中新增 `Content` 分类
+  - `capabilities/tool-bindings.ts` 新增上述 6 个工具的 capability 定义与绑定
+  - `orchestrator.ts` system prompt 补充 Productization 能力描述（brief / auto-edit / hooks / caption preset / 多比例导出 / quality report）
+  - `project-tools.ts` 增强 `export_video`：新增可选参数 `fileName`，支持导出文件名定制
+
 - **Agent UI i18n（中英文）**：Agent 聊天与转录相关面板补齐双语支持
   - 新增 `agent-locale`：支持 `zh/en` 切换、基于 `navigator.language` 的默认语言识别与 `localStorage` 持久化
   - `AgentChatbox` 新增语言切换入口（`中/EN`），并将聊天/工作流/执行进度文案切换为按 locale 渲染

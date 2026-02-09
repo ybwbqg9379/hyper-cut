@@ -18,6 +18,7 @@ import { getHighlightTools } from "./highlight-tools";
 import { getFillerTools } from "./filler-tools";
 import { getCapabilityTools } from "./capability-tools";
 import { getTranscriptEditTools } from "./transcript-edit-tools";
+import { getContentTools } from "./content-tools";
 
 // Re-export individual tool getters
 export { getTimelineTools } from "./timeline-tools";
@@ -33,6 +34,7 @@ export { getHighlightTools } from "./highlight-tools";
 export { getFillerTools } from "./filler-tools";
 export { getCapabilityTools } from "./capability-tools";
 export { getTranscriptEditTools } from "./transcript-edit-tools";
+export { getContentTools } from "./content-tools";
 
 /**
  * Get all available agent tools
@@ -50,6 +52,7 @@ export function getAllTools(): AgentTool[] {
 		...getHighlightTools(),
 		...getFillerTools(),
 		...getTranscriptEditTools(),
+		...getContentTools(),
 		...getWorkflowTools(),
 		...getCapabilityTools(),
 	]);
@@ -71,6 +74,7 @@ export function getToolsSummary(): { category: string; count: number }[] {
 		{ category: "Highlight", count: getHighlightTools().length },
 		{ category: "Filler", count: getFillerTools().length },
 		{ category: "Transcript", count: getTranscriptEditTools().length },
+		{ category: "Content", count: getContentTools().length },
 		{ category: "Workflow", count: getWorkflowTools().length },
 		{ category: "Capability", count: getCapabilityTools().length },
 	];

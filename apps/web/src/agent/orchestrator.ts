@@ -56,6 +56,7 @@ Available capabilities:
 - Query information: get timeline info, current position, selected elements
 - Vision understanding: detect scenes, analyze frames, suggest edit points
 - Workflow automation: run predefined workflows for multi-step edits
+- Productization: generate edit brief, auto-edit from one-line prompt, hook variants, caption presets, multi-ratio export, quality reports
 
 When the user asks you to do something:
 1. Understand their intent
