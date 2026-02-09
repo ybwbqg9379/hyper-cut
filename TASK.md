@@ -147,7 +147,7 @@ Commit message 约定：
 
 ### Phase 6: Workflow 产品化（场景包）
 
-- **Status**: 🔄 In Progress
+- **Status**: ✅ Completed
 - **Description**: 从“技术工作流”升级到“场景工作流”。
 - **Implementation Scope**:
   - 在 `workflows/definitions.ts` 增加场景向工作流：
@@ -157,20 +157,20 @@ Commit message 约定：
   - 工作流参数 schema 化（默认值、范围、说明）
   - Workflow UI 支持按场景筛选和模板说明
 - **Acceptance Criteria**:
-  - [ ] 新增至少 3 个场景工作流
-  - [ ] 工作流参数校验统一化
-  - [ ] Workflow 面板可直接配置并运行
+  - [x] 新增至少 3 个场景工作流
+  - [x] 工作流参数校验统一化
+  - [x] Workflow 面板可直接配置并运行
 - **Tests**:
-  - [ ] workflow 参数校验测试
-  - [ ] workflow 展开/恢复测试
-  - [ ] 场景 workflow 集成测试
+  - [x] workflow 参数校验测试
+  - [x] workflow 展开/恢复测试
+  - [x] 场景 workflow 集成测试
 - **Docs**:
-  - [ ] `CHANGELOG.md`
-  - [ ] `docs/plans/agent-workflow-productization.md`
+  - [x] `CHANGELOG.md`
+  - [x] `docs/plans/agent-workflow-productization.md`
 
 ### Phase 7: 质量评估器 + 自动二次迭代
 
-- **Status**: ⏳ Pending
+- **Status**: 🔄 In Progress
 - **Description**: 执行后自动打分，不达标自动触发二次规划。
 - **Implementation Scope**:
   - 新增 `apps/web/src/agent/services/quality-evaluator.ts`

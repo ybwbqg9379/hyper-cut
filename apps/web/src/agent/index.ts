@@ -72,6 +72,8 @@ export {
 } from "./workflows";
 export type {
 	Workflow,
+	WorkflowScenario,
 	WorkflowStep,
+	WorkflowStepArgumentSchema,
 	WorkflowStepOverride,
 } from "./workflows/types";

@@ -11,6 +11,7 @@ export function registerWorkflowPlaybackQueryTests() {
 			expect(result.message).toContain("auto-caption-cleanup");
 			expect(result.message).toContain("selection-caption-cleanup");
 			expect(result.message).toContain("long-to-short");
+			expect(result.message).toContain("podcast-to-clips");
 			const workflows = (result.data as { workflows?: Array<unknown> })
 				?.workflows;
 			const longToShort =
@@ -35,6 +36,16 @@ export function registerWorkflowPlaybackQueryTests() {
 				(applyCut as { requiresConfirmation?: boolean } | null)
 					?.requiresConfirmation,
 			).toBe(true);
+			const podcastToClips =
+				(Array.isArray(workflows) ? workflows : []).find(
+					(item) =>
+						typeof item === "object" &&
+						item !== null &&
+						(item as { name?: string }).name === "podcast-to-clips",
+				) ?? null;
+			expect((podcastToClips as { scenario?: string } | null)?.scenario).toBe(
+				"podcast",
+			);
 		});
 
 		it("run_workflow should execute preset steps", async () => {

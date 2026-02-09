@@ -15,6 +15,7 @@ import {
 	type ToolResult,
 	type WorkflowNextStep,
 	type WorkflowResumeHint,
+	type WorkflowStep,
 } from "@/agent";
 import { useAgent } from "@/hooks/use-agent";
 import { useEditor } from "@/hooks/use-editor";
@@ -76,6 +77,22 @@ interface ParsedStepOverride {
 }
 
 type WorkflowFieldKind = "string" | "number" | "boolean" | "json";
+type WorkflowScenarioFilter =
+	| "all"
+	| "general"
+	| "podcast"
+	| "talking-head"
+	| "course";
+
+interface WorkflowStepFieldConfig {
+	key: string;
+	defaultValue: unknown;
+	kind: WorkflowFieldKind;
+	description?: string;
+	min?: number;
+	max?: number;
+	enum?: Array<string | number | boolean>;
+}
 
 interface WorkflowFieldDraft {
 	kind: WorkflowFieldKind;
@@ -172,6 +189,85 @@ function formatWorkflowValueForHint(value: unknown): string {
 	} catch {
 		return String(value);
 	}
+}
+
+function formatWorkflowScenarioLabel(scenario: WorkflowScenarioFilter): string {
+	if (scenario === "all") return "全部场景";
+	if (scenario === "podcast") return "播客";
+	if (scenario === "talking-head") return "口播人像";
+	if (scenario === "course") return "课程";
+	return "通用";
+}
+
+function workflowFieldKindFromSchemaType(
+	type: "string" | "number" | "boolean" | "array" | "object",
+): WorkflowFieldKind {
+	if (type === "number") return "number";
+	if (type === "boolean") return "boolean";
+	if (type === "string") return "string";
+	return "json";
+}
+
+function buildWorkflowStepFieldConfigs(
+	step: WorkflowStep,
+): WorkflowStepFieldConfig[] {
+	if (step.argumentSchema && step.argumentSchema.length > 0) {
+		return step.argumentSchema.map((schema) => ({
+			key: schema.key,
+			defaultValue: schema.defaultValue,
+			kind: workflowFieldKindFromSchemaType(schema.type),
+			description: schema.description,
+			min: schema.min,
+			max: schema.max,
+			enum: schema.enum,
+		}));
+	}
+	return Object.entries(step.arguments ?? {}).map(([key, defaultValue]) => ({
+		key,
+		defaultValue,
+		kind: detectWorkflowFieldKind(defaultValue),
+	}));
+}
+
+function buildWorkflowStepDefaultArguments(
+	step: WorkflowStep,
+): Record<string, unknown> {
+	const defaults: Record<string, unknown> = { ...(step.arguments ?? {}) };
+	for (const field of buildWorkflowStepFieldConfigs(step)) {
+		if (defaults[field.key] === undefined) {
+			defaults[field.key] = field.defaultValue;
+		}
+	}
+	return defaults;
+}
+
+function validateWorkflowFieldValue({
+	field,
+	value,
+}: {
+	field: WorkflowStepFieldConfig;
+	value: unknown;
+}): string | null {
+	if (
+		field.kind === "number" &&
+		typeof value === "number" &&
+		Number.isFinite(value)
+	) {
+		if (field.min !== undefined && value < field.min) {
+			return `应不小于 ${field.min}`;
+		}
+		if (field.max !== undefined && value > field.max) {
+			return `应不大于 ${field.max}`;
+		}
+	}
+	if (
+		field.enum &&
+		field.enum.length > 0 &&
+		!field.enum.some((candidate) => candidate === value)
+	) {
+		return `应为 ${field.enum.join(", ")} 之一`;
+	}
+	return null;
 }
 
 function formatExecutionMode(
@@ -366,6 +462,8 @@ export function AgentChatbox() {
 	const [stepDrafts, setStepDrafts] = useState<Record<string, string>>({});
 	const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
 	const [activeView, setActiveView] = useState<AgentView>("chat");
+	const [selectedWorkflowScenario, setSelectedWorkflowScenario] =
+		useState<WorkflowScenarioFilter>("all");
 	const [selectedWorkflowName, setSelectedWorkflowName] = useState("");
 	const [workflowStepDrafts, setWorkflowStepDrafts] =
 		useState<WorkflowStepDrafts>({});
@@ -407,8 +505,23 @@ export function AgentChatbox() {
 		activeExecutionRequestId,
 	} = useAgent();
 	const workflowOptions = useMemo(() => getPresetWorkflows(), []);
+	const workflowScenarioOptions = useMemo<WorkflowScenarioFilter[]>(() => {
+		const scenarios = new Set<WorkflowScenarioFilter>(["all"]);
+		for (const workflow of workflowOptions) {
+			scenarios.add(workflow.scenario);
+		}
+		return Array.from(scenarios);
+	}, [workflowOptions]);
+	const filteredWorkflowOptions = useMemo(() => {
+		if (selectedWorkflowScenario === "all") {
+			return workflowOptions;
+		}
+		return workflowOptions.filter(
+			(workflow) => workflow.scenario === selectedWorkflowScenario,
+		);
+	}, [workflowOptions, selectedWorkflowScenario]);
 	const selectedWorkflow =
-		workflowOptions.find(
+		filteredWorkflowOptions.find(
 			(workflow) => workflow.name === selectedWorkflowName,
 		) ?? null;
 	const executionEventsByRequestId = useMemo(() => {
@@ -429,10 +542,21 @@ export function AgentChatbox() {
 	}, [activeExecutionRequestId, executionEventsByRequestId]);
 
 	useEffect(() => {
-		if (!selectedWorkflowName && workflowOptions.length > 0) {
-			setSelectedWorkflowName(workflowOptions[0].name);
+		if (filteredWorkflowOptions.length === 0) {
+			if (selectedWorkflowName) {
+				setSelectedWorkflowName("");
+			}
+			return;
 		}
-	}, [selectedWorkflowName, workflowOptions]);
+		if (
+			!selectedWorkflowName ||
+			!filteredWorkflowOptions.some(
+				(workflow) => workflow.name === selectedWorkflowName,
+			)
+		) {
+			setSelectedWorkflowName(filteredWorkflowOptions[0].name);
+		}
+	}, [selectedWorkflowName, filteredWorkflowOptions]);
 
 	useEffect(() => {
 		if (!selectedWorkflow) {
@@ -442,7 +566,9 @@ export function AgentChatbox() {
 
 		const nextDrafts: WorkflowStepDrafts = {};
 		for (const step of selectedWorkflow.steps) {
-			nextDrafts[step.id] = buildWorkflowArgumentsDraft(step.arguments);
+			nextDrafts[step.id] = buildWorkflowArgumentsDraft(
+				buildWorkflowStepDefaultArguments(step),
+			);
 		}
 
 		setWorkflowStepDrafts(nextDrafts);
@@ -686,7 +812,9 @@ export function AgentChatbox() {
 
 		setWorkflowStepDrafts((prev) => ({
 			...prev,
-			[stepId]: buildWorkflowArgumentsDraft(targetStep.arguments),
+			[stepId]: buildWorkflowArgumentsDraft(
+				buildWorkflowStepDefaultArguments(targetStep),
+			),
 		}));
 		setWorkflowFormError(null);
 	};
@@ -696,7 +824,9 @@ export function AgentChatbox() {
 
 		const nextDrafts: WorkflowStepDrafts = {};
 		for (const step of selectedWorkflow.steps) {
-			nextDrafts[step.id] = buildWorkflowArgumentsDraft(step.arguments);
+			nextDrafts[step.id] = buildWorkflowArgumentsDraft(
+				buildWorkflowStepDefaultArguments(step),
+			);
 		}
 		setWorkflowStepDrafts(nextDrafts);
 		setWorkflowFormError(null);
@@ -717,23 +847,33 @@ export function AgentChatbox() {
 		for (const step of selectedWorkflow.steps) {
 			const draftFields = workflowStepDrafts[step.id] ?? {};
 			const changedArguments: Record<string, unknown> = {};
+			const fields = buildWorkflowStepFieldConfigs(step);
 
-			for (const [fieldKey, defaultValue] of Object.entries(
-				step.arguments ?? {},
-			)) {
-				const draftField = draftFields[fieldKey];
+			for (const field of fields) {
+				const draftField = draftFields[field.key];
 				if (!draftField) continue;
 
 				const parsed = parseWorkflowFieldValue(draftField);
 				if (!parsed.ok) {
 					setWorkflowFormError(
-						`步骤 ${step.toolName} 的参数 ${fieldKey} 无效：${parsed.message}`,
+						`步骤 ${step.toolName} 的参数 ${field.key} 无效：${parsed.message}`,
 					);
 					return;
 				}
 
-				if (!areWorkflowValuesEqual(parsed.value, defaultValue)) {
-					changedArguments[fieldKey] = parsed.value;
+				const schemaError = validateWorkflowFieldValue({
+					field,
+					value: parsed.value,
+				});
+				if (schemaError) {
+					setWorkflowFormError(
+						`步骤 ${step.toolName} 的参数 ${field.key} 无效：${schemaError}`,
+					);
+					return;
+				}
+
+				if (!areWorkflowValuesEqual(parsed.value, field.defaultValue)) {
+					changedArguments[field.key] = parsed.value;
 				}
 			}
 
@@ -979,6 +1119,34 @@ export function AgentChatbox() {
 					<ScrollArea className="flex-1 min-h-0">
 						<div className="p-3 space-y-3">
 							<div>
+								<p className="mb-1 text-xs font-medium">场景筛选</p>
+								<Select
+									value={selectedWorkflowScenario}
+									onValueChange={(nextValue) =>
+										setSelectedWorkflowScenario(
+											nextValue as WorkflowScenarioFilter,
+										)
+									}
+									disabled={workflowActionDisabled}
+								>
+									<SelectTrigger className="h-8 w-full text-xs">
+										<SelectValue placeholder="请选择场景" />
+									</SelectTrigger>
+									<SelectContent>
+										{workflowScenarioOptions.map((scenario) => (
+											<SelectItem
+												key={scenario}
+												value={scenario}
+												className="text-xs"
+											>
+												{formatWorkflowScenarioLabel(scenario)}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+
+							<div>
 								<p className="mb-1 text-xs font-medium">选择工作流</p>
 								<Select
 									value={selectedWorkflowName}
@@ -989,7 +1157,7 @@ export function AgentChatbox() {
 										<SelectValue placeholder="请选择工作流" />
 									</SelectTrigger>
 									<SelectContent>
-										{workflowOptions.map((workflow) => (
+										{filteredWorkflowOptions.map((workflow) => (
 											<SelectItem
 												key={workflow.name}
 												value={workflow.name}
@@ -1005,8 +1173,14 @@ export function AgentChatbox() {
 							{selectedWorkflow ? (
 								<div className="rounded-md border border-border p-2 space-y-2">
 									<div className="flex items-center justify-between gap-2">
-										<div className="text-xs font-medium">
-											{selectedWorkflow.name}
+										<div className="space-y-1">
+											<div className="text-xs font-medium">
+												{selectedWorkflow.name}
+											</div>
+											<div className="text-[11px] text-muted-foreground">
+												场景：
+												{formatWorkflowScenarioLabel(selectedWorkflow.scenario)}
+											</div>
 										</div>
 										<Button
 											variant="text"
@@ -1021,11 +1195,19 @@ export function AgentChatbox() {
 									<p className="text-xs text-muted-foreground">
 										{selectedWorkflow.description}
 									</p>
+									{selectedWorkflow.templateDescription ? (
+										<p className="text-[11px] text-muted-foreground">
+											模板说明：{selectedWorkflow.templateDescription}
+										</p>
+									) : null}
+									{selectedWorkflow.tags && selectedWorkflow.tags.length > 0 ? (
+										<p className="text-[11px] text-muted-foreground">
+											标签：{selectedWorkflow.tags.join(" / ")}
+										</p>
+									) : null}
 									<div className="space-y-2">
 										{selectedWorkflow.steps.map((step, index) => {
-											const stepArguments = Object.entries(
-												step.arguments ?? {},
-											);
+											const stepFields = buildWorkflowStepFieldConfigs(step);
 											return (
 												<div
 													key={`${selectedWorkflow.name}-${step.id}`}
@@ -1044,7 +1226,7 @@ export function AgentChatbox() {
 															}
 															disabled={
 																workflowActionDisabled ||
-																stepArguments.length === 0
+																stepFields.length === 0
 															}
 														>
 															恢复本步骤默认
@@ -1057,33 +1239,56 @@ export function AgentChatbox() {
 													) : null}
 
 													<div className="space-y-2">
-														{stepArguments.length === 0 ? (
+														{stepFields.length === 0 ? (
 															<div className="text-[11px] text-muted-foreground">
 																此步骤无参数
 															</div>
 														) : (
-															stepArguments.map(([fieldKey, defaultValue]) => {
+															stepFields.map((field) => {
 																const draft =
-																	workflowStepDrafts[step.id]?.[fieldKey] ??
+																	workflowStepDrafts[step.id]?.[field.key] ??
 																	null;
 																if (!draft) return null;
 
 																return (
 																	<div
-																		key={`${step.id}-${fieldKey}`}
+																		key={`${step.id}-${field.key}`}
 																		className="space-y-1"
 																	>
 																		<div className="flex items-center justify-between gap-2">
 																			<div className="text-[11px] font-medium">
-																				{fieldKey}
+																				{field.key}
 																			</div>
 																			<div className="text-[11px] text-muted-foreground truncate">
 																				默认:{" "}
 																				{formatWorkflowValueForHint(
-																					defaultValue,
+																					field.defaultValue,
 																				)}
 																			</div>
 																		</div>
+																		{field.description ? (
+																			<div className="text-[11px] text-muted-foreground">
+																				{field.description}
+																			</div>
+																		) : null}
+																		{field.min !== undefined ||
+																		field.max !== undefined ? (
+																			<div className="text-[11px] text-muted-foreground">
+																				范围:{" "}
+																				{field.min !== undefined
+																					? field.min
+																					: "-"}
+																				~
+																				{field.max !== undefined
+																					? field.max
+																					: "-"}
+																			</div>
+																		) : null}
+																		{field.enum && field.enum.length > 0 ? (
+																			<div className="text-[11px] text-muted-foreground">
+																				可选: {field.enum.join(", ")}
+																			</div>
+																		) : null}
 
 																		{draft.kind === "boolean" ? (
 																			<Select
@@ -1091,7 +1296,7 @@ export function AgentChatbox() {
 																				onValueChange={(nextValue) =>
 																					handleWorkflowFieldChange({
 																						stepId: step.id,
-																						fieldKey,
+																						fieldKey: field.key,
 																						value: nextValue,
 																					})
 																				}
@@ -1115,7 +1320,7 @@ export function AgentChatbox() {
 																				onChange={(event) =>
 																					handleWorkflowFieldChange({
 																						stepId: step.id,
-																						fieldKey,
+																						fieldKey: field.key,
 																						value: event.target.value,
 																					})
 																				}
@@ -1139,7 +1344,7 @@ export function AgentChatbox() {
 																				onChange={(event) =>
 																					handleWorkflowFieldChange({
 																						stepId: step.id,
-																						fieldKey,
+																						fieldKey: field.key,
 																						value: event.target.value,
 																					})
 																				}

@@ -58,7 +58,7 @@ export const listWorkflowsTool: AgentTool = {
 
 		const lines = workflows.map(
 			(workflow) =>
-				`- ${workflow.name}: ${workflow.description} (${workflow.steps.length} steps)`,
+				`- ${workflow.name} [${workflow.scenario}]: ${workflow.description} (${workflow.steps.length} steps)`,
 		);
 
 		return {
@@ -68,11 +68,15 @@ export const listWorkflowsTool: AgentTool = {
 				workflows: workflows.map((workflow) => ({
 					name: workflow.name,
 					description: workflow.description,
+					scenario: workflow.scenario,
+					templateDescription: workflow.templateDescription,
+					tags: workflow.tags,
 					steps: workflow.steps.map((step) => ({
 						id: step.id,
 						toolName: step.toolName,
 						summary: step.summary,
 						arguments: step.arguments,
+						argumentSchema: step.argumentSchema,
 						requiresConfirmation: step.requiresConfirmation === true,
 					})),
 				})),

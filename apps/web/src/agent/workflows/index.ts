@@ -3,15 +3,23 @@ import type {
 	ResolvedWorkflow,
 	Workflow,
 	WorkflowStep,
+	WorkflowStepArgumentSchema,
 	WorkflowStepOverride,
 } from "./types";
 
 function cloneWorkflow(workflow: Workflow): Workflow {
 	return {
 		...workflow,
+		tags: workflow.tags ? [...workflow.tags] : undefined,
 		steps: workflow.steps.map((step) => ({
 			...step,
 			arguments: { ...step.arguments },
+			argumentSchema: step.argumentSchema
+				? step.argumentSchema.map((schema) => ({
+						...schema,
+						enum: schema.enum ? [...schema.enum] : undefined,
+					}))
+				: undefined,
 		})),
 	};
 }
@@ -137,6 +145,63 @@ function applyStepOverrides({
 	return { ok: true, steps: nextSteps };
 }
 
+function isValidStepArgumentType({
+	value,
+	type,
+}: {
+	value: unknown;
+	type: WorkflowStepArgumentSchema["type"];
+}): boolean {
+	if (type === "string") return typeof value === "string";
+	if (type === "number")
+		return typeof value === "number" && Number.isFinite(value);
+	if (type === "boolean") return typeof value === "boolean";
+	if (type === "array") return Array.isArray(value);
+	if (type === "object")
+		return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+	return false;
+}
+
+function validateStepArgumentSchema(step: WorkflowStep): string | null {
+	if (!step.argumentSchema || step.argumentSchema.length === 0) {
+		return null;
+	}
+
+	for (const schema of step.argumentSchema) {
+		const value = step.arguments[schema.key];
+		if (!isValidStepArgumentType({ value, type: schema.type })) {
+			return (
+				`工作流步骤 ${step.id} 的参数 ${schema.key} 类型无效，` +
+				`预期 ${schema.type}，当前 ${typeof value}`
+			);
+		}
+		if (
+			schema.type === "number" &&
+			typeof value === "number" &&
+			Number.isFinite(value)
+		) {
+			if (schema.min !== undefined && value < schema.min) {
+				return `工作流步骤 ${step.id} 的参数 ${schema.key} 低于最小值 ${schema.min}`;
+			}
+			if (schema.max !== undefined && value > schema.max) {
+				return `工作流步骤 ${step.id} 的参数 ${schema.key} 高于最大值 ${schema.max}`;
+			}
+		}
+		if (
+			schema.enum &&
+			schema.enum.length > 0 &&
+			!schema.enum.some((candidate) => candidate === value)
+		) {
+			return (
+				`工作流步骤 ${step.id} 的参数 ${schema.key} 不在允许范围内 ` +
+				`(${schema.enum.join(", ")})`
+			);
+		}
+	}
+
+	return null;
+}
+
 export function listWorkflows(): Workflow[] {
 	return WORKFLOWS.map((workflow) => cloneWorkflow(workflow));
 }
@@ -182,6 +247,15 @@ export function resolveWorkflowFromParams(
 	});
 	if (!applied.ok) {
 		return applied;
+	}
+	for (const step of applied.steps) {
+		const validationError = validateStepArgumentSchema(step);
+		if (validationError) {
+			return {
+				ok: false,
+				message: validationError,
+			};
+		}
 	}
 
 	return {

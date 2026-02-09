@@ -37,6 +37,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 新增恢复事件：`recovery_started`、`recovery_prerequisite_started`、`recovery_prerequisite_completed`、`recovery_retrying`、`recovery_exhausted`
   - `AgentChatbox` 执行轨迹与 `useAgent` 执行进度接入恢复事件展示
   - 新增测试：`recovery-policies.test.ts`；增强 `orchestrator.test.ts` 覆盖恢复成功/失败与重试上限
+- **Agent Workflow Productization（Phase 6）**：工作流场景化与参数 schema 统一
+  - 新增场景工作流：`podcast-to-clips`、`talking-head-polish`、`course-chaptering`
+  - `workflows/types.ts` 扩展 `scenario/templateDescription/tags/argumentSchema`
+  - `workflows/index.ts` 在 `resolveWorkflowFromParams` 接入统一 schema 校验（类型/范围/枚举）
+  - `AgentChatbox` 工作流面板新增场景筛选、模板说明、schema 参数提示与运行前校验
+  - `list_workflows` 输出新增 `scenario/templateDescription/tags/argumentSchema`
+  - 新增测试：`workflow-productization.test.ts`；增强 `integration-workflow-playback-query.ts`
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

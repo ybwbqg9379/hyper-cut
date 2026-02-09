@@ -1,7 +1,24 @@
+export type WorkflowScenario =
+	| "general"
+	| "podcast"
+	| "talking-head"
+	| "course";
+
+export interface WorkflowStepArgumentSchema {
+	key: string;
+	type: "string" | "number" | "boolean" | "array" | "object";
+	description: string;
+	defaultValue: unknown;
+	min?: number;
+	max?: number;
+	enum?: Array<string | number | boolean>;
+}
+
 export interface WorkflowStep {
 	id: string;
 	toolName: string;
 	arguments: Record<string, unknown>;
+	argumentSchema?: WorkflowStepArgumentSchema[];
 	summary?: string;
 	requiresConfirmation?: boolean;
 	operation?: "read" | "write";
@@ -12,6 +29,9 @@ export interface WorkflowStep {
 export interface Workflow {
 	name: string;
 	description: string;
+	scenario: WorkflowScenario;
+	templateDescription?: string;
+	tags?: string[];
 	steps: WorkflowStep[];
 }
 
