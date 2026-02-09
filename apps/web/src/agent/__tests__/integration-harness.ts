@@ -219,6 +219,7 @@ vi.mock("@/lib/transcription/caption", () => ({
 
 vi.mock("@/services/transcription/service", () => ({
 	transcriptionService: {
+		getLastResult: vi.fn(() => null),
 		transcribe: vi.fn(async () => ({
 			text: "Hello world Second line",
 			segments: [

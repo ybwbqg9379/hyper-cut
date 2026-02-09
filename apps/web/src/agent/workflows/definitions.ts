@@ -615,6 +615,195 @@ export const WORKFLOWS: Workflow[] = [
 		],
 	},
 	{
+		name: "one-click-masterpiece",
+		description:
+			"一键成片炫技链路：自动完成字幕、文本精简、高光规划、质检与导出计划。One-click end-to-end showcase pipeline.",
+		scenario: "general",
+		templateDescription:
+			"无需手动配置，点击即执行全链路。默认目标时长为当前时间线的一半。",
+		tags: ["one-click", "showcase", "end-to-end"],
+		steps: [
+			{
+				id: "baseline-summary",
+				toolName: "get_timeline_summary",
+				arguments: {},
+				summary: "读取当前时间线基线摘要",
+				operation: "read",
+			},
+			{
+				id: "baseline-duration",
+				toolName: "get_total_duration",
+				arguments: {},
+				summary: "读取当前总时长",
+				operation: "read",
+			},
+			{
+				id: "baseline-selection",
+				toolName: "get_selected_elements",
+				arguments: {},
+				summary: "读取当前选中元素",
+				operation: "read",
+			},
+			{
+				id: "generate-captions",
+				toolName: "generate_captions",
+				arguments: {
+					source: "timeline",
+					language: "auto",
+				},
+				summary: "生成或刷新时间线字幕",
+			},
+			{
+				id: "detect-fillers",
+				toolName: "detect_filler_words",
+				arguments: {
+					minConfidence: 0.55,
+				},
+				summary: "检测填充词与犹豫词",
+			},
+			{
+				id: "suggest-cuts",
+				toolName: "suggest_transcript_cuts",
+				arguments: {
+					goal: "tighten",
+					dryRun: true,
+				},
+				summary: "生成文本裁剪建议（仅预览）",
+			},
+			{
+				id: "smart-trim",
+				toolName: "transcript_smart_trim",
+				arguments: {
+					targetDurationSeconds: 60,
+					strategy: "balanced",
+					dryRun: false,
+				},
+				argumentSchema: [
+					{
+						key: "targetDurationSeconds",
+						type: "number",
+						description: "目标时长（秒），默认由按钮按当前时长一半注入",
+						defaultValue: 60,
+						min: 1,
+						max: 7200,
+					},
+				],
+				summary: "按目标时长执行智能文本缩时",
+			},
+			{
+				id: "score-highlights",
+				toolName: "score_highlights",
+				arguments: {
+					useLLM: true,
+					segmentMinSeconds: 8,
+					segmentMaxSeconds: 35,
+				},
+				summary: "计算高光评分",
+			},
+			{
+				id: "visual-validation",
+				toolName: "validate_highlights_visual",
+				arguments: {
+					topN: 8,
+					frameConcurrency: 2,
+				},
+				summary: "视觉质量验证高光候选",
+			},
+			{
+				id: "generate-plan",
+				toolName: "generate_highlight_plan",
+				arguments: {
+					targetDuration: 60,
+					tolerance: 0.18,
+					includeHook: true,
+				},
+				argumentSchema: [
+					{
+						key: "targetDuration",
+						type: "number",
+						description: "目标成片时长（秒），默认由按钮按当前时长一半注入",
+						defaultValue: 60,
+						min: 1,
+						max: 7200,
+					},
+				],
+				summary: "生成精华剪辑计划",
+			},
+			{
+				id: "apply-cut",
+				toolName: "apply_highlight_cut",
+				arguments: {
+					addCaptions: false,
+					removeSilence: false,
+				},
+				summary: "应用高光剪辑计划",
+			},
+			{
+				id: "remove-silence",
+				toolName: "remove_silence",
+				arguments: {
+					source: "timeline",
+					threshold: 0.02,
+					minDuration: 0.28,
+					windowSeconds: 0.08,
+				},
+				summary: "执行静音压缩",
+			},
+			{
+				id: "apply-caption-preset",
+				toolName: "apply_caption_preset",
+				arguments: {
+					preset: "social-bold",
+					dryRun: false,
+				},
+				summary: "应用字幕风格模板",
+			},
+			{
+				id: "generate-hooks",
+				toolName: "generate_hook_variants",
+				arguments: {
+					count: 4,
+					strategy: "mixed",
+					minSeconds: 2.5,
+					maxSeconds: 7,
+					useLLM: true,
+				},
+				summary: "生成 4 个 Hook 变体",
+			},
+			{
+				id: "quality-report",
+				toolName: "evaluate_timeline_quality",
+				arguments: {
+					targetDurationSeconds: 60,
+					durationToleranceRatio: 0.18,
+				},
+				argumentSchema: [
+					{
+						key: "targetDurationSeconds",
+						type: "number",
+						description: "质检目标时长（秒），默认由按钮按当前时长一半注入",
+						defaultValue: 60,
+						min: 1,
+						max: 7200,
+					},
+				],
+				summary: "输出结构化质量报告",
+			},
+			{
+				id: "export-plan",
+				toolName: "export_multi_ratio",
+				arguments: {
+					ratios: ["9:16", "1:1", "16:9"],
+					format: "mp4",
+					quality: "high",
+					includeAudio: true,
+					dryRun: true,
+				},
+				summary: "输出多比例导出计划（不执行真实导出）",
+			},
+		],
+	},
+	{
 		name: "podcast-to-clips",
 		description:
 			"播客口播自动精剪：去口头禅、去静音、生成高光短片。Podcast-focused cleanup and highlight clipping.",

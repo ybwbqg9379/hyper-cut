@@ -9,6 +9,7 @@ describe("workflow productization", () => {
 		expect(names).toContain("podcast-to-clips");
 		expect(names).toContain("talking-head-polish");
 		expect(names).toContain("course-chaptering");
+		expect(names).toContain("one-click-masterpiece");
 	});
 
 	it("should expose scenario metadata and template description", () => {
@@ -69,5 +70,48 @@ describe("workflow productization", () => {
 			targetDuration: 75,
 			tolerance: 0.3,
 		});
+	});
+
+	it("should allow one-click workflow target overrides", () => {
+		const resolved = resolveWorkflowFromParams({
+			workflowName: "one-click-masterpiece",
+			stepOverrides: [
+				{
+					stepId: "smart-trim",
+					arguments: {
+						targetDurationSeconds: 22.5,
+					},
+				},
+				{
+					stepId: "generate-plan",
+					arguments: {
+						targetDuration: 22.5,
+					},
+				},
+				{
+					stepId: "quality-report",
+					arguments: {
+						targetDurationSeconds: 22.5,
+					},
+				},
+			],
+		});
+
+		expect(resolved.ok).toBe(true);
+		if (!resolved.ok) {
+			throw new Error("Expected valid one-click override to pass");
+		}
+		const smartTrim = resolved.resolved.steps.find(
+			(step) => step.id === "smart-trim",
+		);
+		const generatePlan = resolved.resolved.steps.find(
+			(step) => step.id === "generate-plan",
+		);
+		const quality = resolved.resolved.steps.find(
+			(step) => step.id === "quality-report",
+		);
+		expect(smartTrim?.arguments.targetDurationSeconds).toBe(22.5);
+		expect(generatePlan?.arguments.targetDuration).toBe(22.5);
+		expect(quality?.arguments.targetDurationSeconds).toBe(22.5);
 	});
 });

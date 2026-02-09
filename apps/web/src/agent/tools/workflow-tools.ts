@@ -9,6 +9,8 @@ import { getProjectTools } from "./project-tools";
 import { getVisionTools } from "./vision-tools";
 import { getHighlightTools } from "./highlight-tools";
 import { getFillerTools } from "./filler-tools";
+import { getTranscriptEditTools } from "./transcript-edit-tools";
+import { getContentTools } from "./content-tools";
 import { listWorkflows, resolveWorkflowFromParams } from "../workflows";
 import { toBooleanOrDefault, toNonEmptyString } from "../utils/values";
 import { EXECUTION_CANCELLED_ERROR_CODE } from "../utils/cancellation";
@@ -26,6 +28,8 @@ function buildExecutableToolMap(): Map<string, AgentTool> {
 		...getVisionTools(),
 		...getHighlightTools(),
 		...getFillerTools(),
+		...getTranscriptEditTools(),
+		...getContentTools(),
 	];
 
 	for (const tool of tools) {

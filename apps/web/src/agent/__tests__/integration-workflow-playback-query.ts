@@ -12,6 +12,7 @@ export function registerWorkflowPlaybackQueryTests() {
 			expect(result.message).toContain("selection-caption-cleanup");
 			expect(result.message).toContain("long-to-short");
 			expect(result.message).toContain("podcast-to-clips");
+			expect(result.message).toContain("one-click-masterpiece");
 			const workflows = (result.data as { workflows?: Array<unknown> })
 				?.workflows;
 			const longToShort =
@@ -79,6 +80,37 @@ export function registerWorkflowPlaybackQueryTests() {
 				errorCode: "WORKFLOW_CONFIRMATION_REQUIRED",
 				status: "awaiting_confirmation",
 			});
+		});
+
+		it("run_workflow should execute transcript step tools", async () => {
+			const tool = getToolByName("run_workflow");
+			const result = await tool.execute({
+				workflowName: "text-based-cleanup",
+				startFromStepId: "suggest-semantic-cuts",
+				confirmRequiredSteps: true,
+			});
+
+			expect(
+				(result.data as { errorCode?: string } | undefined)?.errorCode,
+			).not.toBe("WORKFLOW_TOOL_NOT_FOUND");
+		});
+
+		it("run_workflow should execute content step tools", async () => {
+			const tool = getToolByName("run_workflow");
+			const result = await tool.execute({
+				workflowName: "one-click-masterpiece",
+				startFromStepId: "quality-report",
+				stepOverrides: [
+					{
+						stepId: "quality-report",
+						arguments: { targetDurationSeconds: 5 },
+					},
+				],
+				confirmRequiredSteps: true,
+			});
+
+			expect(result.success).toBe(true);
+			expect(result.message).toContain("执行完成");
 		});
 	});
 

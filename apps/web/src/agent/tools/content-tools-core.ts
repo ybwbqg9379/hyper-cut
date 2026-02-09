@@ -492,7 +492,7 @@ async function buildEditBrief({
 				role: "user",
 				content: [
 					"请根据用户需求生成结构化剪辑 brief。",
-					"可选 workflowName: quick-social-clip, podcast-to-clips, talking-head-polish, course-chaptering, text-based-cleanup, long-to-short",
+					"可选 workflowName: quick-social-clip, podcast-to-clips, talking-head-polish, course-chaptering, text-based-cleanup, long-to-short, one-click-masterpiece",
 					"输出 JSON 字段:",
 					"{goal,audience,platform,tone,language,targetDurationSeconds,workflowName,stepOverrides,captionPreset,exportRatios,hookVariantCount}",
 					`用户需求: ${prompt}`,

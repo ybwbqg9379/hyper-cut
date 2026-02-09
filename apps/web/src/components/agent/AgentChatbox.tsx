@@ -60,6 +60,7 @@ import {
 	MessagesSquare,
 	ScrollText,
 	GitBranch,
+	WandSparkles,
 } from "lucide-react";
 
 type AgentView = "chat" | "transcript" | "workflow";
@@ -69,6 +70,8 @@ interface ParsedStepOverride {
 	index?: number;
 	arguments: Record<string, unknown>;
 }
+
+const ONE_CLICK_WORKFLOW_NAME = "one-click-masterpiece";
 
 const AGENT_CHATBOX_TEXT = {
 	zh: {
@@ -107,6 +110,12 @@ const AGENT_CHATBOX_TEXT = {
 			"仅在你修改参数时才会自动生成 stepOverrides，未改动的参数不会提交。",
 		noWorkflows: "暂无可用工作流",
 		sendToRunWorkflow: "发送到 run_workflow",
+		oneClickTitle: "一键成片",
+		oneClickDescription:
+			"自动执行全链路（字幕/文本精简/高光/质检/导出计划），默认目标时长=当前视频 1/2。",
+		oneClickButton: "立即一键成片",
+		oneClickWorkflowError: "一键成片失败：当前时间线时长无效",
+		oneClickMessagePrefix: "一键成片",
 		workflowRequiredError: "请先选择一个工作流",
 		workflowNotFoundError: "未找到所选工作流，请重新选择",
 		stepFieldInvalid: "步骤 {step} 的参数 {field} 无效：{reason}",
@@ -162,6 +171,13 @@ const AGENT_CHATBOX_TEXT = {
 			"stepOverrides is generated only for changed fields; unchanged values are not submitted.",
 		noWorkflows: "No available workflows",
 		sendToRunWorkflow: "Send to run_workflow",
+		oneClickTitle: "One-Click Masterpiece",
+		oneClickDescription:
+			"Run full pipeline automatically (captions/trim/highlights/quality/export plan), target duration defaults to 1/2 of current timeline.",
+		oneClickButton: "Run One-Click Pipeline",
+		oneClickWorkflowError:
+			"One-click pipeline failed: invalid timeline duration",
+		oneClickMessagePrefix: "One-click pipeline",
 		workflowRequiredError: "Please select a workflow first",
 		workflowNotFoundError: "Selected workflow not found, please reselect",
 		stepFieldInvalid: "Invalid argument {field} for step {step}: {reason}",
@@ -613,6 +629,56 @@ export function AgentChatbox() {
 		setWorkflowFormError(null);
 	};
 
+	const handleRunOneClickMasterpiece = async () => {
+		if (isProcessing || pendingPlanId) return;
+
+		const currentDurationSeconds = editor.timeline.getTotalDuration();
+		if (
+			!Number.isFinite(currentDurationSeconds) ||
+			currentDurationSeconds <= 0
+		) {
+			setWorkflowFormError(text.oneClickWorkflowError);
+			return;
+		}
+
+		const targetDurationSeconds = Number(
+			(currentDurationSeconds / 2).toFixed(2),
+		);
+		const stepOverrides: ParsedStepOverride[] = [
+			{
+				stepId: "smart-trim",
+				arguments: { targetDurationSeconds },
+			},
+			{
+				stepId: "generate-plan",
+				arguments: { targetDuration: targetDurationSeconds },
+			},
+			{
+				stepId: "quality-report",
+				arguments: { targetDurationSeconds },
+			},
+		];
+
+		setWorkflowFormError(null);
+		const userMessage: AgentChatMessage = {
+			id: crypto.randomUUID(),
+			role: "user",
+			content:
+				`[${text.oneClickMessagePrefix}] ${ONE_CLICK_WORKFLOW_NAME}\n` +
+				`targetDurationSeconds=${targetDurationSeconds} (source=${currentDurationSeconds.toFixed(2)}s)`,
+			timestamp: new Date(),
+		};
+		setMessages((prev) => [...prev, userMessage]);
+		setActiveView("chat");
+
+		const response = await runWorkflow({
+			workflowName: ONE_CLICK_WORKFLOW_NAME,
+			stepOverrides,
+			confirmRequiredSteps: true,
+		});
+		appendAssistantResponse(response);
+	};
+
 	const handleRunWorkflow = async () => {
 		if (isProcessing || pendingPlanId) return;
 		if (!selectedWorkflowName) {
@@ -931,6 +997,27 @@ export function AgentChatbox() {
 
 					<ScrollArea className="flex-1 min-h-0">
 						<div className="p-3 space-y-3">
+							<div className="rounded-md border border-primary/40 bg-primary/5 p-3 space-y-2">
+								<div className="flex items-start justify-between gap-2">
+									<div className="space-y-1">
+										<div className="text-xs font-medium flex items-center gap-1.5">
+											<WandSparkles className="size-3.5" />
+											{text.oneClickTitle}
+										</div>
+										<p className="text-[11px] text-muted-foreground">
+											{text.oneClickDescription}
+										</p>
+									</div>
+								</div>
+								<Button
+									onClick={handleRunOneClickMasterpiece}
+									disabled={workflowActionDisabled}
+									className="w-full"
+								>
+									{text.oneClickButton}
+								</Button>
+							</div>
+
 							<div>
 								<p className="mb-1 text-xs font-medium">
 									{text.scenarioFilter}
