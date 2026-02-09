@@ -111,13 +111,13 @@ export interface AgentChatMessage {
 		confidence?: number;
 		minConfidence?: number;
 	};
-	layoutCandidateRetry?: {
+	layoutCandidateRetries?: Array<{
 		arguments: Record<string, unknown>;
 		rank: number;
 		elementId: string;
 		trackId: string;
 		elementName?: string;
-	};
+	}>;
 }
 
 interface MessageBubbleProps {
@@ -337,38 +337,29 @@ export function MessageBubble({
 						</div>
 					) : null}
 
-					{message.layoutCandidateRetry ? (
+					{message.layoutCandidateRetries && message.layoutCandidateRetries.length > 0 ? (
 						<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2 space-y-2">
 							<div className="text-xs text-muted-foreground">
-								{isZh ? (
-									<>
-										自动匹配失败。可用候选 #{message.layoutCandidateRetry.rank}
-										：{message.layoutCandidateRetry.elementName ??
-											message.layoutCandidateRetry.elementId}
-									</>
-								) : (
-									<>
-										Auto-match failed. Candidate #{message.layoutCandidateRetry.rank}
-										:{" "}
-										{message.layoutCandidateRetry.elementName ??
-											message.layoutCandidateRetry.elementId}
-									</>
-								)}
+								{isZh
+									? "自动匹配失败，请选择候选元素重试："
+									: "Auto-match failed. Select a candidate to retry:"}
 							</div>
-							<Button
-								size="sm"
-								variant="secondary"
-								onClick={() => {
-									const retry = message.layoutCandidateRetry;
-									if (!retry) return;
-									onRetryLayoutWithCandidate(retry.arguments);
-								}}
-								disabled={resumeDisabled}
-								className="h-7 px-2 text-xs"
-							>
-								<Play className="size-3 mr-1" />
-								{isZh ? "使用候选重试布局" : "Retry with Candidate"}
-							</Button>
+							{message.layoutCandidateRetries.map((candidate) => (
+								<Button
+									key={`${candidate.elementId}-${candidate.rank}`}
+									size="sm"
+									variant="secondary"
+									onClick={() => onRetryLayoutWithCandidate(candidate.arguments)}
+									disabled={resumeDisabled}
+									className="h-7 px-2 text-xs w-full justify-start"
+								>
+									<Play className="size-3 mr-1 shrink-0" />
+									<span className="truncate">
+										#{candidate.rank}{" "}
+										{candidate.elementName ?? candidate.elementId}
+									</span>
+								</Button>
+							))}
 						</div>
 					) : null}
 

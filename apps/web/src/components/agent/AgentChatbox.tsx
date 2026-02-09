@@ -37,7 +37,7 @@ import {
 	buildWorkflowStepDefaultArguments,
 	buildWorkflowStepFieldConfigs,
 	extractHighlightPlanPreviewFromToolCalls,
-	extractLayoutCandidateRetryFromToolCalls,
+	extractAllLayoutCandidatesFromToolCalls,
 	extractLayoutConfirmationFromToolCalls,
 	extractOperationDiffFromToolCalls,
 	extractTranscriptSuggestionsFromToolCalls,
@@ -451,7 +451,7 @@ export function AgentChatbox() {
 		const layoutConfirmation = extractLayoutConfirmationFromToolCalls(
 			response.toolCalls,
 		);
-		const layoutCandidateRetry = extractLayoutCandidateRetryFromToolCalls(
+		const layoutCandidateRetries = extractAllLayoutCandidatesFromToolCalls(
 			response.toolCalls,
 		);
 		const applyHighlightCutSucceeded = hasSuccessfulToolCall({
@@ -536,7 +536,7 @@ export function AgentChatbox() {
 				plan: response.plan,
 				requiresConfirmation: response.requiresConfirmation,
 				layoutConfirmation: layoutConfirmation ?? undefined,
-				layoutCandidateRetry: layoutCandidateRetry ?? undefined,
+				layoutCandidateRetries: layoutCandidateRetries.length > 0 ? layoutCandidateRetries : undefined,
 			};
 			setMessages((prev) => [...prev, assistantMessage]);
 

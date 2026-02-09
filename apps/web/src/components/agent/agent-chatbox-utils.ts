@@ -587,3 +587,60 @@ export function extractLayoutCandidateRetryFromToolCalls(
 
 	return null;
 }
+
+export function extractAllLayoutCandidatesFromToolCalls(
+	toolCalls: AgentResponse["toolCalls"] | undefined,
+): LayoutCandidateRetryPayload[] {
+	if (!toolCalls || toolCalls.length === 0) return [];
+
+	for (const toolCall of toolCalls) {
+		if (toolCall.name !== "apply_layout_suggestion") continue;
+		const dataRecord = asObjectRecord(toolCall.result.data);
+		if (!dataRecord || dataRecord.errorCode !== "AUTO_TARGET_NOT_FOUND") {
+			continue;
+		}
+
+		const suggestionRecord = asObjectRecord(dataRecord.suggestion);
+		const candidateElements = Array.isArray(dataRecord.candidateElements)
+			? dataRecord.candidateElements
+			: [];
+		if (!suggestionRecord || candidateElements.length === 0) continue;
+
+		const results: LayoutCandidateRetryPayload[] = [];
+		for (const raw of candidateElements) {
+			const candidateRecord = asObjectRecord(raw);
+			if (!candidateRecord) continue;
+			if (
+				typeof candidateRecord.elementId !== "string" ||
+				typeof candidateRecord.trackId !== "string"
+			) {
+				continue;
+			}
+
+			const rank = Number(candidateRecord.rank);
+			const argumentsPayload: Record<string, unknown> = {
+				elementId: candidateRecord.elementId,
+				trackId: candidateRecord.trackId,
+				suggestion: suggestionRecord,
+				confirmLowConfidence: true,
+			};
+			if (typeof dataRecord.target === "string") {
+				argumentsPayload.target = dataRecord.target;
+			}
+
+			results.push({
+				arguments: argumentsPayload,
+				rank: Number.isInteger(rank) && rank > 0 ? rank : results.length + 1,
+				elementId: candidateRecord.elementId,
+				trackId: candidateRecord.trackId,
+				...(typeof candidateRecord.elementName === "string"
+					? { elementName: candidateRecord.elementName }
+					: {}),
+			});
+		}
+
+		if (results.length > 0) return results;
+	}
+
+	return [];
+}
