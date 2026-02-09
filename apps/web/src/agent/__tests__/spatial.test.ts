@@ -120,4 +120,60 @@ describe("spatial utils", () => {
 		);
 		expect(logoSuggestion?.anchor).toBe("top-left");
 	});
+
+	it("should not trigger false positives from common words containing spatial substrings", () => {
+		const falsePositiveDescriptions = [
+			"bright sunlight fills the room",
+			"copyright notice visible",
+			"stop motion animation",
+			"desktop recording of screen",
+			"context menu appeared",
+			"texture overlay on video",
+			"nightclub scene with strobe lights",
+			"copyright 2024 all rights reserved",
+		];
+
+		for (const description of falsePositiveDescriptions) {
+			const suggestions = buildLayoutSuggestionsFromObservations([
+				{
+					description,
+					people: [],
+					textOnScreen: [],
+				},
+			]);
+			const captionSuggestion = suggestions.find(
+				(suggestion) => suggestion.target === "caption",
+			);
+			expect(
+				captionSuggestion?.anchor,
+				`false positive for: "${description}"`,
+			).toBe("bottom-center");
+		}
+	});
+
+	it("should detect explicit spatial keywords and adjust layout suggestions accordingly", () => {
+		const bottomBusySuggestions = buildLayoutSuggestionsFromObservations([
+			{
+				description: "subtitle covers the bottom area",
+				people: [],
+				textOnScreen: ["line1", "line2"],
+			},
+		]);
+		const captionBottomBusy = bottomBusySuggestions.find(
+			(suggestion) => suggestion.target === "caption",
+		);
+		expect(captionBottomBusy?.anchor).toBe("top-center");
+
+		const topBusySuggestions = buildLayoutSuggestionsFromObservations([
+			{
+				description: "a banner visible at the top of the frame",
+				people: [],
+				textOnScreen: [],
+			},
+		]);
+		const logoTopBusy = topBusySuggestions.find(
+			(suggestion) => suggestion.target === "logo",
+		);
+		expect(logoTopBusy?.anchor).toBe("bottom-right");
+	});
 });
