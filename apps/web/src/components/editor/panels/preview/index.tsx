@@ -106,11 +106,11 @@ function AgentPreviewOverlay() {
 		<>
 			{executionProgress ? (
 				<div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex justify-center">
-					<div className="flex items-center gap-2 rounded-md border border-border/80 bg-background/92 px-3 py-2 text-xs shadow-sm">
+					<div className="flex w-full max-w-[min(92vw,560px)] items-center gap-2 overflow-hidden rounded-md border border-border/80 bg-background/92 px-3 py-2 text-xs shadow-sm">
 						<Loader2 className="size-3.5 animate-spin text-primary" />
 						<div className="flex min-w-0 flex-col">
 							<span className="font-medium">AI 正在处理</span>
-							<span className="truncate text-muted-foreground">
+							<span className="block max-w-full truncate text-muted-foreground">
 								{executionProgress.message}
 							</span>
 						</div>

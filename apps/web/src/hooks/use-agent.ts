@@ -33,10 +33,16 @@ export function useAgent() {
 			return nextEvents;
 		});
 		if (event.type === "request_started") {
+			const requestMessage =
+				event.mode === "workflow"
+					? "正在启动工作流..."
+					: event.mode === "plan_confirmation"
+						? "正在执行已确认计划..."
+						: "正在分析请求...";
 			setActiveExecutionRequestId(event.requestId);
 			useAgentUiStore.getState().setExecutionProgress({
 				requestId: event.requestId,
-				message: event.message ?? "正在处理请求...",
+				message: requestMessage,
 				updatedAt: event.timestamp,
 			});
 			return;
@@ -98,9 +104,17 @@ export function useAgent() {
 			: undefined;
 		const planningEnabled =
 			process.env.NEXT_PUBLIC_AGENT_PLANNING_ENABLED !== "false";
+		const parsedMaxToolIterations = Number(
+			process.env.NEXT_PUBLIC_AGENT_MAX_TOOL_ITERATIONS,
+		);
+		const maxToolIterations =
+			Number.isFinite(parsedMaxToolIterations) && parsedMaxToolIterations > 0
+				? Math.floor(parsedMaxToolIterations)
+				: undefined;
 		return new AgentOrchestrator(tools, {
 			systemPrompt,
 			toolTimeoutMs,
+			maxToolIterations,
 			planningEnabled,
 			onExecutionEvent: appendExecutionEvent,
 		});

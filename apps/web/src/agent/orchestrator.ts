@@ -71,7 +71,7 @@ Caption language rule:
 Always be helpful and explain what actions you're taking.`;
 
 const MAX_HISTORY_MESSAGES = 30;
-const DEFAULT_MAX_TOOL_ITERATIONS = 4;
+const DEFAULT_MAX_TOOL_ITERATIONS = 10;
 const DEFAULT_TOOL_TIMEOUT_MS = 60000;
 const DEFAULT_PLANNING_ENABLED = false;
 const MAX_TOOL_HISTORY_CONTENT_LENGTH = 4000;
@@ -1924,7 +1924,7 @@ export class AgentOrchestrator {
 						requestId,
 						mode: "chat",
 						response: {
-							message: "工具调用次数已达上限，请重试 (Tool call limit reached)",
+							message: `工具调用次数已达上限（${this.maxToolIterations} 轮），请尝试拆分指令或改用工作流模式后重试 (Tool call limit reached)`,
 							toolCalls: this.toClientToolCalls(executedTools),
 							success: false,
 							status: "error",
