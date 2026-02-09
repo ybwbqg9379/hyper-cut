@@ -117,6 +117,8 @@ export interface AgentTool {
 	name: string;
 	description: string;
 	parameters: ToolDefinition["parameters"];
+	capabilityId?: string;
+	capabilityIds?: string[];
 	execute: (
 		params: Record<string, unknown>,
 		context?: ToolExecutionContext,

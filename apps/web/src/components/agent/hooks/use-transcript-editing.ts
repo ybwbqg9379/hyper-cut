@@ -36,7 +36,10 @@ interface UseTranscriptEditingResult {
 	removeFillerAtRange: (start: number, end: number) => void;
 	removeAllFillers: () => void;
 	clearFillers: () => void;
-	isFillerWord: (startTime: number, endTime: number) => FillerHighlight | undefined;
+	isFillerWord: (
+		startTime: number,
+		endTime: number,
+	) => FillerHighlight | undefined;
 }
 
 const service = new FillerDetectorService();
@@ -95,7 +98,10 @@ export function useTranscriptEditing(): UseTranscriptEditingResult {
 			let tracks = editor.timeline.getTracks() as TimelineTrack[];
 
 			const splitTimes = merged.flatMap((r) => [r.start, r.end]);
-			const { tracks: splitTracks } = splitTracksAtTimes({ tracks, splitTimes });
+			const { tracks: splitTracks } = splitTracksAtTimes({
+				tracks,
+				splitTimes,
+			});
 			tracks = splitTracks;
 
 			for (const range of merged) {

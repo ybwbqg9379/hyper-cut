@@ -28,7 +28,9 @@ export class ReplaceTracksCommand extends Command {
 			return;
 		}
 		if (this.options.selection) {
-			editor.selection.setSelectedElements({ elements: this.options.selection });
+			editor.selection.setSelectedElements({
+				elements: this.options.selection,
+			});
 		}
 	}
 

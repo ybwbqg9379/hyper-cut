@@ -30,7 +30,7 @@ export function splitTracksAtTime({
 	splitTime: number;
 	shouldInclude?: ElementPredicate;
 	epsilon?: number;
-	}): {
+}): {
 	tracks: TimelineTrack[];
 	splitCount: number;
 	rightSideElements: Array<{ trackId: string; elementId: string }>;

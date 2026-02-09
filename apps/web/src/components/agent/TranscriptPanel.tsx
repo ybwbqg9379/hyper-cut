@@ -14,10 +14,7 @@ import {
 import { transcriptionService } from "@/services/transcription/service";
 import { cn } from "@/utils/ui";
 import { Check, Trash2, Sparkles, X, Loader2 } from "lucide-react";
-import {
-	useTranscriptEditing,
-	type FillerHighlight,
-} from "@/hooks/use-transcript-editing";
+import { useTranscriptEditing } from "@/hooks/use-transcript-editing";
 
 interface CaptionSegment {
 	trackId: string;
@@ -253,7 +250,8 @@ export function TranscriptPanel() {
 		editor.playback.seek({ time: word.startTime });
 		const relatedSegment = segments.find(
 			(segment) =>
-				word.startTime >= segment.startTime && word.startTime <= segment.endTime,
+				word.startTime >= segment.startTime &&
+				word.startTime <= segment.endTime,
 		);
 		if (!relatedSegment) return;
 		editor.selection.setSelectedElements({
@@ -428,10 +426,7 @@ export function TranscriptPanel() {
 						) : (
 							<div className="flex flex-wrap gap-1">
 								{wordItems.map((word, index) => {
-									const filler = isFillerWord(
-										word.startTime,
-										word.endTime,
-									);
+									const filler = isFillerWord(word.startTime, word.endTime);
 									const fillerColor = filler
 										? filler.category === "filler"
 											? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400"
@@ -458,10 +453,7 @@ export function TranscriptPanel() {
 											title={tooltipText}
 											onClick={() => {
 												if (filler) {
-													removeFillerAtRange(
-														filler.startTime,
-														filler.endTime,
-													);
+													removeFillerAtRange(filler.startTime, filler.endTime);
 												} else {
 													focusWord(word);
 												}

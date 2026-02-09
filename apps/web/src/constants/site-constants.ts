@@ -1,4 +1,4 @@
-import { OcDataBuddyIcon, OcMarbleIcon, } from "@hypercut/ui/icons";
+import { OcDataBuddyIcon, OcMarbleIcon } from "@hypercut/ui/icons";
 
 export const SITE_URL = "https://hypercut.app";
 

@@ -1,23 +1,21 @@
 import { describe, it, expect } from "vitest";
-import {
-	FillerDetectorService,
-	type FillerWordMatch,
-} from "../services/filler-detector";
+import { FillerDetectorService } from "../services/filler-detector";
 import type { TranscriptContext } from "../tools/highlight-types";
 
 function makeContext(
 	words: Array<{ text: string; start: number; end: number }>,
 ): TranscriptContext {
 	return {
-		segments: words.length > 0
-			? [
-					{
-						startTime: words[0].start,
-						endTime: words[words.length - 1].end,
-						text: words.map((w) => w.text).join(" "),
-					},
-				]
-			: [],
+		segments:
+			words.length > 0
+				? [
+						{
+							startTime: words[0].start,
+							endTime: words[words.length - 1].end,
+							text: words.map((w) => w.text).join(" "),
+						},
+					]
+				: [],
 		words: words.map((w) => ({
 			startTime: w.start,
 			endTime: w.end,
@@ -60,9 +58,7 @@ describe("FillerDetectorService", () => {
 			expect(allTexts).toContain("like");
 			expect(result.stats.totalCount).toBeGreaterThan(0);
 			// "um" should be detected as either filler or hesitation
-			const umMatch = result.matches.find(
-				(m) => m.text.toLowerCase() === "um",
-			);
+			const umMatch = result.matches.find((m) => m.text.toLowerCase() === "um");
 			expect(umMatch).toBeDefined();
 		});
 
@@ -198,7 +194,7 @@ describe("FillerDetectorService", () => {
 				m.text.toLowerCase().includes("i mean"),
 			);
 			expect(phraseMatch).toBeDefined();
-			expect(phraseMatch!.category).toBe("filler");
+			expect(phraseMatch?.category).toBe("filler");
 		});
 
 		it("merges adjacent same-category matches", () => {

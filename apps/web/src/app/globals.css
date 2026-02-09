@@ -123,8 +123,8 @@
 	--font-sans: var(--font-inter), sans-serif;
 
 	/* Font sizes */
-	--text-xl: 1.20rem;
-  --text-base: 0.92rem;
+	--text-xl: 1.2rem;
+	--text-base: 0.92rem;
 	--text-base--line-height: calc(1.5 / 0.95);
 	--text-xs: 0.75rem;
 	--text-xs--line-height: calc(1 / 0.8);

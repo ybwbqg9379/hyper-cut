@@ -39,7 +39,8 @@ function isFiniteNumber(value: unknown): value is number {
 function resolveTranscriptContext() {
 	try {
 		const currentWhisper = transcriptionService.getLastResult();
-		const skipWhisper = staleWhisperRef !== null && currentWhisper === staleWhisperRef;
+		const skipWhisper =
+			staleWhisperRef !== null && currentWhisper === staleWhisperRef;
 		return buildTranscriptContext(EditorCore.getInstance(), { skipWhisper });
 	} catch {
 		return null;
@@ -158,7 +159,9 @@ export const detectFillerWordsTool: AgentTool = {
 				`检测到 ${filteredMatches.length} 个填充词，` +
 				`总时长 ${filteredDuration.toFixed(1)}s ` +
 				`(占比 ${filteredPercentage}%)\n` +
-				(summary ? `前 ${Math.min(10, filteredMatches.length)} 个:\n${summary}` : ""),
+				(summary
+					? `前 ${Math.min(10, filteredMatches.length)} 个:\n${summary}`
+					: ""),
 			data: {
 				totalCount: filteredMatches.length,
 				totalDurationSeconds: Number(filteredDuration.toFixed(3)),

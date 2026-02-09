@@ -146,21 +146,21 @@ export class LMStudioProvider implements LLMProvider {
 				body: JSON.stringify(requestBody),
 				signal: controller.signal,
 			});
-			} catch (error) {
-				if (error instanceof Error && error.name === "AbortError") {
-					throw new Error(
-						abortedByCaller
-							? "LM Studio request cancelled"
-							: "LM Studio request timed out",
-					);
-				}
-				throw error;
-			} finally {
-				clearTimeout(timeoutId);
-				if (options?.signal) {
-					options.signal.removeEventListener("abort", onCallerAbort);
-				}
+		} catch (error) {
+			if (error instanceof Error && error.name === "AbortError") {
+				throw new Error(
+					abortedByCaller
+						? "LM Studio request cancelled"
+						: "LM Studio request timed out",
+				);
 			}
+			throw error;
+		} finally {
+			clearTimeout(timeoutId);
+			if (options?.signal) {
+				options.signal.removeEventListener("abort", onCallerAbort);
+			}
+		}
 
 		if (!response.ok) {
 			throw new Error(`LM Studio API error: ${response.statusText}`);

@@ -4,6 +4,7 @@
  */
 
 import type { AgentTool } from "../types";
+import { bindCapabilitiesToTools } from "../capabilities";
 import { getTimelineTools } from "./timeline-tools";
 import { getPlaybackTools } from "./playback-tools";
 import { getQueryTools } from "./query-tools";
@@ -15,6 +16,7 @@ import { getWorkflowTools } from "./workflow-tools";
 import { getVisionTools } from "./vision-tools";
 import { getHighlightTools } from "./highlight-tools";
 import { getFillerTools } from "./filler-tools";
+import { getCapabilityTools } from "./capability-tools";
 
 // Re-export individual tool getters
 export { getTimelineTools } from "./timeline-tools";
@@ -28,12 +30,13 @@ export { getWorkflowTools } from "./workflow-tools";
 export { getVisionTools } from "./vision-tools";
 export { getHighlightTools } from "./highlight-tools";
 export { getFillerTools } from "./filler-tools";
+export { getCapabilityTools } from "./capability-tools";
 
 /**
  * Get all available agent tools
  */
 export function getAllTools(): AgentTool[] {
-	return [
+	return bindCapabilitiesToTools([
 		...getTimelineTools(),
 		...getPlaybackTools(),
 		...getQueryTools(),
@@ -45,7 +48,8 @@ export function getAllTools(): AgentTool[] {
 		...getHighlightTools(),
 		...getFillerTools(),
 		...getWorkflowTools(),
-	];
+		...getCapabilityTools(),
+	]);
 }
 
 /**
@@ -64,5 +68,6 @@ export function getToolsSummary(): { category: string; count: number }[] {
 		{ category: "Highlight", count: getHighlightTools().length },
 		{ category: "Filler", count: getFillerTools().length },
 		{ category: "Workflow", count: getWorkflowTools().length },
+		{ category: "Capability", count: getCapabilityTools().length },
 	];
 }

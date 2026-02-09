@@ -8,7 +8,11 @@ export class UpdateElementTransformCommand extends Command {
 	constructor(
 		private trackId: string,
 		private elementId: string,
-		private updates: { transform?: Transform; opacity?: number; color?: string },
+		private updates: {
+			transform?: Transform;
+			opacity?: number;
+			color?: string;
+		},
 	) {
 		super();
 	}

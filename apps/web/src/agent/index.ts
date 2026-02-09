@@ -47,6 +47,22 @@ export { getProjectTools } from "./tools/project-tools";
 export { getVisionTools } from "./tools/vision-tools";
 export { getWorkflowTools } from "./tools/workflow-tools";
 export { getHighlightTools } from "./tools/highlight-tools";
+export { getCapabilityTools } from "./tools/capability-tools";
+
+// Capabilities
+export type {
+	CapabilityDefinition,
+	CapabilityDomain,
+	CapabilityParameter,
+	CapabilityRegistry,
+	CapabilityRisk,
+	CapabilitySource,
+} from "./capabilities";
+export {
+	getCapabilityRegistry,
+	listCapabilities,
+	getToolBindingCoverage,
+} from "./capabilities";
 
 // Workflows
 export {

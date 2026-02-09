@@ -51,7 +51,10 @@ export interface FillerDetectionResult {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalizeEnglish(text: string): string {
-	return text.toLowerCase().replace(/[^a-z\s]/gi, "").trim();
+	return text
+		.toLowerCase()
+		.replace(/[^a-z\s]/gi, "")
+		.trim();
 }
 
 function isEnglishFiller(text: string): boolean {
@@ -82,7 +85,10 @@ function isHesitationPattern(text: string): boolean {
 	return false;
 }
 
-function isRepetition(current: TranscriptWord, previous: TranscriptWord | null): boolean {
+function isRepetition(
+	current: TranscriptWord,
+	previous: TranscriptWord | null,
+): boolean {
 	if (!previous) return false;
 	const currentText = current.text.trim().toLowerCase();
 	const previousText = previous.text.trim().toLowerCase();
@@ -91,7 +97,10 @@ function isRepetition(current: TranscriptWord, previous: TranscriptWord | null):
 	return currentText === previousText;
 }
 
-function computeConfidence(word: TranscriptWord, category: FillerCategory): number {
+function computeConfidence(
+	word: TranscriptWord,
+	category: FillerCategory,
+): number {
 	const duration = word.endTime - word.startTime;
 	// Short fillers have slightly lower confidence
 	const durationFactor = Math.min(1, duration / 0.5);
@@ -178,7 +187,11 @@ export class FillerDetectorService {
 			const b = words[i + 1];
 			const aDur = a.endTime - a.startTime;
 			const bDur = b.endTime - b.startTime;
-			if (aDur < MIN_FILLER_WORD_DURATION_SECONDS && bDur < MIN_FILLER_WORD_DURATION_SECONDS) continue;
+			if (
+				aDur < MIN_FILLER_WORD_DURATION_SECONDS &&
+				bDur < MIN_FILLER_WORD_DURATION_SECONDS
+			)
+				continue;
 			if (isEnglishFillerPhrase(a.text, b.text)) {
 				const combined: TranscriptWord = {
 					startTime: a.startTime,

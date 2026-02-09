@@ -6,6 +6,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **Agent Capability Registry（Phase 1）**：新增能力镜像层与工具能力绑定
+  - 新增 `src/agent/capabilities/`：`types`、`collect-from-actions`、`collect-from-managers`、`registry`、`tool-bindings`、`index`
+  - 新增只读工具 `list_capabilities`，支持按 `source/risk` 过滤能力定义
+  - `getAllTools()` 统一注入 `capabilityId/capabilityIds`
+  - 新增能力覆盖率接口 `getToolBindingCoverage`（当前工具绑定覆盖率 100%）
+  - 新增测试：`capability-registry.test.ts`、`capability-tools.test.ts`
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

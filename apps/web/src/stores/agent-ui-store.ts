@@ -46,11 +46,17 @@ interface AgentUiStore {
 		sourceRequestId?: string;
 	}) => void;
 	clearHighlightPreview: () => void;
-	setHighlightPreviewPlaybackEnabled: ({ enabled }: { enabled: boolean }) => void;
-	setExecutionProgress: (
-		progress: AgentExecutionProgressState | null,
-	) => void;
-	clearExecutionProgressByRequest: ({ requestId }: { requestId: string }) => void;
+	setHighlightPreviewPlaybackEnabled: ({
+		enabled,
+	}: {
+		enabled: boolean;
+	}) => void;
+	setExecutionProgress: (progress: AgentExecutionProgressState | null) => void;
+	clearExecutionProgressByRequest: ({
+		requestId,
+	}: {
+		requestId: string;
+	}) => void;
 	clearAllAgentUiState: () => void;
 }
 
@@ -137,23 +143,22 @@ export const useAgentUiStore = create<AgentUiStore>((set) => ({
 			return;
 		}
 
-		const mappedSegments = segments
-			.map((segment) => {
-				const start = clampTime(segment.startTime, normalizedTotalDuration);
-				const end = clampTime(segment.endTime, normalizedTotalDuration);
-				if (end <= start) return null;
-				const nextSegment: HighlightPreviewRange = {
-					start,
-					end,
-				};
-				if (Number.isFinite(segment.score)) {
-					nextSegment.score = Number(segment.score?.toFixed(4));
-				}
-				if (typeof segment.reason === "string") {
-					nextSegment.reason = segment.reason;
-				}
-				return nextSegment;
-			});
+		const mappedSegments = segments.map((segment) => {
+			const start = clampTime(segment.startTime, normalizedTotalDuration);
+			const end = clampTime(segment.endTime, normalizedTotalDuration);
+			if (end <= start) return null;
+			const nextSegment: HighlightPreviewRange = {
+				start,
+				end,
+			};
+			if (Number.isFinite(segment.score)) {
+				nextSegment.score = Number(segment.score?.toFixed(4));
+			}
+			if (typeof segment.reason === "string") {
+				nextSegment.reason = segment.reason;
+			}
+			return nextSegment;
+		});
 		const normalizedSegments: HighlightPreviewRange[] = mappedSegments
 			.filter(isHighlightPreviewRange)
 			.sort((a, b) => a.start - b.start);

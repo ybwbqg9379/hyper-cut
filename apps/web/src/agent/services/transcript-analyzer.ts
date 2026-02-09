@@ -9,10 +9,7 @@ import {
 	DEFAULT_HIGHLIGHT_SEGMENT_MAX_SECONDS,
 	DEFAULT_HIGHLIGHT_SEGMENT_MIN_SECONDS,
 } from "../constants/highlight";
-import {
-	EN_FILLER_WORDS,
-	ZH_FILLER_WORDS,
-} from "../constants/filler";
+import { EN_FILLER_WORDS, ZH_FILLER_WORDS } from "../constants/filler";
 
 const MIN_SEGMENT_SECONDS = 2;
 

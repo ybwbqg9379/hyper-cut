@@ -86,7 +86,9 @@ export const useProjectsStore = create<ProjectsState>()(
 						projectId,
 						isSelected,
 					}),
-					lastSelectedProjectId: isSelected ? projectId : state.lastSelectedProjectId,
+					lastSelectedProjectId: isSelected
+						? projectId
+						: state.lastSelectedProjectId,
 				})),
 			selectProjectRange: ({ projectId, allProjectIds }) =>
 				set((state) => {

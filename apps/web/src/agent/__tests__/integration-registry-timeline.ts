@@ -604,10 +604,7 @@ export function registerRegistryTimelineTests() {
 				};
 
 				const result = await tool.execute({
-					elements: [
-						{ elementId: "el1" },
-						{ elementId: "nonexistent" },
-					],
+					elements: [{ elementId: "el1" }, { elementId: "nonexistent" }],
 				});
 				expect(result.success).toBe(true);
 				const data = result.data as {

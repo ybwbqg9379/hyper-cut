@@ -418,9 +418,10 @@ export const toggleBookmarkAtTimeTool: AgentTool = {
 
 			return {
 				success: true,
-				message: action === "removed"
-					? `已移除 ${time.toFixed(2)} 秒处的书签 (Removed bookmark at ${time.toFixed(2)}s)`
-					: `已添加 ${time.toFixed(2)} 秒处的书签 (Added bookmark at ${time.toFixed(2)}s)`,
+				message:
+					action === "removed"
+						? `已移除 ${time.toFixed(2)} 秒处的书签 (Removed bookmark at ${time.toFixed(2)}s)`
+						: `已添加 ${time.toFixed(2)} 秒处的书签 (Added bookmark at ${time.toFixed(2)}s)`,
 				data: { time, action },
 			};
 		} catch (error) {
@@ -450,9 +451,7 @@ export const getBookmarksTool: AgentTool = {
 		try {
 			const editor = EditorCore.getInstance();
 			const activeScene = editor.scenes.getActiveScene();
-			const bookmarks = [...activeScene.bookmarks].sort(
-				(a, b) => a - b,
-			);
+			const bookmarks = [...activeScene.bookmarks].sort((a, b) => a - b);
 
 			if (bookmarks.length === 0) {
 				return {
