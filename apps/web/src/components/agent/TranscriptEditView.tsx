@@ -105,6 +105,71 @@ function upperBoundByRowStart(
 	return Math.max(0, Math.min(rows.length - 1, left - 1));
 }
 
+function findActiveWordIndex({
+	words,
+	time,
+}: {
+	words: Array<{ startTime: number; endTime: number }>;
+	time: number;
+}): number | null {
+	if (words.length === 0) return null;
+	if (!Number.isFinite(time) || time <= 0) return 0;
+
+	let left = 0;
+	let right = words.length - 1;
+	let candidate = 0;
+
+	while (left <= right) {
+		const middle = Math.floor((left + right) / 2);
+		const word = words[middle];
+		if (word.startTime <= time) {
+			candidate = middle;
+			left = middle + 1;
+			continue;
+		}
+		right = middle - 1;
+	}
+
+	const candidateWord = words[candidate];
+	if (time <= candidateWord.endTime) {
+		return candidate;
+	}
+
+	for (
+		let index = candidate + 1;
+		index < words.length && words[index].startTime <= time;
+		index += 1
+	) {
+		if (time <= words[index].endTime) {
+			return index;
+		}
+	}
+
+	return candidate;
+}
+
+function findRowIndexByWordIndex(
+	rows: VirtualSegmentRow[],
+	wordIndex: number,
+): number {
+	let left = 0;
+	let right = rows.length - 1;
+	while (left <= right) {
+		const middle = Math.floor((left + right) / 2);
+		const row = rows[middle];
+		if (wordIndex < row.startWordIndex) {
+			right = middle - 1;
+			continue;
+		}
+		if (wordIndex > row.endWordIndex) {
+			left = middle + 1;
+			continue;
+		}
+		return middle;
+	}
+	return -1;
+}
+
 export function TranscriptEditView() {
 	const editor = useEditor();
 	const document = useTranscriptDocument();
@@ -181,19 +246,10 @@ export function TranscriptEditView() {
 
 	const activeWordIndex = useMemo(() => {
 		if (!document || document.words.length === 0) return null;
-		const words = document.words;
-		for (let index = 0; index < words.length; index += 1) {
-			const word = words[index];
-			if (currentTime >= word.startTime && currentTime <= word.endTime) {
-				return index;
-			}
-		}
-		for (let index = words.length - 1; index >= 0; index -= 1) {
-			if (words[index].startTime <= currentTime) {
-				return index;
-			}
-		}
-		return 0;
+		return findActiveWordIndex({
+			words: document.words,
+			time: currentTime,
+		});
 	}, [currentTime, document]);
 
 	const estimatedSavedSeconds = useMemo(() => {
@@ -226,9 +282,18 @@ export function TranscriptEditView() {
 		const measure = () => {
 			cancelAnimationFrame(rafId);
 			rafId = requestAnimationFrame(() => {
-				setScrollMetrics({
-					scrollTop: container.scrollTop,
-					viewportHeight: container.clientHeight,
+				setScrollMetrics((previous) => {
+					const next = {
+						scrollTop: container.scrollTop,
+						viewportHeight: container.clientHeight,
+					};
+					if (
+						Math.abs(previous.scrollTop - next.scrollTop) < 0.5 &&
+						previous.viewportHeight === next.viewportHeight
+					) {
+						return previous;
+					}
+					return next;
 				});
 			});
 		};
@@ -354,11 +419,9 @@ export function TranscriptEditView() {
 
 		const container = scrollAreaRef.current;
 		if (!container || virtualRows.length === 0) return;
-		const activeSegmentRow = virtualRows.find(
-			(row) =>
-				activeWordIndex >= row.startWordIndex &&
-				activeWordIndex <= row.endWordIndex,
-		);
+		const rowIndex = findRowIndexByWordIndex(virtualRows, activeWordIndex);
+		if (rowIndex < 0) return;
+		const activeSegmentRow = virtualRows[rowIndex];
 		if (!activeSegmentRow) return;
 
 		const targetTop = Math.max(
