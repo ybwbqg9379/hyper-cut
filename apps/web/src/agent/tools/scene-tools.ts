@@ -1,5 +1,6 @@
 import type { AgentTool, ToolResult } from "../types";
 import { invokeActionWithCheck } from "./action-utils";
+import { executeMutationWithUndoGuard } from "./execution-policy";
 import { EditorCore } from "@/core";
 
 /**
@@ -292,7 +293,11 @@ export const deleteSceneTool: AgentTool = {
 				};
 			}
 
-			await editor.scenes.deleteScene({ sceneId: targetScene.id });
+			await executeMutationWithUndoGuard({
+				label: "delete_scene",
+				destructive: true,
+				run: () => editor.scenes.deleteScene({ sceneId: targetScene.id }),
+			});
 			return {
 				success: true,
 				message: `已删除场景 "${targetScene.name}" (Scene deleted)`,

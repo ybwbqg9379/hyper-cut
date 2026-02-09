@@ -31,7 +31,11 @@ import { buildCaptionChunks } from "@/lib/transcription/caption";
 import { createCaptionMetadata } from "@/lib/transcription/caption-metadata";
 import { transcriptionService } from "@/services/transcription/service";
 import { UpdateElementTransformCommand } from "@/lib/commands/timeline";
-import { invokeActionWithCheck } from "./action-utils";
+import {
+	invokeActionWithCheck,
+	invokeDestructiveActionWithCheck,
+} from "./action-utils";
+import { executeMutationWithUndoGuard } from "./execution-policy";
 import {
 	splitTracksAtTime,
 	deleteElementsFullyInRange,
@@ -198,7 +202,7 @@ export const deleteSelectedTool: AgentTool = {
 	},
 	execute: async (): Promise<ToolResult> => {
 		try {
-			invokeActionWithCheck("delete-selected");
+			invokeDestructiveActionWithCheck("delete-selected");
 			return {
 				success: true,
 				message: "已删除选中的片段 (Deleted selected elements)",
@@ -227,7 +231,7 @@ export const splitLeftTool: AgentTool = {
 	},
 	execute: async (): Promise<ToolResult> => {
 		try {
-			invokeActionWithCheck("split-left");
+			invokeDestructiveActionWithCheck("split-left");
 			return {
 				success: true,
 				message: "已分割并删除左侧部分 (Split and removed left portion)",
@@ -256,7 +260,7 @@ export const splitRightTool: AgentTool = {
 	},
 	execute: async (): Promise<ToolResult> => {
 		try {
-			invokeActionWithCheck("split-right");
+			invokeDestructiveActionWithCheck("split-right");
 			return {
 				success: true,
 				message: "已分割并删除右侧部分 (Split and removed right portion)",
@@ -672,7 +676,11 @@ export const removeTrackTool: AgentTool = {
 				};
 			}
 
-			editor.timeline.removeTrack({ trackId });
+			await executeMutationWithUndoGuard({
+				label: "remove_track",
+				destructive: true,
+				run: () => editor.timeline.removeTrack({ trackId }),
+			});
 
 			return {
 				success: true,
@@ -2448,9 +2456,14 @@ export const removeSilenceTool: AgentTool = {
 				shouldShift: source === "selection" ? includePredicate : undefined,
 			});
 			throwIfExecutionCancelled(context?.signal);
-			editor.timeline.replaceTracks({
-				tracks: ripple.tracks,
-				selection: previousSelection,
+			await executeMutationWithUndoGuard({
+				label: "remove_silence",
+				destructive: true,
+				run: () =>
+					editor.timeline.replaceTracks({
+						tracks: ripple.tracks,
+						selection: previousSelection,
+					}),
 			});
 
 			return {
@@ -3002,7 +3015,11 @@ export const deleteElementByIdTool: AgentTool = {
 				};
 			}
 
-			editor.timeline.deleteElements({ elements: toDelete });
+			await executeMutationWithUndoGuard({
+				label: "delete_element_by_id",
+				destructive: true,
+				run: () => editor.timeline.deleteElements({ elements: toDelete }),
+			});
 
 			return {
 				success: true,

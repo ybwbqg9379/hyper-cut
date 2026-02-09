@@ -47,6 +47,7 @@ import {
 	deleteElementsFullyInRange,
 	rippleCompressTracks,
 } from "./timeline-edit-ops";
+import { executeMutationWithUndoGuard } from "./execution-policy";
 
 const MIN_INTERVAL_SECONDS = 0.03;
 const SELECT_EPSILON = 0.02;
@@ -2179,9 +2180,14 @@ export const applyHighlightCutTool: AgentTool = {
 				};
 			}
 
-			editor.timeline.replaceTracks({
-				tracks: finalTracks,
-				selection: null,
+			await executeMutationWithUndoGuard({
+				label: "apply_highlight_cut",
+				destructive: true,
+				run: () =>
+					editor.timeline.replaceTracks({
+						tracks: finalTracks,
+						selection: null,
+					}),
 			});
 
 			const followUps: Array<{

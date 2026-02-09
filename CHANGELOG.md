@@ -12,6 +12,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `getAllTools()` 统一注入 `capabilityId/capabilityIds`
   - 新增能力覆盖率接口 `getToolBindingCoverage`（当前工具绑定覆盖率 100%）
   - 新增测试：`capability-registry.test.ts`、`capability-tools.test.ts`
+- **Agent Execution Policy（Phase 2）**：新增 Action-first + Command-safe 统一执行策略
+  - 新增 `src/agent/tools/execution-policy.ts`：action 优先执行、用户态 fallback 限制、destructive undo checkpoint 校验
+  - `action-utils.ts` 迁移到策略层，并新增 `invokeDestructiveActionWithCheck`
+  - 关键破坏型工具接入 undo guard（timeline/scene/asset/filler/highlight）
+  - `remove_asset` 改为 `RemoveMediaAssetCommand`，确保进入 undo/redo 链路
+  - 新增测试：`execution-policy.test.ts`；补充 action 不可用与 remove_asset 命令链路集成测试
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

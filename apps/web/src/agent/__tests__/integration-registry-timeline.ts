@@ -54,6 +54,19 @@ export function registerRegistryTimelineTests() {
 			expect(result.success).toBe(true);
 		});
 
+		it("split_at_playhead should fail when action handler is unavailable", async () => {
+			const { hasActionHandlers } = await import("@/lib/actions");
+			(hasActionHandlers as ReturnType<typeof vi.fn>).mockImplementationOnce(
+				() => false,
+			);
+
+			const tool = getToolByName("split_at_playhead");
+			const result = await tool.execute({});
+
+			expect(result.success).toBe(false);
+			expect(result.message).toContain('Action "split" is not available');
+		});
+
 		it("delete_selected should invoke delete-selected action", async () => {
 			const { invokeAction } = await import("@/lib/actions");
 			const tool = getToolByName("delete_selected");

@@ -60,7 +60,7 @@ Commit message 约定：
 
 ### Phase 2: Action-first + Command-safe 执行策略
 
-- **Status**: 🔄 In Progress
+- **Status**: ✅ Completed
 - **Description**: 用户触发编辑优先走 Action，破坏性操作必须可撤销。
 - **Implementation Scope**:
   - 新增 `apps/web/src/agent/tools/execution-policy.ts`
@@ -69,19 +69,19 @@ Commit message 约定：
     - fallback 到 manager/command（仅内部场景）
   - 为删除/裁剪/批量变更增加“可撤销保证”检查
 - **Acceptance Criteria**:
-  - [ ] 主要用户触发型工具默认走 action
-  - [ ] 破坏性工具都能走 undo/redo 链路
-  - [ ] 无“提示成功但未实际生效”路径
+  - [x] 主要用户触发型工具默认走 action
+  - [x] 破坏性工具都能走 undo/redo 链路（新增 undo checkpoint guard）
+  - [x] 无“提示成功但未实际生效”路径（action 不可用直接失败）
 - **Tests**:
-  - [ ] action 不可用时的失败路径测试
-  - [ ] undo/redo 行为一致性测试
+  - [x] action 不可用时的失败路径测试
+  - [x] undo/redo 行为一致性测试
 - **Docs**:
-  - [ ] `CHANGELOG.md`
-  - [ ] `docs/plans/agent-execution-policy.md`
+  - [x] `CHANGELOG.md`
+  - [x] `docs/plans/agent-execution-policy.md`
 
 ### Phase 3: Planner 升级为 DAG（读并行/写串行）
 
-- **Status**: ⏳ Pending
+- **Status**: 🔄 In Progress
 - **Description**: 把线性计划扩展为依赖图执行，提升吞吐与稳定性。
 - **Implementation Scope**:
   - 扩展 `AgentPlanStep`：依赖关系、读写类型、资源锁

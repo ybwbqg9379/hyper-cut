@@ -21,6 +21,7 @@ import {
 	rippleCompressTracks,
 	type TimeRange,
 } from "./timeline-edit-ops";
+import { executeMutationWithUndoGuard } from "./execution-policy";
 import type { TimelineTrack } from "@/types/timeline";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -307,9 +308,14 @@ export const removeFillerWordsTool: AgentTool = {
 
 			// Apply to editor (same pattern as removeSilenceTool)
 			const previousSelection = editor.selection.getSelectedElements();
-			editor.timeline.replaceTracks({
-				tracks,
-				selection: previousSelection,
+			await executeMutationWithUndoGuard({
+				label: "remove_filler_words",
+				destructive: true,
+				run: () =>
+					editor.timeline.replaceTracks({
+						tracks,
+						selection: previousSelection,
+					}),
 			});
 
 			// Mark current whisper result as stale — subsequent tool calls skip it

@@ -425,13 +425,17 @@ export function registerAssetProjectSplitTests() {
 			const tool = getToolByName("remove_asset");
 			const { EditorCore } = await import("@/core");
 			const editor = EditorCore.getInstance() as unknown as {
-				media: { removeMediaAsset: ReturnType<typeof vi.fn> };
+				command: { execute: ReturnType<typeof vi.fn> };
 			};
 
 			const result = await tool.execute({ assetId: "asset2" });
 			expect(result.success).toBe(true);
-			expect(editor.media.removeMediaAsset).toHaveBeenCalledWith(
-				expect.objectContaining({ id: "asset2" }),
+			expect(editor.command.execute).toHaveBeenCalledWith(
+				expect.objectContaining({
+					command: expect.objectContaining({
+						assetId: "asset2",
+					}),
+				}),
 			);
 		});
 

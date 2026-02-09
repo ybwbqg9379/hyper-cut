@@ -10,9 +10,11 @@ import {
 	buildLibraryAudioElement,
 } from "@/lib/timeline/element-utils";
 import { canElementGoOnTrack } from "@/lib/timeline/track-utils";
+import { RemoveMediaAssetCommand } from "@/lib/commands/media";
 import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 import { processMediaAssets } from "@/lib/media/processing";
 import { searchIcons } from "@/lib/iconify-api";
+import { executeMutationWithUndoGuard } from "./execution-policy";
 import {
 	buildExecutionCancelledResult,
 	isExecutionCancelled,
@@ -1205,9 +1207,16 @@ export const removeAssetTool: AgentTool = {
 				};
 			}
 
-			await editor.media.removeMediaAsset({
-				projectId: activeProject.metadata.id,
-				id: assetId,
+			await executeMutationWithUndoGuard({
+				label: "remove_asset",
+				destructive: true,
+				run: () => {
+					const command = new RemoveMediaAssetCommand(
+						activeProject.metadata.id,
+						assetId,
+					);
+					editor.command.execute({ command });
+				},
 			});
 
 			return {
