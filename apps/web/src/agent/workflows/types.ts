@@ -4,6 +4,9 @@ export interface WorkflowStep {
 	arguments: Record<string, unknown>;
 	summary?: string;
 	requiresConfirmation?: boolean;
+	operation?: "read" | "write";
+	dependsOn?: string[];
+	resourceLocks?: string[];
 }
 
 export interface Workflow {

@@ -134,6 +134,9 @@ export interface AgentPlanStep {
 	toolName: string;
 	arguments: Record<string, unknown>;
 	summary: string;
+	operation?: "read" | "write";
+	dependsOn?: string[];
+	resourceLocks?: string[];
 }
 
 export interface AgentExecutionPlan {
@@ -218,8 +221,10 @@ export interface AgentExecutionEvent {
 	mode: "chat" | "workflow" | "plan_confirmation";
 	toolName?: string;
 	toolCallId?: string;
+	planStepId?: string;
 	stepIndex?: number;
 	totalSteps?: number;
+	dagState?: "pending" | "ready" | "running" | "completed" | "failed";
 	status?:
 		| "completed"
 		| "planned"

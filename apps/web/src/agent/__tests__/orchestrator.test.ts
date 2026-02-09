@@ -4,7 +4,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTool, LLMProvider, ToolExecutionContext } from "../types";
+import type {
+	AgentExecutionEvent,
+	AgentTool,
+	LLMProvider,
+	ToolExecutionContext,
+} from "../types";
 import { AgentOrchestrator } from "../orchestrator";
 
 vi.mock("../providers", () => ({
@@ -669,6 +674,72 @@ describe("AgentOrchestrator", () => {
 		);
 		expect(confirmResult.success).toBe(true);
 		expect(confirmResult.status).toBe("completed");
+	});
+
+	it("confirmPendingPlan should execute read-only DAG steps in parallel", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			content: null,
+			toolCalls: [
+				{ id: "call-1", name: "get_alpha", arguments: {} },
+				{ id: "call-2", name: "get_beta", arguments: {} },
+			],
+			finishReason: "tool_calls",
+		});
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		const events: AgentExecutionEvent[] = [];
+		const wait = (ms: number) =>
+			new Promise((resolve) => {
+				setTimeout(resolve, ms);
+			});
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "get_alpha",
+					description: "read alpha",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: vi.fn(async () => {
+						await wait(40);
+						return { success: true, message: "alpha" };
+					}),
+				},
+				{
+					name: "get_beta",
+					description: "read beta",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: vi.fn(async () => {
+						await wait(40);
+						return { success: true, message: "beta" };
+					}),
+				},
+			],
+			{
+				planningEnabled: true,
+				onExecutionEvent: (event) => events.push(event),
+			},
+		);
+
+		await orchestrator.process("parallel reads");
+		const startedAt = Date.now();
+		const confirmResult = await orchestrator.confirmPendingPlan();
+		const elapsedMs = Date.now() - startedAt;
+
+		expect(confirmResult.success).toBe(true);
+		expect(confirmResult.status).toBe("completed");
+		expect(elapsedMs).toBeLessThan(75);
+
+		const completionIndex = events.findIndex(
+			(event) =>
+				event.type === "tool_completed" && event.mode === "plan_confirmation",
+		);
+		const startedBeforeComplete = events.filter(
+			(event, index) =>
+				index < completionIndex &&
+				event.type === "tool_started" &&
+				event.mode === "plan_confirmation",
+		).length;
+		expect(startedBeforeComplete).toBeGreaterThanOrEqual(2);
 	});
 
 	it("should support updating plan step arguments before confirmation", async () => {

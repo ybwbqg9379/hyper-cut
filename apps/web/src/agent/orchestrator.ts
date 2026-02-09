@@ -20,6 +20,12 @@ import {
 	isCancellationError,
 } from "./utils/cancellation";
 import { resolveWorkflowFromParams } from "./workflows";
+import {
+	buildDagFromPlanSteps,
+	getReadyDagNodes,
+	getTopologicalOrder,
+	type DagNodeState,
+} from "./planner/dag";
 
 /**
  * System prompt for the video editing agent
@@ -84,7 +90,13 @@ const TOOL_EXECUTION_TIMEOUT_ERROR_CODE = "TOOL_EXECUTION_TIMEOUT";
 
 interface PendingPlanState {
 	plan: AgentExecutionPlan;
-	toolCalls: ToolCall[];
+	toolCalls: PlannedToolCall[];
+}
+
+interface PlannedToolCall extends ToolCall {
+	operation?: "read" | "write";
+	dependsOn?: string[];
+	resourceLocks?: string[];
 }
 
 interface WorkflowPauseInfo {
@@ -103,6 +115,7 @@ interface ToolExecutionMeta {
 	requestId: string;
 	mode: "chat" | "workflow" | "plan_confirmation";
 	toolCallId: string;
+	planStepId?: string;
 	stepIndex?: number;
 	totalSteps?: number;
 	signal?: AbortSignal;
@@ -665,7 +678,7 @@ export class AgentOrchestrator {
 
 	private buildExecutionPlan(
 		userMessage: string,
-		toolCalls: ToolCall[],
+		toolCalls: PlannedToolCall[],
 	): PendingPlanState {
 		this.planSequence += 1;
 		const normalizedCalls = toolCalls.map((toolCall, index) => {
@@ -679,11 +692,35 @@ export class AgentOrchestrator {
 			};
 		});
 
-		const steps: AgentPlanStep[] = normalizedCalls.map((toolCall) => ({
+		const draftSteps: AgentPlanStep[] = normalizedCalls.map((toolCall) => ({
 			id: toolCall.id,
 			toolName: toolCall.name,
 			arguments: toolCall.arguments,
 			summary: this.buildPlanSummary(toolCall),
+			operation: toolCall.operation,
+			dependsOn: toolCall.dependsOn,
+			resourceLocks: toolCall.resourceLocks,
+		}));
+		const dag = buildDagFromPlanSteps(draftSteps);
+		const steps: AgentPlanStep[] = dag.nodes
+			.sort((a, b) => a.index - b.index)
+			.map((node) => ({
+				...node.step,
+				operation: node.operation,
+				dependsOn: node.dependsOn,
+				resourceLocks: node.resourceLocks,
+			}));
+		const callById = Object.fromEntries(
+			normalizedCalls.map((toolCall) => [toolCall.id, toolCall]),
+		);
+		const normalizedCallsWithDag: PlannedToolCall[] = steps.map((step) => ({
+			...callById[step.id],
+			id: step.id,
+			name: step.toolName,
+			arguments: step.arguments,
+			operation: step.operation,
+			dependsOn: step.dependsOn,
+			resourceLocks: step.resourceLocks,
 		}));
 
 		return {
@@ -693,12 +730,12 @@ export class AgentOrchestrator {
 				createdAt: new Date().toISOString(),
 				steps,
 			},
-			toolCalls: normalizedCalls,
+			toolCalls: normalizedCallsWithDag,
 		};
 	}
 
-	private expandToolCallsForPlanning(toolCalls: ToolCall[]): ToolCall[] {
-		const expandedToolCalls: ToolCall[] = [];
+	private expandToolCallsForPlanning(toolCalls: ToolCall[]): PlannedToolCall[] {
+		const expandedToolCalls: PlannedToolCall[] = [];
 
 		for (const toolCall of toolCalls) {
 			if (toolCall.name !== "run_workflow") {
@@ -722,6 +759,9 @@ export class AgentOrchestrator {
 					id: `${toolCall.id || "workflow"}-step-${index + 1}`,
 					name: step.toolName,
 					arguments: step.arguments,
+					operation: step.operation,
+					dependsOn: step.dependsOn,
+					resourceLocks: step.resourceLocks,
 				});
 			}
 		}
@@ -868,8 +908,10 @@ export class AgentOrchestrator {
 						status: "running",
 						toolName: resolvedToolName,
 						toolCallId: meta.toolCallId,
+						planStepId: meta.planStepId,
 						stepIndex: meta.stepIndex,
 						totalSteps: meta.totalSteps,
+						dagState: "running",
 						message: progress.message,
 						progress: {
 							message: progress.message,
@@ -919,6 +961,169 @@ export class AgentOrchestrator {
 				meta.signal.removeEventListener("abort", handleParentAbort);
 			}
 		}
+	}
+
+	private async executeToolCallsAsDag({
+		requestId,
+		mode,
+		toolCalls,
+		signal,
+	}: {
+		requestId: string;
+		mode: "chat" | "workflow" | "plan_confirmation";
+		toolCalls: PlannedToolCall[];
+		signal?: AbortSignal;
+	}): Promise<{
+		executedTools: Array<{ name: string; result: ToolResult }>;
+		hasPause: boolean;
+		cancelled: boolean;
+	}> {
+		if (toolCalls.length === 0) {
+			return { executedTools: [], hasPause: false, cancelled: false };
+		}
+
+		const planSteps: AgentPlanStep[] = toolCalls.map((toolCall) => ({
+			id: toolCall.id,
+			toolName: toolCall.name,
+			arguments: toolCall.arguments ?? {},
+			summary: `Execute ${toolCall.name}`,
+			operation: toolCall.operation,
+			dependsOn: toolCall.dependsOn,
+			resourceLocks: toolCall.resourceLocks,
+		}));
+		const dag = buildDagFromPlanSteps(planSteps);
+		getTopologicalOrder(dag);
+
+		const toolByStepId = new Map<string, PlannedToolCall>(
+			toolCalls.map((toolCall, index) => [
+				toolCall.id?.trim() ? toolCall.id : `step-${index + 1}`,
+				{
+					...toolCall,
+					id: toolCall.id?.trim() ? toolCall.id : `step-${index + 1}`,
+				},
+			]),
+		);
+		const states: Record<string, DagNodeState> = Object.fromEntries(
+			dag.nodes.map((node) => [node.id, "pending"]),
+		);
+		const runningLocks = new Set<string>();
+		const running = new Map<
+			string,
+			Promise<{
+				nodeId: string;
+				toolCall: PlannedToolCall;
+				result: ToolResult;
+			}>
+		>();
+		const executedTools: Array<{ name: string; result: ToolResult }> = [];
+		let hasPause = false;
+		let cancelled = false;
+
+		while (true) {
+			if (!hasPause && !cancelled) {
+				const readyNodes = getReadyDagNodes({
+					dag,
+					states,
+					runningLocks,
+				}).sort((a, b) => a.index - b.index);
+
+				for (const node of readyNodes) {
+					const toolCall = toolByStepId.get(node.id);
+					if (!toolCall) {
+						throw new Error(`Missing tool call for DAG node ${node.id}`);
+					}
+
+					states[node.id] = "running";
+					for (const lock of node.resourceLocks) {
+						runningLocks.add(lock);
+					}
+
+					this.emitExecutionEvent({
+						type: "tool_started",
+						requestId,
+						mode,
+						status: "running",
+						toolName: toolCall.name,
+						toolCallId: toolCall.id,
+						planStepId: node.id,
+						stepIndex: node.index + 1,
+						totalSteps: dag.nodes.length,
+						dagState: "running",
+					});
+
+					const promise = this.executeToolCall(toolCall, {
+						requestId,
+						mode,
+						toolCallId: toolCall.id,
+						planStepId: node.id,
+						stepIndex: node.index + 1,
+						totalSteps: dag.nodes.length,
+						signal,
+					}).then((result) => ({ nodeId: node.id, toolCall, result }));
+
+					running.set(node.id, promise);
+				}
+			}
+
+			if (running.size === 0) {
+				const pendingLeft = dag.nodes.some(
+					(node) =>
+						states[node.id] === "pending" || states[node.id] === "ready",
+				);
+				if (pendingLeft && !hasPause && !cancelled) {
+					throw new Error("DAG scheduling deadlock detected");
+				}
+				break;
+			}
+
+			const settled = await Promise.race(running.values());
+			running.delete(settled.nodeId);
+			for (const lock of dag.byId[settled.nodeId].resourceLocks) {
+				runningLocks.delete(lock);
+			}
+
+			const pauseInfo = extractWorkflowPauseInfo(settled.result.data);
+			if (pauseInfo) {
+				hasPause = true;
+			}
+			if (this.isToolResultCancelled(settled.result)) {
+				cancelled = true;
+			}
+
+			states[settled.nodeId] = settled.result.success ? "completed" : "failed";
+			executedTools.push({
+				name: settled.toolCall.name,
+				result: settled.result,
+			});
+			this.emitExecutionEvent({
+				type: "tool_completed",
+				requestId,
+				mode,
+				status: pauseInfo
+					? "awaiting_confirmation"
+					: settled.result.success
+						? "running"
+						: "error",
+				toolName: settled.toolCall.name,
+				toolCallId: settled.toolCall.id,
+				planStepId: settled.nodeId,
+				stepIndex: dag.byId[settled.nodeId].index + 1,
+				totalSteps: dag.nodes.length,
+				dagState: settled.result.success ? "completed" : "failed",
+				result: {
+					success: settled.result.success,
+					message: settled.result.message,
+				},
+			});
+			this.appendHistory({
+				role: "tool",
+				content: this.buildToolHistoryContent(settled.toolCall, settled.result),
+				toolCallId: settled.toolCall.id,
+				name: settled.toolCall.name,
+			});
+		}
+
+		return { executedTools, hasPause, cancelled };
 	}
 
 	/**
@@ -1073,72 +1278,27 @@ export class AgentOrchestrator {
 					});
 				}
 
-				let shouldPauseForConfirmation = false;
-				for (const [index, toolCall] of response.toolCalls.entries()) {
-					this.emitExecutionEvent({
-						type: "tool_started",
+				const dagExecution = await this.executeToolCallsAsDag({
+					requestId,
+					mode: "chat",
+					toolCalls: response.toolCalls,
+					signal: executionSignal,
+				});
+				executedTools.push(...dagExecution.executedTools);
+				if (dagExecution.cancelled) {
+					return this.completeRequest({
 						requestId,
 						mode: "chat",
-						status: "running",
-						toolName: toolCall.name,
-						toolCallId: toolCall.id,
-						stepIndex: index + 1,
-						totalSteps: response.toolCalls.length,
-					});
-					const result = await this.executeToolCall(toolCall, {
-						requestId,
-						mode: "chat",
-						toolCallId: toolCall.id,
-						stepIndex: index + 1,
-						totalSteps: response.toolCalls.length,
-						signal: executionSignal,
-					});
-					executedTools.push({ name: toolCall.name, result });
-					if (this.isToolResultCancelled(result)) {
-						return this.completeRequest({
-							requestId,
-							mode: "chat",
-							response: {
-								message: "执行已取消 (Execution cancelled)",
-								toolCalls: this.toClientToolCalls(executedTools),
-								success: false,
-								status: "cancelled",
-							},
-						});
-					}
-					const pauseInfo = extractWorkflowPauseInfo(result.data);
-					this.emitExecutionEvent({
-						type: "tool_completed",
-						requestId,
-						mode: "chat",
-						status: pauseInfo
-							? "awaiting_confirmation"
-							: result.success
-								? "running"
-								: "error",
-						toolName: toolCall.name,
-						toolCallId: toolCall.id,
-						stepIndex: index + 1,
-						totalSteps: response.toolCalls.length,
-						result: {
-							success: result.success,
-							message: result.message,
+						response: {
+							message: "执行已取消 (Execution cancelled)",
+							toolCalls: this.toClientToolCalls(executedTools),
+							success: false,
+							status: "cancelled",
 						},
 					});
-
-					this.appendHistory({
-						role: "tool",
-						content: this.buildToolHistoryContent(toolCall, result),
-						toolCallId: toolCall.id,
-						name: toolCall.name,
-					});
-					if (pauseInfo) {
-						shouldPauseForConfirmation = true;
-						break;
-					}
 				}
 
-				if (shouldPauseForConfirmation) {
+				if (dagExecution.hasPause) {
 					return this.completeRequest({
 						requestId,
 						mode: "chat",
@@ -1656,67 +1816,24 @@ export class AgentOrchestrator {
 				content: "[确认执行计划]",
 			});
 
-			const executedTools: Array<{ name: string; result: ToolResult }> = [];
-			for (const [index, toolCall] of pendingPlan.toolCalls.entries()) {
-				this.emitExecutionEvent({
-					type: "tool_started",
+			const dagExecution = await this.executeToolCallsAsDag({
+				requestId,
+				mode: "plan_confirmation",
+				toolCalls: pendingPlan.toolCalls,
+				signal: executionSignal,
+			});
+			const executedTools = dagExecution.executedTools;
+			if (dagExecution.cancelled) {
+				return this.completeRequest({
 					requestId,
 					mode: "plan_confirmation",
-					status: "running",
-					toolName: toolCall.name,
-					toolCallId: toolCall.id,
-					stepIndex: index + 1,
-					totalSteps: pendingPlan.toolCalls.length,
-				});
-				const result = await this.executeToolCall(toolCall, {
-					requestId,
-					mode: "plan_confirmation",
-					toolCallId: toolCall.id,
-					stepIndex: index + 1,
-					totalSteps: pendingPlan.toolCalls.length,
-					signal: executionSignal,
-				});
-				executedTools.push({ name: toolCall.name, result });
-				if (this.isToolResultCancelled(result)) {
-					return this.completeRequest({
-						requestId,
-						mode: "plan_confirmation",
-						response: {
-							message: "执行已取消 (Execution cancelled)",
-							toolCalls: this.toClientToolCalls(executedTools),
-							success: false,
-							status: "cancelled",
-						},
-					});
-				}
-				const pauseInfo = extractWorkflowPauseInfo(result.data);
-				this.emitExecutionEvent({
-					type: "tool_completed",
-					requestId,
-					mode: "plan_confirmation",
-					status: pauseInfo
-						? "awaiting_confirmation"
-						: result.success
-							? "running"
-							: "error",
-					toolName: toolCall.name,
-					toolCallId: toolCall.id,
-					stepIndex: index + 1,
-					totalSteps: pendingPlan.toolCalls.length,
-					result: {
-						success: result.success,
-						message: result.message,
+					response: {
+						message: "执行已取消 (Execution cancelled)",
+						toolCalls: this.toClientToolCalls(executedTools),
+						success: false,
+						status: "cancelled",
 					},
 				});
-				this.appendHistory({
-					role: "tool",
-					content: this.buildToolHistoryContent(toolCall, result),
-					toolCallId: toolCall.id,
-					name: toolCall.name,
-				});
-				if (pauseInfo) {
-					break;
-				}
 			}
 
 			const { hasAwaitingConfirmation, hasToolFailure, pauseInfo } =

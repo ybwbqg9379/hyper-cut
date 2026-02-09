@@ -81,7 +81,7 @@ Commit message 约定：
 
 ### Phase 3: Planner 升级为 DAG（读并行/写串行）
 
-- **Status**: 🔄 In Progress
+- **Status**: ✅ Completed
 - **Description**: 把线性计划扩展为依赖图执行，提升吞吐与稳定性。
 - **Implementation Scope**:
   - 扩展 `AgentPlanStep`：依赖关系、读写类型、资源锁
@@ -91,20 +91,20 @@ Commit message 约定：
     - 写操作串行
     - 冲突资源互斥
 - **Acceptance Criteria**:
-  - [ ] 兼容现有线性计划
-  - [ ] 至少 1 个 workflow 启用并行读步骤
-  - [ ] 执行事件流能反映 DAG 节点状态
+  - [x] 兼容现有线性计划
+  - [x] 至少 1 个 workflow 启用并行读步骤（`timeline-diagnostics`）
+  - [x] 执行事件流能反映 DAG 节点状态（`planStepId` + `dagState`）
 - **Tests**:
-  - [ ] DAG 拓扑排序测试
-  - [ ] 并发冲突保护测试
-  - [ ] orchestrator DAG 集成测试
+  - [x] DAG 拓扑排序测试
+  - [x] 并发冲突保护测试
+  - [x] orchestrator DAG 集成测试
 - **Docs**:
-  - [ ] `CHANGELOG.md`
-  - [ ] `docs/plans/agent-dag-planner.md`
+  - [x] `CHANGELOG.md`
+  - [x] `docs/plans/agent-dag-planner.md`
 
 ### Phase 4: 通用 Dry-run + Diff 仿真
 
-- **Status**: ⏳ Pending
+- **Status**: 🔄 In Progress
 - **Description**: 所有改动型工具先仿真输出 diff，再确认应用。
 - **Implementation Scope**:
   - 扩展工具参数协议：`dryRun?: boolean`

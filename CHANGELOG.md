@@ -18,6 +18,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 关键破坏型工具接入 undo guard（timeline/scene/asset/filler/highlight）
   - `remove_asset` 改为 `RemoveMediaAssetCommand`，确保进入 undo/redo 链路
   - 新增测试：`execution-policy.test.ts`；补充 action 不可用与 remove_asset 命令链路集成测试
+- **Agent DAG Planner（Phase 3）**：计划执行升级为依赖图调度（读并行、写串行）
+  - 新增 `src/agent/planner/dag.ts`：DAG 构建、拓扑排序、ready 节点选择与资源锁冲突保护
+  - `AgentPlanStep` 扩展 `operation/dependsOn/resourceLocks`
+  - `AgentExecutionEvent` 扩展 `planStepId/dagState`，可反映 DAG 节点状态
+  - Orchestrator 新增 `executeToolCallsAsDag`，`process` 与 `confirmPendingPlan` 接入 DAG 调度
+  - 新增 workflow `timeline-diagnostics`，提供并行 read-only 步骤样例
+  - 新增测试：`dag-planner.test.ts`；增强 `orchestrator.test.ts` 的 DAG 并行执行覆盖
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

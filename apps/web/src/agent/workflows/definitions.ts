@@ -53,6 +53,34 @@ export const WORKFLOWS: Workflow[] = [
 		],
 	},
 	{
+		name: "timeline-diagnostics",
+		description:
+			"并行读取时间线诊断信息（轨道概览/总览/播放头）。Parallel timeline diagnostics reads.",
+		steps: [
+			{
+				id: "timeline-info",
+				toolName: "get_timeline_info",
+				arguments: {},
+				summary: "读取轨道与元素基础统计",
+				operation: "read",
+			},
+			{
+				id: "timeline-summary",
+				toolName: "get_timeline_summary",
+				arguments: {},
+				summary: "读取时间线结构化摘要",
+				operation: "read",
+			},
+			{
+				id: "playhead",
+				toolName: "get_current_time",
+				arguments: {},
+				summary: "读取当前播放头位置",
+				operation: "read",
+			},
+		],
+	},
+	{
 		name: "long-to-short",
 		description:
 			"将长视频自动剪辑为短视频精华。Auto-cut long video into a short highlight reel.",
