@@ -577,6 +577,10 @@ export function registerAssetProjectSplitTests() {
 			const { EditorCore } = await import("@/core");
 			const editor = EditorCore.getInstance() as unknown as {
 				playback: { getIsScrubbing: ReturnType<typeof vi.fn> };
+				timeline: {
+					getTotalDuration: ReturnType<typeof vi.fn>;
+					getTracks: ReturnType<typeof vi.fn>;
+				};
 			};
 
 			editor.playback.getIsScrubbing.mockReturnValueOnce(true);
@@ -585,6 +589,8 @@ export function registerAssetProjectSplitTests() {
 			expect(result.data).toMatchObject({
 				errorCode: "SCRUBBING_IN_PROGRESS",
 			});
+			expect(editor.timeline.getTotalDuration).not.toHaveBeenCalled();
+			expect(editor.timeline.getTracks).not.toHaveBeenCalled();
 		});
 	});
 }

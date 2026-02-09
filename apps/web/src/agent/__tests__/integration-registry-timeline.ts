@@ -434,6 +434,91 @@ export function registerRegistryTimelineTests() {
 			expect(result.success).toBe(false);
 		});
 
+		it("position_element should position selected element by anchor and margin", async () => {
+			const tool = getToolByName("position_element");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: { updateElements: ReturnType<typeof vi.fn> };
+			};
+
+			const result = await tool.execute({
+				elementId: "el1",
+				anchor: "top-right",
+				marginX: 0.1,
+				marginY: 0.1,
+			});
+			expect(result.success).toBe(true);
+			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
+				updates: [{
+					trackId: "track1",
+					elementId: "el1",
+					updates: {
+						transform: {
+							scale: 1,
+							rotate: 0,
+							position: { x: 768, y: -432 },
+						},
+					},
+				}],
+			});
+		});
+
+		it("position_element should fail on invalid anchor", async () => {
+			const tool = getToolByName("position_element");
+			const result = await tool.execute({
+				elementId: "el1",
+				anchor: "invalid-anchor",
+			});
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({ errorCode: "INVALID_ANCHOR" });
+		});
+
+		it("position_element should fail with NO_SELECTION when no element is selected", async () => {
+			const tool = getToolByName("position_element");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				selection: { getSelectedElements: ReturnType<typeof vi.fn> };
+			};
+
+			editor.selection.getSelectedElements.mockReturnValueOnce([]);
+			const result = await tool.execute({ anchor: "center" });
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({ errorCode: "NO_SELECTION" });
+		});
+
+		it("position_element should fail with MULTIPLE_SELECTIONS when multiple elements are selected", async () => {
+			const tool = getToolByName("position_element");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				selection: { getSelectedElements: ReturnType<typeof vi.fn> };
+			};
+
+			editor.selection.getSelectedElements.mockReturnValueOnce([
+				{ trackId: "track1", elementId: "el1" },
+				{ trackId: "track1", elementId: "el2" },
+			]);
+			const result = await tool.execute({ anchor: "center" });
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({ errorCode: "MULTIPLE_SELECTIONS" });
+		});
+
+		it("position_element should fail with NO_ACTIVE_PROJECT when active project is missing", async () => {
+			const tool = getToolByName("position_element");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				project: { getActive: ReturnType<typeof vi.fn> };
+			};
+
+			editor.project.getActive.mockReturnValueOnce(null);
+			const result = await tool.execute({
+				elementId: "el1",
+				trackId: "track1",
+				anchor: "center",
+			});
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({ errorCode: "NO_ACTIVE_PROJECT" });
+		});
+
 		it("update_sticker_color should call updateElements for sticker updates", async () => {
 			const tool = getToolByName("update_sticker_color");
 			const { EditorCore } = await import("@/core");

@@ -1,5 +1,6 @@
 import { EditorCore } from "@/core";
 import { DEFAULT_CANVAS_PRESETS } from "@/constants/project-constants";
+import { MIN_FONT_SIZE, MAX_FONT_SIZE } from "@/constants/text-constants";
 import { isCaptionTextElement } from "@/lib/transcription/caption-metadata";
 import type { TextElement } from "@/types/timeline";
 import { createRoutedProvider } from "../providers";
@@ -869,6 +870,23 @@ export const applyCaptionPresetTool: AgentTool = {
 		}
 		const dryRun = params.dryRun !== false;
 		const presetConfig = CAPTION_PRESETS[preset];
+		const presetFontSize = presetConfig.updates.fontSize;
+		if (
+			!Number.isFinite(presetFontSize) ||
+			presetFontSize < MIN_FONT_SIZE ||
+			presetFontSize > MAX_FONT_SIZE
+		) {
+			return {
+				success: false,
+				message:
+					`字幕模板字号超出范围（${MIN_FONT_SIZE}-${MAX_FONT_SIZE}）(Caption preset fontSize is out of range)`,
+				data: {
+					errorCode: "INVALID_PRESET_FONT_SIZE",
+					preset,
+					fontSize: presetFontSize,
+				},
+			};
+		}
 		const editor = EditorCore.getInstance();
 		const beforeTracks = editor.timeline.getTracks();
 

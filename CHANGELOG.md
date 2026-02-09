@@ -6,6 +6,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **Agent 空间语义定位能力（P1-a）**：新增 `position_element`，支持基于锚点与边距的稳定布局
+  - 新增 `src/agent/utils/spatial.ts`：提供 `SPATIAL_ANCHORS`、`MAX_SPATIAL_MARGIN_RATIO` 与 `resolveAnchorToPixels`
+  - 新增 `position_element` 工具：输入 `anchor + marginX/marginY`，自动转换为画布中心坐标系的 `transform.position`
+  - 工具执行统一走 `editor.timeline.updateElements()`，与现有元素更新链路保持一致
+  - 新增 `src/agent/__tests__/spatial.test.ts` 与集成用例，覆盖 9 宫格锚点、边距边界与参数校验
+
 - **Agent 上游能力增强（P0-a / P0-b / P2-a）**：统一元素更新执行层，补齐 scrubbing 感知，并收紧字号参数约束
   - `update_element_transform` 与 `update_sticker_color` 迁移到 `editor.timeline.updateElements()`，与 `update_text_style` 对齐同一更新通道
   - `collect-from-managers` / `upstream-baseline` 新增 `manager.playback.getIsScrubbing` 与 `manager.playback.setScrubbing`
@@ -238,6 +244,8 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Fixed
 
+- **Caption preset 字号越界防护**：`apply_caption_preset` 新增 `fontSize` 范围校验（`MIN_FONT_SIZE ~ MAX_FONT_SIZE`），越界返回 `INVALID_PRESET_FONT_SIZE`，避免 preset 直写路径绕过工具层约束
+- **Upstream guard warning 清零**：更新 baseline 覆盖新增上游命令（含 `batch-command` 与 `timeline/element/update-element`），`agent:upstream-guard` 报告 `warnings=[]` 且 `blockingIssues=[]`
 - **Upstream guard blocking 清零**：`manager.playback.getIsScrubbing / setScrubbing` 已进入 capability 与 tool binding 映射，`agent:upstream-guard` 不再报 blocking
 - **填充词单次删除后时间戳失效**：`useTranscriptEditing` 删除一个 filler 后剩余高亮全部消失，因为 ripple 压缩后旧时间戳不再匹配。修复：删除后自动重新检测
 - **`EN_FILLER_WORDS` 重构丢失 "you"/"know" 独立词条**：拆分为 `EN_FILLER_WORDS`（单词级）和 `EN_FILLER_PHRASES`（短语级），恢复 `transcript-analyzer` 的 `computeContentDensity` 行为

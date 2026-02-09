@@ -50,6 +50,12 @@ import {
 	isCancellationError,
 	throwIfExecutionCancelled,
 } from "../utils/cancellation";
+import {
+	SPATIAL_ANCHORS,
+	isSpatialAnchor,
+	resolveAnchorToPixels,
+	MAX_SPATIAL_MARGIN_RATIO,
+} from "../utils/spatial";
 
 /**
  * Timeline Editing Tools
@@ -2157,6 +2163,186 @@ export const updateElementTransformTool: AgentTool = {
 };
 
 /**
+ * Position Element
+ * Positions an element using anchor + margin semantics
+ */
+export const positionElementTool: AgentTool = {
+	name: "position_element",
+	description:
+		"按锚点与边距定位元素（anchor + margin）。Position an element with anchor and margin.",
+	parameters: {
+		type: "object",
+		properties: {
+			elementId: {
+				type: "string",
+				description:
+					"元素ID（可选，默认当前选中）(Element ID, defaults to selected)",
+			},
+			trackId: {
+				type: "string",
+				description: "轨道ID（可选）(Optional track ID)",
+			},
+			anchor: {
+				type: "string",
+				enum: [...SPATIAL_ANCHORS],
+				description: "锚点位置 (Anchor position)",
+			},
+			marginX: {
+				type: "number",
+				description: "横向边距比例 0-0.5 (Horizontal margin ratio)",
+			},
+			marginY: {
+				type: "number",
+				description: "纵向边距比例 0-0.5 (Vertical margin ratio)",
+			},
+		},
+		required: ["anchor"],
+	},
+	execute: async (params): Promise<ToolResult> => {
+		try {
+			const editor = EditorCore.getInstance();
+			const tracks = editor.timeline.getTracks();
+			const anchor = params.anchor;
+			if (!isSpatialAnchor(anchor)) {
+				return {
+					success: false,
+					message: "anchor 参数无效 (Invalid anchor)",
+					data: { errorCode: "INVALID_ANCHOR" },
+				};
+			}
+
+			const marginXRaw = params.marginX === undefined ? 0 : params.marginX;
+			const marginYRaw = params.marginY === undefined ? 0 : params.marginY;
+			if (
+				!isFiniteNumber(marginXRaw) ||
+				marginXRaw < 0 ||
+				marginXRaw > MAX_SPATIAL_MARGIN_RATIO ||
+				!isFiniteNumber(marginYRaw) ||
+				marginYRaw < 0 ||
+				marginYRaw > MAX_SPATIAL_MARGIN_RATIO
+			) {
+				return {
+					success: false,
+					message:
+						`marginX/marginY 必须在 0-${MAX_SPATIAL_MARGIN_RATIO} 之间 (marginX/marginY must be between 0-${MAX_SPATIAL_MARGIN_RATIO})`,
+					data: { errorCode: "INVALID_MARGIN" },
+				};
+			}
+			const marginX = marginXRaw;
+			const marginY = marginYRaw;
+
+			const elementIdParam = isNonEmptyString(params.elementId)
+				? params.elementId.trim()
+				: "";
+			const trackIdParam = isNonEmptyString(params.trackId)
+				? params.trackId.trim()
+				: "";
+
+			let resolved = null as null | {
+				track: TimelineTrack;
+				element: TimelineElement;
+			};
+
+			if (elementIdParam) {
+				resolved = resolveElementById({
+					tracks,
+					elementId: elementIdParam,
+					trackId: trackIdParam || undefined,
+				});
+			} else {
+				const selected = editor.selection.getSelectedElements();
+				if (selected.length === 0) {
+					return {
+						success: false,
+						message: "没有选中任何元素 (No element selected)",
+						data: { errorCode: "NO_SELECTION" },
+					};
+				}
+				if (selected.length > 1) {
+					return {
+						success: false,
+						message: "一次只能定位一个元素 (Select a single element)",
+						data: { errorCode: "MULTIPLE_SELECTIONS" },
+					};
+				}
+				const [selection] = selected;
+				resolved = resolveElementById({
+					tracks,
+					elementId: selection.elementId,
+					trackId: selection.trackId,
+				});
+			}
+
+			if (!resolved) {
+				return {
+					success: false,
+					message: "未找到元素 (Element not found)",
+					data: { errorCode: "ELEMENT_NOT_FOUND" },
+				};
+			}
+
+			if (!("transform" in resolved.element)) {
+				return {
+					success: false,
+					message: "该元素不支持定位 (Element does not support positioning)",
+					data: { errorCode: "UNSUPPORTED_ELEMENT" },
+				};
+			}
+
+			const activeProject = editor.project.getActive();
+			if (!activeProject) {
+				return {
+					success: false,
+					message: "没有活动项目 (No active project)",
+					data: { errorCode: "NO_ACTIVE_PROJECT" },
+				};
+			}
+
+			const canvasSize = activeProject.settings.canvasSize;
+			const position = resolveAnchorToPixels({
+				anchor,
+				canvasSize,
+				marginX,
+				marginY,
+			});
+
+			editor.timeline.updateElements({
+				updates: [{
+					trackId: resolved.track.id,
+					elementId: resolved.element.id,
+					updates: {
+						transform: {
+							...resolved.element.transform,
+							position,
+						},
+					},
+				}],
+			});
+
+			return {
+				success: true,
+				message: "已更新元素位置 (Element positioned)",
+				data: {
+					trackId: resolved.track.id,
+					elementId: resolved.element.id,
+					anchor,
+					marginX,
+					marginY,
+					position,
+					canvasSize,
+				},
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: `定位元素失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+				data: { errorCode: "POSITION_ELEMENT_FAILED" },
+			};
+		}
+	},
+};
+
+/**
  * Update Sticker Color
  * Updates the color field of a sticker element
  */
@@ -2889,19 +3075,19 @@ export const splitAtTimeTool: AgentTool = {
 				};
 			}
 
-			const duration = editor.timeline.getTotalDuration();
-			if (time > duration) {
-				return {
-					success: false,
-					message: `时间 ${time}s 超出时间线总时长 ${duration.toFixed(2)}s (Time exceeds timeline duration)`,
-				};
-			}
-
 			if (editor.playback.getIsScrubbing()) {
 				return {
 					success: false,
 					message: "正在拖动进度条，请稍候 (Scrubbing in progress, try again later)",
 					data: { errorCode: "SCRUBBING_IN_PROGRESS" },
+				};
+			}
+
+			const duration = editor.timeline.getTotalDuration();
+			if (time > duration) {
+				return {
+					success: false,
+					message: `时间 ${time}s 超出时间线总时长 ${duration.toFixed(2)}s (Time exceeds timeline duration)`,
 				};
 			}
 
@@ -3159,6 +3345,7 @@ export function getTimelineTools(): AgentTool[] {
 		trimElementTool,
 		resizeElementTool,
 		updateElementTransformTool,
+		positionElementTool,
 		updateStickerColorTool,
 		removeSilenceTool,
 		insertTextTool,
