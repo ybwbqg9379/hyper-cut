@@ -187,3 +187,4 @@ These files have been modified by us **and** may be modified by upstream. Auto-m
 | Date | Upstream HEAD | Commits | Notes |
 | ---- | ------------- | ------- | ----- |
 | 2026-02-07 | `464a6e8` | 6 | Storage migration per-project refactor, v1→v2 fixes, checkbox style. 2 overlap files auto-merged cleanly. |
+| 2026-02-09 | `fe10cee` | 19 | Transform support, generic updateElements, BatchCommand, visual-node extraction, dynamic font sizing. 6 conflicts resolved (4 content + 2 delete). Migrated agent from updateTextElement to updateElements array API. |
