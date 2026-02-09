@@ -176,6 +176,12 @@ vi.mock("@/lib/timeline/element-utils", () => ({
 		opacity: 1,
 	})),
 	getElementsAtTime: vi.fn(() => [{ trackId: "track1", elementId: "el1" }]),
+	hasMediaId: vi.fn(
+		(
+			element: Record<string, unknown>,
+		): element is Record<string, unknown> & { mediaId: string } =>
+			typeof element.mediaId === "string" && element.mediaId.length > 0,
+	),
 	canElementHaveAudio: vi.fn(
 		(element: { type?: string }) =>
 			element.type === "audio" || element.type === "video",

@@ -134,6 +134,17 @@ export const AGENT_NATIVE_CAPABILITIES: CapabilityDefinition[] = [
 		preconditions: ["analysis_context_available"],
 	},
 	{
+		id: "tool.vision.apply_layout_suggestion",
+		name: "vision.apply_layout_suggestion",
+		description: "Apply vision layout suggestion to element positioning",
+		source: "tool",
+		sourceRef: "@/agent/tools/vision-tools-core.ts",
+		domain: "vision",
+		risk: "caution",
+		parameters: [],
+		preconditions: ["analysis_context_available", "timeline_element_exists"],
+	},
+	{
 		id: "tool.highlight.score_highlights",
 		name: "highlight.score_highlights",
 		description: "Score transcript segments for highlight potential",
@@ -402,6 +413,10 @@ export const TOOL_CAPABILITY_BINDINGS: Record<string, string[]> = {
 	save_project: ["manager.project.saveCurrentProject"],
 	detect_scenes: ["tool.vision.detect_scenes"],
 	analyze_frames: ["tool.vision.analyze_frames"],
+	apply_layout_suggestion: [
+		"tool.vision.apply_layout_suggestion",
+		"tool.timeline.position_element",
+	],
 	suggest_edits: ["tool.vision.suggest_edits"],
 	score_highlights: ["tool.highlight.score_highlights"],
 	validate_highlights_visual: ["tool.highlight.validate_highlights_visual"],

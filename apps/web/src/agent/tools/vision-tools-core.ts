@@ -30,6 +30,14 @@ import {
 	DEFAULT_VISION_MODEL_TEMPERATURE,
 	DEFAULT_VISION_TRANSCRIPT_WINDOW_SECONDS,
 } from "../constants/vision";
+import {
+	buildLayoutSuggestionsFromObservations,
+	isSpatialAnchor,
+	isSpatialLayoutTarget,
+	type SpatialLayoutSuggestion,
+	type SpatialLayoutTarget,
+} from "../utils/spatial";
+import { positionElementTool } from "./timeline-tools-core";
 
 type SuggestionStrategy = "highlight" | "cleanup" | "pacing" | "auto";
 
@@ -66,6 +74,7 @@ interface SceneCacheEntry {
 interface FrameAnalysisCacheEntry {
 	assetId: string;
 	analyses: FrameAnalysisResult[];
+	layoutSuggestions: SpatialLayoutSuggestion[];
 	updatedAt: string;
 }
 
@@ -754,6 +763,82 @@ function toEditSuggestions(value: unknown): EditSuggestion[] {
 		.filter((item): item is EditSuggestion => Boolean(item));
 }
 
+function toNumberInRange({
+	value,
+	min,
+	max,
+	fallback,
+}: {
+	value: unknown;
+	min: number;
+	max: number;
+	fallback: number;
+}): number {
+	const raw = toNumberOrDefault(value, fallback);
+	return Math.max(min, Math.min(max, raw));
+}
+
+function buildLayoutSuggestions({
+	analyses,
+}: {
+	analyses: FrameAnalysisResult[];
+}): SpatialLayoutSuggestion[] {
+	return buildLayoutSuggestionsFromObservations(
+		analyses.map((analysis) => ({
+			description: analysis.description,
+			sceneType: analysis.sceneType,
+			mood: analysis.mood,
+			people: analysis.people,
+			textOnScreen: analysis.textOnScreen,
+			changes: analysis.changes,
+		})),
+	);
+}
+
+function toManualLayoutSuggestion(value: unknown): SpatialLayoutSuggestion | null {
+	if (!value || typeof value !== "object") return null;
+	const record = value as Record<string, unknown>;
+	const targetValue = isSpatialLayoutTarget(record.target)
+		? record.target
+		: ("caption" as SpatialLayoutTarget);
+	const anchorValue = record.anchor;
+	if (!isSpatialAnchor(anchorValue)) {
+		return null;
+	}
+	const marginX = toNumberInRange({
+		value: record.marginX,
+		min: 0,
+		max: 0.5,
+		fallback: 0,
+	});
+	const marginY = toNumberInRange({
+		value: record.marginY,
+		min: 0,
+		max: 0.5,
+		fallback: 0,
+	});
+	const confidence = toNumberInRange({
+		value: record.confidence,
+		min: 0.55,
+		max: 0.95,
+		fallback: 0.75,
+	});
+	const reason = toStringOrDefault(record.reason, "手动指定布局建议");
+	return {
+		target: targetValue,
+		anchor: anchorValue,
+		marginX,
+		marginY,
+		confidence,
+		reason,
+		positionElementArgs: {
+			anchor: anchorValue,
+			marginX,
+			marginY,
+		},
+	};
+}
+
 function buildFallbackSuggestions({
 	strategy,
 	scenes,
@@ -1080,10 +1165,12 @@ export const analyzeFramesTool: AgentTool = {
 					}),
 				);
 			}
+			const layoutSuggestions = buildLayoutSuggestions({ analyses });
 
 			const cacheEntry: FrameAnalysisCacheEntry = {
 				assetId: asset.id,
 				analyses,
+				layoutSuggestions,
 				updatedAt: new Date().toISOString(),
 			};
 			frameAnalysisCache.set(asset.id, cacheEntry);
@@ -1095,6 +1182,7 @@ export const analyzeFramesTool: AgentTool = {
 					videoAssetId: asset.id,
 					frameCount: analyses.length,
 					analyses,
+					layoutSuggestions,
 					cachedAt: cacheEntry.updatedAt,
 				},
 			};
@@ -1103,6 +1191,177 @@ export const analyzeFramesTool: AgentTool = {
 				success: false,
 				message: `帧分析失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "FRAME_ANALYSIS_FAILED" },
+			};
+		}
+	},
+};
+
+export const applyLayoutSuggestionTool: AgentTool = {
+	name: "apply_layout_suggestion",
+	description:
+		"将视觉布局建议一键应用到元素定位（内部调用 position_element）。Apply vision layout suggestion and position element in one step.",
+	parameters: {
+		type: "object",
+		properties: {
+			videoAssetId: {
+				type: "string",
+				description:
+					"视频素材 ID（可选，默认自动选择）(Optional video asset ID)",
+			},
+			elementId: {
+				type: "string",
+				description:
+					"要定位的元素 ID（可选，默认当前选中）(Optional target element ID)",
+			},
+			trackId: {
+				type: "string",
+				description: "元素所在轨道 ID（可选）(Optional element track ID)",
+			},
+			target: {
+				type: "string",
+				enum: ["caption", "logo", "sticker"],
+				description:
+					"建议目标类型（caption/logo/sticker）(Layout target type)",
+			},
+			suggestionIndex: {
+				type: "number",
+				description:
+					"布局建议索引（从 0 开始，基于 analyze_frames 输出）(Suggestion index)",
+			},
+			suggestion: {
+				type: "object",
+				description:
+					"可直接传入建议对象（anchor/marginX/marginY），优先于缓存建议 (Inline suggestion object)",
+			},
+		},
+		required: [],
+	},
+	execute: async (params): Promise<ToolResult> => {
+		try {
+			const manualSuggestion = toManualLayoutSuggestion(params.suggestion);
+			let selectedSuggestion: SpatialLayoutSuggestion | null = manualSuggestion;
+			let selectedIndex = 0;
+			let sourceVideoAssetId = "";
+
+			if (!selectedSuggestion) {
+				const { frameAnalysisCache } = getVisionProjectCache();
+				const { asset } = resolveVideoAsset({
+					videoAssetId:
+						typeof params.videoAssetId === "string"
+							? params.videoAssetId
+							: undefined,
+				});
+				sourceVideoAssetId = asset.id;
+				const cachedEntry = frameAnalysisCache.get(asset.id);
+				const targetValue = params.target;
+				if (
+					targetValue !== undefined &&
+					!isSpatialLayoutTarget(targetValue)
+				) {
+					return {
+						success: false,
+						message:
+							"target 参数无效，必须为 caption/logo/sticker (Invalid target)",
+						data: { errorCode: "INVALID_TARGET" },
+					};
+				}
+				if (!cachedEntry) {
+					return {
+						success: false,
+						message:
+							"没有可用布局建议，请先运行 analyze_frames 或直接传入 suggestion",
+						data: { errorCode: "NO_LAYOUT_SUGGESTIONS" },
+					};
+				}
+				const layoutSuggestions =
+					cachedEntry.layoutSuggestions.length > 0
+						? cachedEntry.layoutSuggestions
+						: buildLayoutSuggestions({ analyses: cachedEntry.analyses });
+
+				if (layoutSuggestions.length === 0) {
+					return {
+						success: false,
+						message:
+							"没有可用布局建议，请先运行 analyze_frames 或直接传入 suggestion",
+						data: { errorCode: "NO_LAYOUT_SUGGESTIONS" },
+					};
+				}
+
+				if (params.suggestionIndex !== undefined) {
+					const index = Number(params.suggestionIndex);
+					if (!Number.isInteger(index) || index < 0) {
+						return {
+							success: false,
+							message:
+								"suggestionIndex 必须是大于等于 0 的整数 (Invalid suggestionIndex)",
+							data: { errorCode: "INVALID_SUGGESTION_INDEX" },
+						};
+					}
+					selectedSuggestion = layoutSuggestions[index] ?? null;
+					selectedIndex = index;
+				} else if (targetValue) {
+					selectedIndex = layoutSuggestions.findIndex(
+						(suggestion) => suggestion.target === targetValue,
+					);
+					selectedSuggestion =
+						selectedIndex >= 0 ? layoutSuggestions[selectedIndex] : null;
+				} else {
+					selectedSuggestion = layoutSuggestions[0];
+					selectedIndex = 0;
+				}
+			}
+
+			if (!selectedSuggestion) {
+				return {
+					success: false,
+					message: "未找到匹配的布局建议 (No matching layout suggestion)",
+					data: { errorCode: "SUGGESTION_NOT_FOUND" },
+				};
+			}
+
+			const elementId =
+				typeof params.elementId === "string" && params.elementId.trim().length > 0
+					? params.elementId.trim()
+					: undefined;
+			const trackId =
+				typeof params.trackId === "string" && params.trackId.trim().length > 0
+					? params.trackId.trim()
+					: undefined;
+			const positionResult = await positionElementTool.execute({
+				elementId,
+				trackId,
+				anchor: selectedSuggestion.anchor,
+				marginX: selectedSuggestion.marginX,
+				marginY: selectedSuggestion.marginY,
+			});
+
+			if (!positionResult.success) {
+				return {
+					success: false,
+					message: `应用布局建议失败: ${positionResult.message}`,
+					data: {
+						errorCode: "APPLY_LAYOUT_FAILED",
+						positionResult: positionResult.data,
+					},
+				};
+			}
+
+			return {
+				success: true,
+				message: "已应用布局建议并完成元素定位 (Layout suggestion applied)",
+				data: {
+					videoAssetId: sourceVideoAssetId || undefined,
+					suggestionIndex: selectedIndex,
+					suggestion: selectedSuggestion,
+					positionResult: positionResult.data,
+				},
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message:
+					`应用布局建议失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+				data: { errorCode: "APPLY_LAYOUT_SUGGESTION_FAILED" },
 			};
 		}
 	},
@@ -1239,5 +1498,10 @@ export function __resetVisionToolCachesForTests(): void {
 }
 
 export function getVisionTools(): AgentTool[] {
-	return [detectScenesTool, analyzeFramesTool, suggestEditsTool];
+	return [
+		detectScenesTool,
+		analyzeFramesTool,
+		applyLayoutSuggestionTool,
+		suggestEditsTool,
+	];
 }

@@ -6,6 +6,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **Agent Vision → Layout 闭环（P1-b）**：`analyze_frames` 直接产出可执行布局建议，并支持一键应用到元素定位
+  - `analyze_frames` 新增 `layoutSuggestions` 输出，包含 `target/anchor/margin/confidence/reason/positionElementArgs`
+  - 新增 `apply_layout_suggestion` 工具：支持读取 `analyze_frames` 缓存建议，或直接传入 suggestion 对象后一键调用 `position_element`
+  - `src/agent/utils/spatial.ts` 新增视觉观察到布局建议的推荐逻辑（caption/logo/sticker 多目标）
+  - 新增 capability 定义与绑定：`tool.vision.apply_layout_suggestion`
+  - 新增回归测试覆盖：`spatial` 推荐策略、`apply_layout_suggestion` 成功路径与无缓存失败路径
+
 - **Agent 空间语义定位能力（P1-a）**：新增 `position_element`，支持基于锚点与边距的稳定布局
   - 新增 `src/agent/utils/spatial.ts`：提供 `SPATIAL_ANCHORS`、`MAX_SPATIAL_MARGIN_RATIO` 与 `resolveAnchorToPixels`
   - 新增 `position_element` 工具：输入 `anchor + marginX/marginY`，自动转换为画布中心坐标系的 `transform.position`

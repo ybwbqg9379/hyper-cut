@@ -1,5 +1,6 @@
 import { describe, expect, it, type vi } from "vitest";
 import { getToolByName } from "./integration-harness";
+import { __resetVisionToolCachesForTests } from "../tools/vision-tools";
 
 export function registerWorkflowPlaybackQueryTests() {
 	describe("Workflow Tools", () => {
@@ -140,6 +141,53 @@ export function registerWorkflowPlaybackQueryTests() {
 			expect(
 				optionalFailures?.some((failure) => failure.stepId === "add-sfx"),
 			).toBe(true);
+		});
+	});
+
+	describe("Vision Tools", () => {
+		it("apply_layout_suggestion should position element from inline suggestion", async () => {
+			__resetVisionToolCachesForTests();
+			const tool = getToolByName("apply_layout_suggestion");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: { updateElements: ReturnType<typeof vi.fn> };
+			};
+
+			const result = await tool.execute({
+				elementId: "el1",
+				trackId: "track1",
+				suggestion: {
+					target: "logo",
+					anchor: "top-right",
+					marginX: 0.06,
+					marginY: 0.06,
+				},
+			});
+			expect(result.success).toBe(true);
+			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
+				updates: [{
+					trackId: "track1",
+					elementId: "el1",
+					updates: {
+						transform: {
+							scale: 1,
+							rotate: 0,
+							position: { x: 844.8, y: -475.2 },
+						},
+					},
+				}],
+			});
+		});
+
+		it("apply_layout_suggestion should fail when no cached suggestions are available", async () => {
+			__resetVisionToolCachesForTests();
+			const tool = getToolByName("apply_layout_suggestion");
+			const result = await tool.execute({
+				elementId: "el1",
+				trackId: "track1",
+			});
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({ errorCode: "NO_LAYOUT_SUGGESTIONS" });
 		});
 	});
 
