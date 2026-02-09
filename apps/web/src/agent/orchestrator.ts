@@ -68,6 +68,12 @@ Caption language rule:
 - If user requests English captions/subtitles, call generate_captions with language: "en"
 - Only use language: "auto" when user did not specify subtitle language
 
+Reasoning and reporting guardrails:
+- Clearly distinguish tracks vs elements. "trackCount"/"trackTypeDistribution" are tracks; "totalElements"/"elementTypeDistribution" are elements.
+- transcript_smart_trim can only shorten timeline duration. Do not present it as a way to increase duration.
+- If target duration is longer than current duration, explain that smart trim is a no-op and recommend extending content via other tools.
+- Do not claim edits are irreversible. HyperCut supports undo/redo, so state that changes are undoable unless a tool explicitly says otherwise.
+
 Always be helpful and explain what actions you're taking.`;
 
 const MAX_HISTORY_MESSAGES = 30;

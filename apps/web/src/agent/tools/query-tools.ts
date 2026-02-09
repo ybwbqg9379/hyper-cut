@@ -494,7 +494,7 @@ export const getTrackDetailsTool: AgentTool = {
 export const getTimelineSummaryTool: AgentTool = {
 	name: "get_timeline_summary",
 	description:
-		"获取时间线结构化摘要（轨道统计、元素分布、间隔分布）。Get structured timeline summary.",
+		"获取时间线结构化摘要（轨道统计、元素统计、间隔分布）。Get structured timeline summary with clear track vs element counts.",
 	parameters: {
 		type: "object",
 		properties: {
@@ -519,7 +519,10 @@ export const getTimelineSummaryTool: AgentTool = {
 					: 5;
 
 			const typeDistribution: Record<string, number> = {};
+			const trackTypeDistribution: Record<string, number> = {};
 			const trackSummaries = tracks.map((track) => {
+				trackTypeDistribution[track.type] =
+					(trackTypeDistribution[track.type] ?? 0) + 1;
 				const sorted = [...track.elements].sort(
 					(a, b) => a.startTime - b.startTime,
 				);
@@ -570,6 +573,7 @@ export const getTimelineSummaryTool: AgentTool = {
 						(sum, track) => sum + track.elements.length,
 						0,
 					),
+					trackTypeDistribution,
 					elementTypeDistribution: typeDistribution,
 					trackSummaries,
 				},

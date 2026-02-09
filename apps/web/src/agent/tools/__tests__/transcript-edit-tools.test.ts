@@ -201,6 +201,14 @@ describe("transcript edit tools", () => {
 		expect(data.dryRun).toBe(true);
 		expect(data.suggestions.length).toBeGreaterThan(0);
 		expect(data.diff).toBeDefined();
+		expect(
+			typeof (data as { currentDurationSeconds?: unknown })
+				.currentDurationSeconds,
+		).toBe("number");
+		expect(
+			typeof (data as { estimatedDurationSeconds?: unknown })
+				.estimatedDurationSeconds,
+		).toBe("number");
 	});
 
 	it("transcript_smart_trim dryRun should generate smart trim suggestions", async () => {
@@ -217,5 +225,23 @@ describe("transcript edit tools", () => {
 		expect(data.dryRun).toBe(true);
 		expect(data.suggestions.length).toBeGreaterThan(0);
 		expect(data.suggestions[0]?.reason).toBeTruthy();
+	});
+
+	it("transcript_smart_trim should return noop when target is longer than current duration", async () => {
+		const result = await findTool("transcript_smart_trim").execute({
+			targetDurationSeconds: 20,
+			strategy: "balanced",
+			dryRun: false,
+		});
+		expect(result.success).toBe(true);
+		const data = result.data as {
+			canTrim?: boolean;
+			noop?: boolean;
+			suggestions?: unknown[];
+		};
+		expect(data.canTrim).toBe(false);
+		expect(data.noop).toBe(true);
+		expect(data.suggestions).toEqual([]);
+		expect(result.message).toContain("仅能缩短时长");
 	});
 });

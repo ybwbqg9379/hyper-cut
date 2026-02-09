@@ -489,6 +489,9 @@ function buildSuggestionToolResult({
 			suggestions,
 			diff: preview.diff,
 			deleteRanges: preview.deleteRanges,
+			currentDurationSeconds: preview.diff.duration.beforeSeconds,
+			estimatedDurationSeconds: preview.diff.duration.afterSeconds,
+			estimatedDurationDeltaSeconds: preview.diff.duration.deltaSeconds,
 			fingerprint: document.fingerprint,
 		},
 	};
@@ -788,7 +791,7 @@ async function buildSmartTrimSuggestions({
 export const transcriptSmartTrimTool: AgentTool = {
 	name: "transcript_smart_trim",
 	description:
-		"按目标时长自动生成并应用转录裁剪建议。Smart trim transcript to a target duration.",
+		"按目标时长自动生成并应用转录裁剪建议（仅缩短，不延长）。Smart trim transcript to reduce duration only.",
 	parameters: {
 		type: "object",
 		properties: {
@@ -831,10 +834,14 @@ export const transcriptSmartTrimTool: AgentTool = {
 		if (currentDuration <= targetDurationSeconds) {
 			return {
 				success: true,
-				message: `当前时长 ${currentDuration.toFixed(1)}s，已不超过目标 ${targetDurationSeconds.toFixed(1)}s`,
+				message: `当前时长 ${currentDuration.toFixed(1)}s，已不超过目标 ${targetDurationSeconds.toFixed(1)}s。transcript_smart_trim 仅能缩短时长，本次未修改时间线。`,
 				data: {
 					targetDurationSeconds,
 					currentDurationSeconds: Number(currentDuration.toFixed(3)),
+					canTrim: false,
+					noop: true,
+					nextStepSuggestion:
+						"如需延长时长，请补充素材/镜头，或将目标时长调整为小于当前时长后重试。",
 					dryRun,
 					suggestions: [],
 				},

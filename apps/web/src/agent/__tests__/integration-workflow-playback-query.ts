@@ -257,6 +257,19 @@ export function registerWorkflowPlaybackQueryTests() {
 			expect(result.data).toMatchObject({
 				trackCount: 4,
 				totalElements: 5,
+				trackTypeDistribution: {
+					video: 1,
+					audio: 1,
+					text: 1,
+					sticker: 1,
+				},
+				elementTypeDistribution: {
+					video: 1,
+					image: 1,
+					audio: 1,
+					text: 1,
+					sticker: 1,
+				},
 			});
 		});
 	});
