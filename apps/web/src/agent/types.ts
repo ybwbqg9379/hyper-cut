@@ -172,6 +172,7 @@ export interface AgentResponse {
 // ============================================================================
 
 export type ProviderType = "lm-studio" | "gemini";
+export type ProviderPrivacyMode = "local-only" | "hybrid" | "cloud-preferred";
 
 export interface LMStudioConfig {
 	url?: string;
@@ -187,6 +188,7 @@ export interface LMStudioConfig {
 
 export interface AgentConfig {
 	provider: ProviderType;
+	providerPrivacyMode?: ProviderPrivacyMode;
 	lmStudio?: LMStudioConfig;
 	/** @deprecated Use lmStudio.url instead */
 	lmStudioUrl?: string;

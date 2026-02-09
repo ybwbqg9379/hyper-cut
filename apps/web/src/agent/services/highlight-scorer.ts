@@ -1,4 +1,4 @@
-import type { LMStudioProvider } from "../providers/lm-studio-provider";
+import type { LLMProvider } from "../types";
 import type {
 	ScoredSegment,
 	RuleScores,
@@ -257,7 +257,7 @@ function parseVisualScores(content: string): VisualScores | null {
 export class HighlightScorerService {
 	async scoreWithLLM(
 		chunks: TranscriptChunk[],
-		provider: LMStudioProvider,
+		provider: LLMProvider,
 	): Promise<LLMScoringResult> {
 		const result = new Map<number, SemanticScores>();
 		const diagnostics = {
@@ -324,7 +324,7 @@ export class HighlightScorerService {
 	async scoreWithVision(
 		candidates: ScoredSegment[],
 		maxCandidates: number,
-		provider: LMStudioProvider,
+		provider: LLMProvider,
 	): Promise<Map<number, VisualScores>> {
 		const result = new Map<number, VisualScores>();
 		if (candidates.length === 0 || maxCandidates <= 0) {

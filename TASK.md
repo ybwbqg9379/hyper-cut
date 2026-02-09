@@ -194,7 +194,7 @@ Commit message 约定：
 
 ### Phase 8: 多 Provider 路由（隐私分级）
 
-- **Status**: 🔄 In Progress
+- **Status**: ✅ Completed
 - **Description**: 本地优先，云端兜底，按任务类型和隐私等级路由。
 - **Implementation Scope**:
   - 新增 `apps/web/src/agent/providers/router.ts`
@@ -204,17 +204,17 @@ Commit message 约定：
     - hybrid
     - cloud-preferred
 - **Acceptance Criteria**:
-  - [ ] provider route 可观测且可配置
-  - [ ] local 不可用时有可控 fallback
-  - [ ] 现有 provider 行为兼容
+  - [x] provider route 可观测且可配置
+  - [x] local 不可用时有可控 fallback
+  - [x] 现有 provider 行为兼容
 - **Tests**:
-  - [ ] 路由决策测试
-  - [ ] fallback 测试
-  - [ ] 隐私模式测试
+  - [x] 路由决策测试
+  - [x] fallback 测试
+  - [x] 隐私模式测试
 - **Docs**:
-  - [ ] `CHANGELOG.md`
-  - [ ] `apps/web/.env.example` 新增路由配置说明
-  - [ ] `docs/plans/agent-provider-routing.md`
+  - [x] `CHANGELOG.md`
+  - [x] `apps/web/.env.example` 新增路由配置说明
+  - [x] `docs/plans/agent-provider-routing.md`
 
 ### Phase 9: Upstream 同步护栏 + 兼容回归
 

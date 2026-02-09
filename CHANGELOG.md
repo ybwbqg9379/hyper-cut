@@ -51,6 +51,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `run_workflow` 参数新增质量循环控制项：`enableQualityLoop`、`qualityMaxIterations`、`qualityTargetDuration`、`qualityDurationTolerance`
   - `useAgent.runWorkflow` 增加质量循环参数透传
   - 新增测试：`quality-evaluator.test.ts`；增强 `orchestrator.test.ts` 覆盖自动迭代与停止条件
+- **Agent Provider Routing（Phase 8）**：新增隐私分级路由与多 Provider fallback
+  - 新增 `src/agent/providers/router.ts`，按任务类型（planning/semantic/vision）与隐私模式（local-only/hybrid/cloud-preferred）决策路由
+  - 新增 `createRoutedProvider`，在 provider 不可用时按路由顺序自动 fallback
+  - Orchestrator、语义高光与视觉分析链路改用任务型 provider 路由
+  - 新增配置 `NEXT_PUBLIC_AGENT_PROVIDER_PRIVACY_MODE`，支持本地优先/混合/云端优先模式
+  - 新增测试：`providers/__tests__/router.test.ts`、`providers/__tests__/routed-provider.test.ts`
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

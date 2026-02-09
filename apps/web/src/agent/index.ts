@@ -22,6 +22,7 @@ export type {
 	WorkflowNextStep,
 	WorkflowResumeHint,
 	ProviderType,
+	ProviderPrivacyMode,
 	AgentConfig,
 	LMStudioConfig,
 	AgentOrchestratorOptions,
@@ -33,8 +34,12 @@ export { AgentOrchestrator } from "./orchestrator";
 // Providers
 export {
 	createProvider,
+	createRoutedProvider,
 	getConfiguredProviderType,
+	resolveProviderRoute,
+	resolveProviderPrivacyMode,
 } from "./providers";
+export type { ProviderTaskType } from "./providers";
 export { LMStudioProvider } from "./providers/lm-studio-provider";
 export { GeminiProvider } from "./providers/gemini-provider";
 

@@ -8,8 +8,8 @@ import { decodeAudioToFloat32 } from "@/lib/media/audio";
 import { transcriptionService } from "@/services/transcription/service";
 import { isCaptionTextElement } from "@/lib/transcription/caption-metadata";
 import { encodeCanvasAsJpeg } from "../utils/image";
-import { LMStudioProvider } from "../providers/lm-studio-provider";
-import type { AgentTool, ToolResult } from "../types";
+import { createRoutedProvider } from "../providers";
+import type { AgentTool, LLMProvider, ToolResult } from "../types";
 import { transcriptAnalyzerService } from "../services/transcript-analyzer";
 import {
 	highlightScorerService,
@@ -18,11 +18,7 @@ import {
 import { segmentSelectorService } from "../services/segment-selector";
 import { mapWithConcurrency } from "../utils/concurrency";
 import { clamp } from "../utils/math";
-import {
-	parseEnvNumber,
-	toBooleanOrDefault,
-	toNumberOrDefault,
-} from "../utils/values";
+import { toBooleanOrDefault, toNumberOrDefault } from "../utils/values";
 import {
 	DEFAULT_HIGHLIGHT_DURATION_TOLERANCE,
 	DEFAULT_HIGHLIGHT_FRAME_EXTRACTION_CONCURRENCY,
@@ -382,13 +378,8 @@ function getHighlightCache(
 	return initial;
 }
 
-function createLocalProvider(): LMStudioProvider {
-	return new LMStudioProvider({
-		url: process.env.NEXT_PUBLIC_LM_STUDIO_URL,
-		model: process.env.NEXT_PUBLIC_LM_STUDIO_MODEL,
-		timeoutMs: parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS),
-		maxTokens: parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_MAX_TOKENS),
-	});
+function createLocalProvider(): LLMProvider {
+	return createRoutedProvider({ taskType: "semantic" });
 }
 
 function buildTimelineFingerprint(tracks: TimelineTrack[]): string {

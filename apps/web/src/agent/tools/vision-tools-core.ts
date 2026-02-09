@@ -6,8 +6,8 @@ import { EditorCore } from "@/core";
 import { extractTimelineAudio } from "@/lib/media/mediabunny";
 import { decodeAudioToFloat32 } from "@/lib/media/audio";
 import { transcriptionService } from "@/services/transcription/service";
-import type { AgentTool, ContentPart, ToolResult } from "../types";
-import { LMStudioProvider } from "../providers/lm-studio-provider";
+import type { AgentTool, ContentPart, LLMProvider, ToolResult } from "../types";
+import { createRoutedProvider } from "../providers";
 import {
 	frameExtractorService,
 	type EncodedVideoFrame,
@@ -21,7 +21,7 @@ import type {
 	TranscriptSegment,
 	TranscriptWord,
 } from "./highlight-types";
-import { parseEnvNumber, toNumberOrDefault } from "../utils/values";
+import { toNumberOrDefault } from "../utils/values";
 import {
 	DEFAULT_SCENE_DIFF_THRESHOLD,
 	DEFAULT_SCENE_MAX_FRAMES,
@@ -105,13 +105,8 @@ function getVisionProjectCache(
 	return initial;
 }
 
-function createVisionProvider(): LMStudioProvider {
-	return new LMStudioProvider({
-		url: process.env.NEXT_PUBLIC_LM_STUDIO_URL,
-		model: process.env.NEXT_PUBLIC_LM_STUDIO_MODEL,
-		timeoutMs: parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_TIMEOUT_MS),
-		maxTokens: parseEnvNumber(process.env.NEXT_PUBLIC_LM_STUDIO_MAX_TOKENS),
-	});
+function createVisionProvider(): LLMProvider {
+	return createRoutedProvider({ taskType: "vision" });
 }
 
 function findElementByRef({

@@ -13,7 +13,7 @@ import type {
 	WorkflowNextStep,
 	WorkflowResumeHint,
 } from "./types";
-import { createProvider, getConfiguredProviderType } from "./providers";
+import { createRoutedProvider } from "./providers";
 import {
 	EXECUTION_CANCELLED_ERROR_CODE,
 	buildExecutionCancelledResult,
@@ -579,7 +579,10 @@ export class AgentOrchestrator {
 		this.debug = options.debug ?? false;
 		this.planningEnabled = options.planningEnabled ?? DEFAULT_PLANNING_ENABLED;
 		this.onExecutionEvent = options.onExecutionEvent;
-		this.provider = createProvider(getConfiguredProviderType(config), config);
+		this.provider = createRoutedProvider({
+			taskType: "planning",
+			config,
+		});
 		for (const tool of tools) {
 			this.registerTool(tool);
 		}

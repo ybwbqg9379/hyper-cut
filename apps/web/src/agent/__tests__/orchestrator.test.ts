@@ -13,7 +13,7 @@ import type {
 import { AgentOrchestrator } from "../orchestrator";
 
 vi.mock("../providers", () => ({
-	createProvider: vi.fn(),
+	createRoutedProvider: vi.fn(),
 	getConfiguredProviderType: vi.fn(() => "lm-studio"),
 }));
 const { evaluateQuality } = vi.hoisted(() => ({
@@ -25,7 +25,7 @@ vi.mock("../services/quality-evaluator", () => ({
 	},
 }));
 
-import { createProvider } from "../providers";
+import { createRoutedProvider } from "../providers";
 
 describe("AgentOrchestrator", () => {
 	const buildProvider = () => {
@@ -95,7 +95,9 @@ describe("AgentOrchestrator", () => {
 				finishReason: "stop",
 			});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const tools: AgentTool[] = [
 			{
@@ -144,7 +146,9 @@ describe("AgentOrchestrator", () => {
 			finishReason: "tool_calls",
 		});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const tools: AgentTool[] = [
 			{
@@ -180,7 +184,9 @@ describe("AgentOrchestrator", () => {
 			],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const firstExecute = vi.fn().mockResolvedValue({
 			success: true,
@@ -241,7 +247,9 @@ describe("AgentOrchestrator", () => {
 				toolCalls: [],
 				finishReason: "stop",
 			});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		let aborted = false;
 		const slowExecute = vi.fn(
@@ -301,7 +309,9 @@ describe("AgentOrchestrator", () => {
 				finishReason: "stop",
 			});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const tools: AgentTool[] = [
 			{
@@ -327,7 +337,9 @@ describe("AgentOrchestrator", () => {
 	it("should not call chat when provider is unavailable", async () => {
 		const provider = buildProvider();
 		(provider.isAvailable as ReturnType<typeof vi.fn>).mockResolvedValue(false);
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator([]);
 		const result = await orchestrator.process("do it");
@@ -357,7 +369,9 @@ describe("AgentOrchestrator", () => {
 				finishReason: "stop",
 			});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const tools: AgentTool[] = [
 			{
@@ -395,7 +409,9 @@ describe("AgentOrchestrator", () => {
 			finishReason: "stop",
 		});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator([], {
 			systemPrompt: "CUSTOM-SYSTEM",
@@ -421,7 +437,9 @@ describe("AgentOrchestrator", () => {
 			finishReason: "tool_calls",
 		});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator(
 			[
@@ -461,7 +479,9 @@ describe("AgentOrchestrator", () => {
 			],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const generateCaptionsExecute = vi
 			.fn()
@@ -511,7 +531,9 @@ describe("AgentOrchestrator", () => {
 			],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const generateCaptionsExecute = vi
 			.fn()
@@ -548,7 +570,9 @@ describe("AgentOrchestrator", () => {
 
 	it("runWorkflow should create a pending plan when planning is enabled", async () => {
 		const provider = buildProvider();
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const generateCaptionsExecute = vi
 			.fn()
@@ -587,7 +611,9 @@ describe("AgentOrchestrator", () => {
 
 	it("runWorkflow should execute run_workflow tool when planning is disabled", async () => {
 		const provider = buildProvider();
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const runWorkflowExecute = vi
 			.fn()
@@ -623,7 +649,9 @@ describe("AgentOrchestrator", () => {
 
 	it("runWorkflow should forward resume parameters", async () => {
 		const provider = buildProvider();
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const runWorkflowExecute = vi
 			.fn()
@@ -673,7 +701,9 @@ describe("AgentOrchestrator", () => {
 
 	it("runWorkflow should auto-iterate when quality is not met", async () => {
 		const provider = buildProvider();
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		evaluateQuality
 			.mockReturnValueOnce({
@@ -772,7 +802,9 @@ describe("AgentOrchestrator", () => {
 
 	it("runWorkflow should stop with QUALITY_TARGET_NOT_MET when max iterations reached", async () => {
 		const provider = buildProvider();
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		evaluateQuality
 			.mockReturnValueOnce({
@@ -885,7 +917,9 @@ describe("AgentOrchestrator", () => {
 			finishReason: "tool_calls",
 		});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator(
 			[
@@ -928,7 +962,9 @@ describe("AgentOrchestrator", () => {
 			],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const events: AgentExecutionEvent[] = [];
 		const wait = (ms: number) =>
@@ -997,7 +1033,9 @@ describe("AgentOrchestrator", () => {
 			finishReason: "tool_calls",
 		});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator(
 			[
@@ -1043,7 +1081,9 @@ describe("AgentOrchestrator", () => {
 			finishReason: "tool_calls",
 		});
 
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator(
 			[
@@ -1076,7 +1116,9 @@ describe("AgentOrchestrator", () => {
 			toolCalls: [{ id: "call-1", name: "test_tool", arguments: { value: 1 } }],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator(
 			[
@@ -1121,7 +1163,9 @@ describe("AgentOrchestrator", () => {
 				toolCalls: [],
 				finishReason: "stop",
 			});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator(
 			[
@@ -1174,7 +1218,9 @@ describe("AgentOrchestrator", () => {
 				toolCalls: [],
 				finishReason: "stop",
 			});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const events: Array<{
 			type: string;
@@ -1230,7 +1276,9 @@ describe("AgentOrchestrator", () => {
 				toolCalls: [],
 				finishReason: "stop",
 			});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		let attempt = 0;
 		const removeFillerExecute = vi.fn().mockImplementation(async () => {
@@ -1293,7 +1341,9 @@ describe("AgentOrchestrator", () => {
 				toolCalls: [],
 				finishReason: "stop",
 			});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const analyzeFramesExecute = vi.fn().mockResolvedValue({
 			success: false,
@@ -1337,7 +1387,9 @@ describe("AgentOrchestrator", () => {
 				toolCalls: [],
 				finishReason: "stop",
 			});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const removeFillerExecute = vi.fn().mockResolvedValue({
 			success: false,
@@ -1378,7 +1430,9 @@ describe("AgentOrchestrator", () => {
 			toolCalls: [{ id: "call-1", name: "test_tool", arguments: { value: 1 } }],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const events: string[] = [];
 		const orchestrator = new AgentOrchestrator(
@@ -1407,7 +1461,9 @@ describe("AgentOrchestrator", () => {
 
 	it("should not emit execution events when confirming without pending plan", async () => {
 		const provider = buildProvider();
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const events: string[] = [];
 		const orchestrator = new AgentOrchestrator([], {
@@ -1424,7 +1480,9 @@ describe("AgentOrchestrator", () => {
 
 	it("runWorkflow should expose awaiting_confirmation response when workflow pauses", async () => {
 		const provider = buildProvider();
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const runWorkflowExecute = vi.fn().mockResolvedValue({
 			success: true,
@@ -1483,7 +1541,9 @@ describe("AgentOrchestrator", () => {
 			toolCalls: [{ id: "call-1", name: "test_tool", arguments: { value: 1 } }],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator(
 			[
@@ -1529,7 +1589,9 @@ describe("AgentOrchestrator", () => {
 			],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const firstExecute = vi.fn().mockResolvedValue({
 			success: true,
@@ -1593,7 +1655,9 @@ describe("AgentOrchestrator", () => {
 			toolCalls: [{ id: "call-1", name: "test_tool", arguments: { value: 1 } }],
 			finishReason: "tool_calls",
 		});
-		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
 
 		const orchestrator = new AgentOrchestrator(
 			[
