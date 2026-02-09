@@ -19,3 +19,4 @@ bun.lockb
 # Twiggy
 .cursor/rules/file-structure.mdc
 *.tsbuildinfo
+apps/web/reports/

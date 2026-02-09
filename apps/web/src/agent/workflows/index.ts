@@ -11,6 +11,7 @@ function cloneWorkflow(workflow: Workflow): Workflow {
 	return {
 		...workflow,
 		tags: workflow.tags ? [...workflow.tags] : undefined,
+		quality: workflow.quality ? { ...workflow.quality } : undefined,
 		steps: workflow.steps.map((step) => ({
 			...step,
 			arguments: { ...step.arguments },
@@ -213,6 +214,12 @@ export function getWorkflowByName(name: string): Workflow | null {
 			(candidate) => normalizeWorkflowName(candidate.name) === normalized,
 		) ?? null;
 	return workflow ? cloneWorkflow(workflow) : null;
+}
+
+export function getWorkflowQualityConfigByName(
+	name: string,
+): Workflow["quality"] | null {
+	return getWorkflowByName(name)?.quality ?? null;
 }
 
 export function resolveWorkflowFromParams(

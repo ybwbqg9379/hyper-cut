@@ -234,6 +234,91 @@ describe("AgentOrchestrator", () => {
 		expect(result.requiresConfirmation).toBe(true);
 	});
 
+	it("process should abort running sibling nodes after pause", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			content: null,
+			toolCalls: [
+				{ id: "call-1", name: "get_pause", arguments: {} },
+				{ id: "call-2", name: "get_slow", arguments: {} },
+			],
+			finishReason: "tool_calls",
+		});
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
+
+		const getPauseExecute = vi.fn().mockResolvedValue({
+			success: true,
+			message: "pause",
+			data: {
+				errorCode: "WORKFLOW_CONFIRMATION_REQUIRED",
+				status: "awaiting_confirmation",
+				nextStep: { id: "apply-cut", toolName: "delete_selection" },
+				resumeHint: {
+					workflowName: "long-to-short",
+					startFromStepId: "apply-cut",
+					confirmRequiredSteps: true,
+				},
+			},
+		});
+
+		let slowAborted = false;
+		const getSlowExecute = vi.fn(
+			(_params: Record<string, unknown>, context?: ToolExecutionContext) =>
+				new Promise<{ success: boolean; message: string; data: unknown }>(
+					(resolve) => {
+						if (context?.signal?.aborted) {
+							slowAborted = true;
+							resolve({
+								success: false,
+								message: "cancelled",
+								data: { errorCode: "EXECUTION_CANCELLED" },
+							});
+							return;
+						}
+						context?.signal?.addEventListener(
+							"abort",
+							() => {
+								slowAborted = true;
+								resolve({
+									success: false,
+									message: "cancelled",
+									data: { errorCode: "EXECUTION_CANCELLED" },
+								});
+							},
+							{ once: true },
+						);
+					},
+				),
+		);
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "get_pause",
+					description: "pause tool",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: getPauseExecute,
+				},
+				{
+					name: "get_slow",
+					description: "slow tool",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: getSlowExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.process("pause and stop siblings");
+
+		expect(result.status).toBe("awaiting_confirmation");
+		expect(getPauseExecute).toHaveBeenCalledTimes(1);
+		expect(getSlowExecute).toHaveBeenCalledTimes(1);
+		expect(slowAborted).toBe(true);
+	});
+
 	it("should abort tool signal when execution times out", async () => {
 		const provider = buildProvider();
 		(provider.chat as ReturnType<typeof vi.fn>)
@@ -798,6 +883,168 @@ describe("AgentOrchestrator", () => {
 		expect(runWorkflowExecute).toHaveBeenCalledTimes(2);
 		expect(result.success).toBe(true);
 		expect(result.toolCalls?.[0]?.result.message).toContain("质量评分");
+	});
+
+	it("process should apply quality loop when run_workflow is called in chat mode", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [
+					{
+						id: "call-1",
+						name: "run_workflow",
+						arguments: {
+							workflowName: "podcast-to-clips",
+							confirmRequiredSteps: true,
+						},
+					},
+				],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "workflow done",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
+
+		evaluateQuality
+			.mockReturnValueOnce({
+				passed: false,
+				overallScore: 0.52,
+				timelineDurationSeconds: 80,
+				targetDurationSeconds: 45,
+				metrics: {
+					semanticCompleteness: {
+						value: 0.8,
+						score: 0.8,
+						passed: true,
+						threshold: 0.65,
+					},
+					silenceRate: {
+						value: 0.2,
+						score: 0.8,
+						passed: true,
+						threshold: 0.45,
+					},
+					subtitleCoverage: {
+						value: 0.7,
+						score: 0.7,
+						passed: true,
+						threshold: 0.55,
+					},
+					durationCompliance: {
+						value: 0.3,
+						score: 0.3,
+						passed: false,
+						threshold: 0.7,
+					},
+				},
+				reasons: ["时长未达标"],
+				evaluatedAt: "2026-02-09T00:00:00.000Z",
+			})
+			.mockReturnValueOnce({
+				passed: true,
+				overallScore: 0.88,
+				timelineDurationSeconds: 46,
+				targetDurationSeconds: 45,
+				metrics: {
+					semanticCompleteness: {
+						value: 0.88,
+						score: 0.88,
+						passed: true,
+						threshold: 0.65,
+					},
+					silenceRate: {
+						value: 0.15,
+						score: 0.85,
+						passed: true,
+						threshold: 0.45,
+					},
+					subtitleCoverage: {
+						value: 0.8,
+						score: 0.8,
+						passed: true,
+						threshold: 0.55,
+					},
+					durationCompliance: {
+						value: 0.9,
+						score: 0.9,
+						passed: true,
+						threshold: 0.7,
+					},
+				},
+				reasons: [],
+				evaluatedAt: "2026-02-09T00:00:01.000Z",
+			});
+
+		const runWorkflowExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "workflow ok" });
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "run_workflow",
+					description: "Run workflow",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: runWorkflowExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.process("请运行播客精剪");
+
+		expect(result.success).toBe(true);
+		expect(runWorkflowExecute).toHaveBeenCalledTimes(2);
+		expect(result.toolCalls?.[0]?.result.message).toContain("质量评分");
+	});
+
+	it("process should execute duplicate tool call ids via normalized DAG ids", async () => {
+		const provider = buildProvider();
+		(provider.chat as ReturnType<typeof vi.fn>)
+			.mockResolvedValueOnce({
+				content: null,
+				toolCalls: [
+					{ id: "dup", name: "test_tool", arguments: { value: 1 } },
+					{ id: "dup", name: "test_tool", arguments: { value: 2 } },
+				],
+				finishReason: "tool_calls",
+			})
+			.mockResolvedValueOnce({
+				content: "done",
+				toolCalls: [],
+				finishReason: "stop",
+			});
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
+
+		const toolExecute = vi.fn().mockResolvedValue({
+			success: true,
+			message: "ok",
+		});
+
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "test_tool",
+					description: "test tool",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: toolExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.process("run duplicates");
+
+		expect(result.success).toBe(true);
+		expect(toolExecute).toHaveBeenCalledTimes(2);
 	});
 
 	it("runWorkflow should stop with QUALITY_TARGET_NOT_MET when max iterations reached", async () => {

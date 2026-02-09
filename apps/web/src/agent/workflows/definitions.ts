@@ -181,6 +181,12 @@ export const WORKFLOWS: Workflow[] = [
 		templateDescription:
 			"高光评分 + 视觉验证 + 计划应用的一体化短视频生产链路。",
 		tags: ["highlights", "shorts"],
+		quality: {
+			enabled: true,
+			maxIterations: 2,
+			targetDurationSeconds: 60,
+			durationToleranceRatio: 0.2,
+		},
 		steps: [
 			{
 				id: "score-highlights",
@@ -313,6 +319,12 @@ export const WORKFLOWS: Workflow[] = [
 		scenario: "general",
 		templateDescription: "快速生成社媒短视频，可按目标时长调参。",
 		tags: ["social", "highlights", "captions"],
+		quality: {
+			enabled: true,
+			maxIterations: 2,
+			targetDurationSeconds: 60,
+			durationToleranceRatio: 0.2,
+		},
 		steps: [
 			{
 				id: "score-highlights",
@@ -523,6 +535,12 @@ export const WORKFLOWS: Workflow[] = [
 		scenario: "podcast",
 		templateDescription: "面向播客/访谈素材，优先提升语音连贯性并输出短片。",
 		tags: ["podcast", "filler", "highlights"],
+		quality: {
+			enabled: true,
+			maxIterations: 2,
+			targetDurationSeconds: 45,
+			durationToleranceRatio: 0.2,
+		},
 		steps: [
 			{
 				id: "detect-fillers",
@@ -696,6 +714,12 @@ export const WORKFLOWS: Workflow[] = [
 		scenario: "talking-head",
 		templateDescription: "用于 vlog/讲解视频，提升节奏并完善字幕。",
 		tags: ["talking-head", "cleanup", "captions"],
+		quality: {
+			enabled: true,
+			maxIterations: 2,
+			targetDurationSeconds: 60,
+			durationToleranceRatio: 0.2,
+		},
 		steps: [
 			{
 				id: "remove-silence",

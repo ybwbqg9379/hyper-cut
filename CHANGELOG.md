@@ -68,6 +68,22 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 修复 P1：provider 路由在请求取消时不再继续 fallback，避免取消请求触发额外模型调用
   - 新增回归测试：`providers/__tests__/routed-provider.test.ts`（cancelled request no-fallback）
   - 新增文档：`docs/plans/agent-final-review.md`
+- **Agent Hardening Follow-up（Review Closure）**：补齐并发安全、配置化与CI门禁
+  - CI `bun-ci.yml` 恢复全量测试门禁：新增 `bun run test`，smoke 不再替代全量回归
+  - 新增 `.gitignore` 规则：忽略 `apps/web/reports/` 报告产物
+  - 取消链路常量与判定逻辑统一到 `utils/cancellation.ts`，移除 tools 层重复定义
+  - Orchestrator DAG 调度增强：
+    - 执行前规范化 toolCall id，避免重复 id 导致节点覆盖
+    - pause/cancel 时中断并清理并行 sibling 节点，避免竞态继续执行
+    - 新增调度循环/超时护栏，降低死锁与挂起风险
+    - recovery prerequisite 使用稳定唯一 toolCallId，并补充 abort 路径处理
+  - 质量循环改为 per-workflow 配置驱动（`workflows/*.ts` 新增 `quality` 配置）
+  - `runWorkflow()` 执行路径对齐 DAG 调度器，避免 workflow 模式绕开统一调度逻辑
+  - `AgentChatbox` 拆分为主容器 + `message-bubble.tsx` + `execution-timeline.tsx` + `agent-chatbox-utils.ts`
+  - 新增回归测试（`orchestrator.test.ts`）：
+    - chat 模式 `run_workflow` 触发质量循环
+    - pause 后并行 sibling 节点中断
+    - 重复 toolCall id 正常执行
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

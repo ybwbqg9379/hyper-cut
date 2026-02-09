@@ -20,6 +20,11 @@ import { mapWithConcurrency } from "../utils/concurrency";
 import { clamp } from "../utils/math";
 import { toBooleanOrDefault, toNumberOrDefault } from "../utils/values";
 import {
+	EXECUTION_CANCELLED_ERROR_CODE,
+	isCancellationError,
+	throwIfExecutionCancelled,
+} from "../utils/cancellation";
+import {
 	DEFAULT_HIGHLIGHT_DURATION_TOLERANCE,
 	DEFAULT_HIGHLIGHT_FRAME_EXTRACTION_CONCURRENCY,
 	DEFAULT_HIGHLIGHT_SEGMENT_MAX_SECONDS,
@@ -51,7 +56,6 @@ const SELECT_EPSILON = 0.02;
 const MAX_HIGHLIGHT_FRAME_WIDTH = 640;
 const MAX_HIGHLIGHT_FRAME_HEIGHT = 360;
 const TRANSCRIPT_ALIGNMENT_TOLERANCE_SECONDS = 1;
-const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 interface HighlightCacheState {
 	scoredSegments: ScoredSegment[] | null;
@@ -331,29 +335,6 @@ function clearPersistedAgentCacheDatabase(): void {
 	} catch {
 		// Ignore persistence failures and keep in-memory behavior.
 	}
-}
-
-function isExecutionCancelled(signal?: AbortSignal): boolean {
-	return signal?.aborted === true;
-}
-
-function throwIfExecutionCancelled(signal?: AbortSignal): void {
-	if (!isExecutionCancelled(signal)) {
-		return;
-	}
-	throw new Error("Execution cancelled");
-}
-
-function isExecutionCancelledError(error: unknown): boolean {
-	if (!(error instanceof Error)) {
-		return false;
-	}
-	const lower = error.message.toLowerCase();
-	return (
-		error.name === "AbortError" ||
-		lower.includes("cancelled") ||
-		lower.includes("canceled")
-	);
 }
 
 function getActiveProjectId(): string {
@@ -1593,7 +1574,7 @@ export const scoreHighlightsTool: AgentTool = {
 				},
 			};
 		} catch (error) {
-			if (isExecutionCancelledError(error)) {
+			if (isCancellationError(error)) {
 				return {
 					success: false,
 					message: "高光评分已取消 (Highlight scoring cancelled)",
@@ -1823,7 +1804,7 @@ export const validateHighlightsVisualTool: AgentTool = {
 				},
 			};
 		} catch (error) {
-			if (isExecutionCancelledError(error)) {
+			if (isCancellationError(error)) {
 				return {
 					success: false,
 					message: "视觉验证已取消 (Visual validation cancelled)",
@@ -1947,7 +1928,7 @@ export const generateHighlightPlanTool: AgentTool = {
 				},
 			};
 		} catch (error) {
-			if (isExecutionCancelledError(error)) {
+			if (isCancellationError(error)) {
 				return {
 					success: false,
 					message: "精华计划生成已取消 (Highlight plan cancelled)",
@@ -2286,7 +2267,7 @@ export const applyHighlightCutTool: AgentTool = {
 				},
 			};
 		} catch (error) {
-			if (isExecutionCancelledError(error)) {
+			if (isCancellationError(error)) {
 				return {
 					success: false,
 					message: "应用精华剪辑已取消 (Highlight cut cancelled)",

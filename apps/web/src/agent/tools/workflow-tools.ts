@@ -11,6 +11,7 @@ import { getHighlightTools } from "./highlight-tools";
 import { getFillerTools } from "./filler-tools";
 import { listWorkflows, resolveWorkflowFromParams } from "../workflows";
 import { toBooleanOrDefault, toNonEmptyString } from "../utils/values";
+import { EXECUTION_CANCELLED_ERROR_CODE } from "../utils/cancellation";
 
 function buildExecutableToolMap(): Map<string, AgentTool> {
 	const toolMap = new Map<string, AgentTool>();
@@ -35,7 +36,6 @@ function buildExecutableToolMap(): Map<string, AgentTool> {
 }
 
 const workflowReservedTools = new Set(["run_workflow", "list_workflows"]);
-const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 export const listWorkflowsTool: AgentTool = {
 	name: "list_workflows",

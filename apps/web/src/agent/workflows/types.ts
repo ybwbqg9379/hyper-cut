@@ -14,6 +14,13 @@ export interface WorkflowStepArgumentSchema {
 	enum?: Array<string | number | boolean>;
 }
 
+export interface WorkflowQualityConfig {
+	enabled?: boolean;
+	maxIterations?: number;
+	targetDurationSeconds?: number;
+	durationToleranceRatio?: number;
+}
+
 export interface WorkflowStep {
 	id: string;
 	toolName: string;
@@ -32,6 +39,7 @@ export interface Workflow {
 	scenario: WorkflowScenario;
 	templateDescription?: string;
 	tags?: string[];
+	quality?: WorkflowQualityConfig;
 	steps: WorkflowStep[];
 }
 

@@ -42,6 +42,11 @@ import {
 	deleteElementsFullyInRange,
 	rippleCompressTracks,
 } from "./timeline-edit-ops";
+import {
+	EXECUTION_CANCELLED_ERROR_CODE,
+	isCancellationError,
+	throwIfExecutionCancelled,
+} from "../utils/cancellation";
 
 /**
  * Timeline Editing Tools
@@ -52,7 +57,6 @@ const TEXT_ALIGN_VALUES = ["left", "center", "right"] as const;
 const TEXT_WEIGHT_VALUES = ["normal", "bold"] as const;
 const TEXT_STYLE_VALUES = ["normal", "italic"] as const;
 const TEXT_DECORATION_VALUES = ["none", "underline", "line-through"] as const;
-const EXECUTION_CANCELLED_ERROR_CODE = "EXECUTION_CANCELLED";
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -60,23 +64,6 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
-}
-
-function throwIfExecutionCancelled(signal?: AbortSignal): void {
-	if (!signal?.aborted) return;
-	throw new Error("Execution cancelled");
-}
-
-function isExecutionCancelledError(error: unknown): boolean {
-	if (!(error instanceof Error)) {
-		return false;
-	}
-	const lower = error.message.toLowerCase();
-	return (
-		error.name === "AbortError" ||
-		lower.includes("cancelled") ||
-		lower.includes("canceled")
-	);
 }
 
 function resolveElementById({
@@ -2516,7 +2503,7 @@ export const removeSilenceTool: AgentTool = {
 				},
 			};
 		} catch (error) {
-			if (isExecutionCancelledError(error)) {
+			if (isCancellationError(error)) {
 				return {
 					success: false,
 					message: "移除静音已取消 (Remove silence cancelled)",

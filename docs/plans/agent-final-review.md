@@ -39,6 +39,14 @@
   - recovery policy
   - upstream guard + compatibility smoke
 
+## 审查后收口（2026-02-09）
+
+- 已补齐 CI 全量回归门禁（smoke + full test）
+- 已统一取消链路常量与错误判定，移除 tools 层重复定义
+- 已增强 DAG 调度器的 pause/cancel 并发中断与调度超时护栏
+- 已将 workflow 质量循环阈值迁移为 per-workflow 配置
+- 已完成 AgentChatbox 拆分，降低单文件复杂度
+
 ## 验证记录
 
 在 `apps/web` 执行并通过：

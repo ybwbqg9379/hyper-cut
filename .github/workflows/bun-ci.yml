@@ -58,3 +58,7 @@ jobs:
       - name: Run agent compatibility smoke tests
         working-directory: apps/web
         run: bun run test:agent-smoke
+
+      - name: Run full test suite
+        working-directory: apps/web
+        run: bun run test
