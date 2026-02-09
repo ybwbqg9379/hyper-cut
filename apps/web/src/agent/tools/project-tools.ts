@@ -167,7 +167,8 @@ export const exportVideoTool: AgentTool = {
 				const mimeType = getExportMimeType({ format });
 				const extension = getExportFileExtension({ format });
 				const customName =
-					typeof params.fileName === "string" && params.fileName.trim().length > 0
+					typeof params.fileName === "string" &&
+					params.fileName.trim().length > 0
 						? params.fileName.trim()
 						: activeProject.metadata.name;
 				fileName = `${customName}${extension}`;

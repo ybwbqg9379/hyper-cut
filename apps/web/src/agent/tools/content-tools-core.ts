@@ -1,7 +1,7 @@
 import { EditorCore } from "@/core";
 import { DEFAULT_CANVAS_PRESETS } from "@/constants/project-constants";
 import { isCaptionTextElement } from "@/lib/transcription/caption-metadata";
-import type { TimelineTrack, TextElement } from "@/types/timeline";
+import type { TextElement } from "@/types/timeline";
 import { createRoutedProvider } from "../providers";
 import { qualityEvaluatorService } from "../services/quality-evaluator";
 import type { AgentTool, ToolResult } from "../types";
@@ -421,8 +421,12 @@ function normalizeBriefFromJson({
 					return acc;
 				}
 				acc.push({
-					stepId: isNonEmptyString(item.stepId) ? item.stepId.trim() : undefined,
-					index: isFiniteNumber(item.index) ? Math.floor(item.index) : undefined,
+					stepId: isNonEmptyString(item.stepId)
+						? item.stepId.trim()
+						: undefined,
+					index: isFiniteNumber(item.index)
+						? Math.floor(item.index)
+						: undefined,
 					arguments: item.arguments,
 				});
 				return acc;
@@ -583,7 +587,14 @@ export const generateEditBriefTool: AgentTool = {
 			},
 			platform: {
 				type: "string",
-				enum: ["auto", "tiktok", "reels", "youtube-shorts", "youtube", "bilibili"],
+				enum: [
+					"auto",
+					"tiktok",
+					"reels",
+					"youtube-shorts",
+					"youtube",
+					"bilibili",
+				],
 				description: "目标平台",
 			},
 			targetDurationSeconds: {
@@ -699,7 +710,9 @@ export const generateHookVariantsTool: AgentTool = {
 			};
 		}
 
-		const scoreData = isObjectRecord(scoreResult.data) ? scoreResult.data : null;
+		const scoreData = isObjectRecord(scoreResult.data)
+			? scoreResult.data
+			: null;
 		const segments = Array.isArray(scoreData?.segments)
 			? (scoreData.segments as Array<Record<string, unknown>>)
 			: [];
@@ -714,7 +727,9 @@ export const generateHookVariantsTool: AgentTool = {
 		const ranked = segments
 			.map((segment) => {
 				const chunk = isObjectRecord(segment.chunk) ? segment.chunk : null;
-				const startTime = isFiniteNumber(chunk?.startTime) ? chunk.startTime : 0;
+				const startTime = isFiniteNumber(chunk?.startTime)
+					? chunk.startTime
+					: 0;
 				const endTime = isFiniteNumber(chunk?.endTime) ? chunk.endTime : 0;
 				const duration = Math.max(0, endTime - startTime);
 				if (duration <= 0) return null;
@@ -941,7 +956,7 @@ export const exportMultiRatioTool: AgentTool = {
 		properties: {
 			ratios: {
 				type: "array",
-				description: "导出比例数组，如 [\"9:16\",\"1:1\",\"16:9\"]",
+				description: '导出比例数组，如 ["9:16","1:1","16:9"]',
 			},
 			format: {
 				type: "string",
@@ -1126,7 +1141,14 @@ export const autoEditFromPromptTool: AgentTool = {
 			},
 			platform: {
 				type: "string",
-				enum: ["auto", "tiktok", "reels", "youtube-shorts", "youtube", "bilibili"],
+				enum: [
+					"auto",
+					"tiktok",
+					"reels",
+					"youtube-shorts",
+					"youtube",
+					"bilibili",
+				],
 				description: "目标平台",
 			},
 			targetDurationSeconds: {
@@ -1297,10 +1319,11 @@ export const autoEditFromPromptTool: AgentTool = {
 				};
 			}
 			const optionalFailures = [
-				(outputs.captionPreset as { success?: boolean } | undefined)?.success ===
-					false,
+				(outputs.captionPreset as { success?: boolean } | undefined)
+					?.success === false,
 				(outputs.hooks as { success?: boolean } | undefined)?.success === false,
-				(outputs.export as { success?: boolean } | undefined)?.success === false,
+				(outputs.export as { success?: boolean } | undefined)?.success ===
+					false,
 			].filter(Boolean).length;
 
 			return {

@@ -108,12 +108,23 @@ export function useAgent() {
 
 	// Process a user message
 	const sendMessage = useCallback(
-		async (message: string): Promise<AgentResponse> => {
+		async (
+			message: string,
+			options?: { preferredResponseLanguage?: "zh" | "en" },
+		): Promise<AgentResponse> => {
 			setIsProcessing(true);
 			setError(null);
 
 			try {
-				const response = await agent.process(message);
+				const languageInstruction =
+					options?.preferredResponseLanguage === "zh"
+						? "\n\n请始终使用简体中文回复。"
+						: options?.preferredResponseLanguage === "en"
+							? "\n\nPlease respond in English."
+							: "";
+				const response = await agent.process(
+					`${message}${languageInstruction}`,
+				);
 				setLastResponse(response);
 				return response;
 			} catch (err) {

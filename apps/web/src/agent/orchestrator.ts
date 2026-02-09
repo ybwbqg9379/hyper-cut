@@ -63,6 +63,11 @@ When the user asks you to do something:
 2. Call the appropriate tool(s) with correct parameters
 3. Confirm what you did in a concise response
 
+Caption language rule:
+- If user requests Chinese captions/subtitles, call generate_captions with language: "zh"
+- If user requests English captions/subtitles, call generate_captions with language: "en"
+- Only use language: "auto" when user did not specify subtitle language
+
 Always be helpful and explain what actions you're taking.`;
 
 const MAX_HISTORY_MESSAGES = 30;

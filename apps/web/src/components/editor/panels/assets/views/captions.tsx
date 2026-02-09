@@ -63,12 +63,25 @@ export function Captions() {
 			});
 
 			setProcessingStep("Generating captions...");
-			const captionChunks = buildCaptionChunks({ segments: result.segments });
+			const captionChunks = buildCaptionChunks({
+				segments: result.segments,
+				words: result.words,
+				language:
+					selectedLanguage === "auto" ? result.language : selectedLanguage,
+			});
 
 			const captionTrackId = editor.timeline.addTrack({
 				type: "text",
 				index: 0,
 			});
+
+			const canvasHeight =
+				editor.project.getActive()?.settings.canvasSize.height ?? 1080;
+			const captionYOffset = Math.round(canvasHeight * 0.4);
+			const captionFontSize = Math.max(
+				42,
+				Math.min(72, Math.round(canvasHeight * 0.052)),
+			);
 
 			for (let i = 0; i < captionChunks.length; i++) {
 				const caption = captionChunks[i];
@@ -80,8 +93,16 @@ export function Captions() {
 						content: caption.text,
 						duration: caption.duration,
 						startTime: caption.startTime,
-						fontSize: 65,
+						fontSize: captionFontSize,
 						fontWeight: "bold",
+						backgroundColor: "rgba(0, 0, 0, 0.45)",
+						transform: {
+							...DEFAULT_TEXT_ELEMENT.transform,
+							position: {
+								x: 0,
+								y: captionYOffset,
+							},
+						},
 						metadata: createCaptionMetadata({
 							origin: "assets-panel",
 							segmentIndex: i,

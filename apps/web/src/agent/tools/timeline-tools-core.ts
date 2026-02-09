@@ -66,6 +66,17 @@ function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
 }
 
+function inferAutoCaptionLanguage(): LanguageCode | undefined {
+	if (typeof navigator === "undefined") {
+		return undefined;
+	}
+	const locale = navigator.language?.toLowerCase() ?? "";
+	if (locale.startsWith("zh")) {
+		return "zh";
+	}
+	return undefined;
+}
+
 function resolveElementById({
 	tracks,
 	elementId,
@@ -832,7 +843,7 @@ export const toggleTrackVisibilityTool: AgentTool = {
 export const generateCaptionsTool: AgentTool = {
 	name: "generate_captions",
 	description:
-		"从选中片段或整条时间线生成字幕（Whisper）。默认使用选中片段音频，自动创建字幕轨道。Generate captions from selected clips or the full timeline.",
+		"从选中片段或整条时间线生成字幕（Whisper）。默认使用选中片段音频，自动创建字幕轨道。若用户指定中文字幕，请传 language=zh。Generate captions from selected clips or the full timeline.",
 	parameters: {
 		type: "object",
 		properties: {
@@ -844,7 +855,8 @@ export const generateCaptionsTool: AgentTool = {
 			},
 			language: {
 				type: "string",
-				description: "语言代码或 auto (Language code or auto)",
+				description:
+					"语言代码或 auto（如 zh/en）。用户要求中文时应传 zh (Language code or auto)",
 			},
 			modelId: {
 				type: "string",
@@ -899,6 +911,7 @@ export const generateCaptionsTool: AgentTool = {
 			const rawLanguage =
 				typeof params.language === "string" ? params.language.trim() : "";
 			const languageParam = rawLanguage || "auto";
+			const autoLanguage = inferAutoCaptionLanguage();
 			if (
 				languageParam !== "auto" &&
 				!TRANSCRIPTION_LANGUAGES.some((lang) => lang.code === languageParam)
@@ -1014,13 +1027,18 @@ export const generateCaptionsTool: AgentTool = {
 				sampleRate,
 				language:
 					languageParam === "auto"
-						? undefined
+						? autoLanguage
 						: (languageParam as LanguageCode),
 				modelId: modelId as TranscriptionModelId,
 			});
 
 			const captionChunks = buildCaptionChunks({
 				segments: transcription.segments,
+				words: transcription.words,
+				language:
+					languageParam === "auto"
+						? (autoLanguage ?? transcription.language)
+						: languageParam,
 				...(wordsPerChunk !== undefined ? { wordsPerChunk } : {}),
 				...(minDuration !== undefined ? { minDuration } : {}),
 			});
@@ -1072,10 +1090,26 @@ export const generateCaptionsTool: AgentTool = {
 				}
 			}
 
+			const canvasHeight =
+				editor.project.getActive()?.settings.canvasSize.height ?? 1080;
+			const captionYOffset = Math.round(canvasHeight * 0.4);
+			const captionFontSize = Math.max(
+				42,
+				Math.min(72, Math.round(canvasHeight * 0.052)),
+			);
+
 			const baseCaption: Omit<TextElement, "id"> = {
 				...DEFAULT_TEXT_ELEMENT,
-				fontSize: 65,
+				fontSize: captionFontSize,
 				fontWeight: "bold",
+				backgroundColor: "rgba(0, 0, 0, 0.45)",
+				transform: {
+					...DEFAULT_TEXT_ELEMENT.transform,
+					position: {
+						x: 0,
+						y: captionYOffset,
+					},
+				},
 			};
 
 			for (let i = 0; i < captionChunks.length; i++) {

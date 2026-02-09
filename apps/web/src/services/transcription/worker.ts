@@ -41,6 +41,9 @@ let cancelled = false;
 let lastReportedProgress = -1;
 const fileBytes = new Map<string, { loaded: number; total: number }>();
 const WHISPER_SAMPLE_RATE = 16_000;
+const CJK_CHAR_REGEX = /[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/;
+const PUNCTUATION_TOKEN_REGEX = /^[.,!?;:，。！？；：、…]+$/;
+const LATIN_WORD_REGEX = /^[a-z0-9]+(?:['’-][a-z0-9]+)*$/i;
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 	const message = event.data;
@@ -231,6 +234,7 @@ async function runTranscriptionWithTimestamps({
 		chunk_length_s: DEFAULT_CHUNK_LENGTH_SECONDS,
 		stride_length_s: DEFAULT_STRIDE_SECONDS,
 		language: language === "auto" ? undefined : language,
+		task: "transcribe",
 		return_timestamps: returnTimestamps,
 	});
 
@@ -280,7 +284,56 @@ function normalizeChunkText(text: string): string {
 function splitChunkToTokens(text: string): string[] {
 	const normalized = normalizeChunkText(text);
 	if (!normalized) return [];
-	return normalized.split(" ").filter(Boolean);
+
+	const whitespaceTokens = normalized.split(" ").filter(Boolean);
+	if (whitespaceTokens.length > 1) {
+		return whitespaceTokens;
+	}
+
+	if (CJK_CHAR_REGEX.test(normalized)) {
+		return Array.from(normalized).filter((token) => token.trim().length > 0);
+	}
+
+	return whitespaceTokens;
+}
+
+function isPunctuationToken(text: string): boolean {
+	return PUNCTUATION_TOKEN_REGEX.test(text.trim());
+}
+
+function shouldInsertSpaceBetween({
+	prev,
+	next,
+}: {
+	prev: string;
+	next: string;
+}): boolean {
+	const prevTrimmed = prev.trim();
+	const nextTrimmed = next.trim();
+	if (!prevTrimmed || !nextTrimmed) return false;
+	if (isPunctuationToken(prevTrimmed) || isPunctuationToken(nextTrimmed)) {
+		return false;
+	}
+
+	return (
+		LATIN_WORD_REGEX.test(prevTrimmed) && LATIN_WORD_REGEX.test(nextTrimmed)
+	);
+}
+
+function joinTokens(tokens: string[]): string {
+	let text = "";
+	for (const tokenValue of tokens) {
+		const token = tokenValue.trim();
+		if (!token) continue;
+		if (!text) {
+			text = token;
+			continue;
+		}
+		text += shouldInsertSpaceBetween({ prev: text, next: token })
+			? ` ${token}`
+			: token;
+	}
+	return text.trim();
 }
 
 function buildWordsFromChunks(
@@ -377,7 +430,7 @@ function buildSegmentsFromWords(
 			isPunctuationBreak
 		) {
 			segments.push({
-				text: currentWords.map((item) => item.text).join(" "),
+				text: joinTokens(currentWords.map((item) => item.text)),
 				start: currentWords[0].start,
 				end: currentWords[currentWords.length - 1].end,
 			});
@@ -390,7 +443,7 @@ function buildSegmentsFromWords(
 
 	if (currentWords.length > 0) {
 		segments.push({
-			text: currentWords.map((item) => item.text).join(" "),
+			text: joinTokens(currentWords.map((item) => item.text)),
 			start: currentWords[0].start,
 			end: currentWords[currentWords.length - 1].end,
 		});

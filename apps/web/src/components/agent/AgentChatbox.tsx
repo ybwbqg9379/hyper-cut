@@ -474,7 +474,9 @@ export function AgentChatbox() {
 		setMessages((prev) => [...prev, userMessage]);
 		setInput("");
 
-		const response = await sendMessage(userMessage.content);
+		const response = await sendMessage(userMessage.content, {
+			preferredResponseLanguage: locale,
+		});
 		appendAssistantResponse(response);
 	};
 
