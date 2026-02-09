@@ -11,6 +11,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/ui";
 import { Ban, Check, Pencil, Play, X } from "lucide-react";
+import type { AgentLocale } from "./agent-locale";
 import { ExecutionTimeline } from "./execution-timeline";
 
 interface OperationDiffPayload {
@@ -121,6 +122,7 @@ interface MessageBubbleProps {
 	onResumeWorkflow: (resumeHint: WorkflowResumeHint) => void;
 	controlsDisabled: boolean;
 	resumeDisabled: boolean;
+	locale: AgentLocale;
 }
 
 export function MessageBubble({
@@ -137,8 +139,10 @@ export function MessageBubble({
 	onResumeWorkflow,
 	controlsDisabled,
 	resumeDisabled,
+	locale,
 }: MessageBubbleProps) {
 	const isUser = message.role === "user";
+	const isZh = locale === "zh";
 
 	return (
 		<div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
@@ -155,7 +159,9 @@ export function MessageBubble({
 				{message.plan && (
 					<div className="mt-3 rounded-md border border-border/50 bg-background/60 p-2 space-y-3">
 						<div className="text-xs font-medium">
-							执行计划（{message.plan.steps.length} 步）
+							{isZh
+								? `执行计划（${message.plan.steps.length} 步）`
+								: `Execution Plan (${message.plan.steps.length} steps)`}
 						</div>
 
 						{message.plan.steps.map((step) => (
@@ -174,7 +180,7 @@ export function MessageBubble({
 											disabled={controlsDisabled}
 										>
 											<X className="size-3 mr-1" />
-											移除
+											{isZh ? "移除" : "Remove"}
 										</Button>
 									)}
 								</div>
@@ -212,7 +218,7 @@ export function MessageBubble({
 										disabled={controlsDisabled}
 									>
 										<Pencil className="size-3 mr-1" />
-										更新步骤参数
+										{isZh ? "更新步骤参数" : "Update Step Args"}
 									</Button>
 								)}
 							</div>
@@ -227,7 +233,7 @@ export function MessageBubble({
 									disabled={controlsDisabled}
 								>
 									<Play className="size-3 mr-1" />
-									确认执行
+									{isZh ? "确认执行" : "Run Plan"}
 								</Button>
 								<Button
 									variant="outline"
@@ -237,7 +243,7 @@ export function MessageBubble({
 									disabled={controlsDisabled}
 								>
 									<Ban className="size-3 mr-1" />
-									取消计划
+									{isZh ? "取消计划" : "Cancel Plan"}
 								</Button>
 							</div>
 						)}
@@ -246,19 +252,33 @@ export function MessageBubble({
 
 				{executionEvents && executionEvents.length > 0 ? (
 					<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2">
-						<div className="mb-1 text-xs font-medium">执行轨迹</div>
-						<ExecutionTimeline events={executionEvents} />
+						<div className="mb-1 text-xs font-medium">
+							{isZh ? "执行轨迹" : "Execution Timeline"}
+						</div>
+						<ExecutionTimeline events={executionEvents} locale={locale} />
 					</div>
 				) : null}
 
 				{message.resumeHint ? (
 					<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2 space-y-2">
 						<div className="text-xs text-muted-foreground">
-							当前流程在步骤{" "}
-							<span className="font-mono">
-								{message.resumeHint.startFromStepId}
-							</span>{" "}
-							等待确认。
+							{isZh ? (
+								<>
+									当前流程在步骤{" "}
+									<span className="font-mono">
+										{message.resumeHint.startFromStepId}
+									</span>{" "}
+									等待确认。
+								</>
+							) : (
+								<>
+									Workflow paused at{" "}
+									<span className="font-mono">
+										{message.resumeHint.startFromStepId}
+									</span>
+									. Confirmation required.
+								</>
+							)}
 						</div>
 						<Button
 							size="sm"
@@ -272,7 +292,7 @@ export function MessageBubble({
 							className="h-7 px-2 text-xs"
 						>
 							<Play className="size-3 mr-1" />
-							继续执行确认步骤
+							{isZh ? "继续执行确认步骤" : "Continue with Confirmation Step"}
 						</Button>
 					</div>
 				) : null}
@@ -301,9 +321,19 @@ export function MessageBubble({
 									if (!diff) return null;
 									return (
 										<span className="text-[10px] opacity-80">
-											Δ{diff.duration.deltaSeconds.toFixed(2)}s · 删除
-											{diff.affectedElements.removed.length} · 移动
-											{diff.affectedElements.moved.length}
+											{isZh ? (
+												<>
+													Δ{diff.duration.deltaSeconds.toFixed(2)}s · 删除
+													{diff.affectedElements.removed.length} · 移动
+													{diff.affectedElements.moved.length}
+												</>
+											) : (
+												<>
+													Δ{diff.duration.deltaSeconds.toFixed(2)}s · Removed{" "}
+													{diff.affectedElements.removed.length} · Moved{" "}
+													{diff.affectedElements.moved.length}
+												</>
+											)}
 										</span>
 									);
 								})()}

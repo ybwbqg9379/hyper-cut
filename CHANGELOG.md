@@ -6,6 +6,12 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **Agent UI i18n（中英文）**：Agent 聊天与转录相关面板补齐双语支持
+  - 新增 `agent-locale`：支持 `zh/en` 切换、基于 `navigator.language` 的默认语言识别与 `localStorage` 持久化
+  - `AgentChatbox` 新增语言切换入口（`中/EN`），并将聊天/工作流/执行进度文案切换为按 locale 渲染
+  - `TranscriptPanel` 与 `TranscriptEditView` 全量用户可见文案（按钮、提示、错误、toast、tooltip）完成中英文映射
+  - `execution-timeline`、`message-bubble`、`agent-chatbox-utils` 的状态/校验提示文案同步接入 locale
+  - 统一通过 Biome 格式化修复本轮改动中的缩进不一致问题
 - **Text-Based Editing（Phase 1-4）**：转录面板支持“编辑文字即编辑视频”
   - 新增 `transcript-document` 与 `transcript-edit-operations`：构建词级文档、词删除映射时间线 split/delete/ripple，并通过命令链路支持 undo/redo
   - 新增 `TranscriptEditView`、`use-transcript-document`、`use-transcript-word-selection`：支持词级选中删除、Shift 范围选择、Delete/Ctrl+A/Escape 快捷键、播放高亮同步

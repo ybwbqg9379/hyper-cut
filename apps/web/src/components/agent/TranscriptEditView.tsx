@@ -17,8 +17,60 @@ import { invokeAction } from "@/lib/actions";
 import { applyTranscriptWordDeletion } from "@/agent/services/transcript-edit-operations";
 import type { TranscriptCutSuggestion } from "@/stores/agent-ui-store";
 import { useAgentUiStore } from "@/stores/agent-ui-store";
+import type { AgentLocale } from "./agent-locale";
 import { useTranscriptDocument } from "./hooks/use-transcript-document";
 import { useTranscriptWordSelection } from "./hooks/use-transcript-word-selection";
+
+const TRANSCRIPT_EDIT_TEXT = {
+	zh: {
+		toastDeleteSelectionSuccess: "已根据选中文字裁剪时间线",
+		toastNoSuggestions: "没有可应用的建议",
+		toastApplySuggestionsFailed: "建议应用失败，请重试",
+		toastApplySuggestionsSuccess: (count: number) => `已应用 ${count} 条建议`,
+		noEditableTranscript: "暂无可编辑词级转录，请先生成字幕或转录。",
+		title: "文字即剪辑",
+		instructions:
+			"点击选词，Shift+点击范围，Delete 删除并自动 ripple；Ctrl+A 全选，Esc 清空",
+		clearSelection: "清空选择",
+		deleteSelection: (count: number) => `删除选中 (${count})`,
+		wordCountSource: (count: number, source: string) =>
+			`词数 ${count} · 来源 ${source}`,
+		captionEstimatedSource: "Caption 估算",
+		pendingSuggestions: (count: number) => `待审阅建议 ${count} 条`,
+		estimatedSavedSeconds: (seconds: string) => `预计节省 ${seconds}s`,
+		applyAccepted: "应用已接受",
+		clearSuggestions: "清空建议",
+		wordRange: (start: number, end: number) => `词区间 ${start}-${end}`,
+		accept: "接受",
+		ignore: "忽略",
+		noEditableWordsInSegment: "该字幕段暂无可编辑词项",
+	},
+	en: {
+		toastDeleteSelectionSuccess: "Timeline trimmed based on selected words",
+		toastNoSuggestions: "No suggestions to apply",
+		toastApplySuggestionsFailed: "Failed to apply suggestions, please retry",
+		toastApplySuggestionsSuccess: (count: number) =>
+			`${count} suggestions applied`,
+		noEditableTranscript:
+			"No editable word-level transcript yet. Generate captions or run transcription first.",
+		title: "Text-Based Editing",
+		instructions:
+			"Click words to select, Shift+Click for range, Delete to ripple-delete, Ctrl+A select all, Esc clear.",
+		clearSelection: "Clear Selection",
+		deleteSelection: (count: number) => `Delete Selected (${count})`,
+		wordCountSource: (count: number, source: string) =>
+			`Words ${count} · Source ${source}`,
+		captionEstimatedSource: "Caption Estimation",
+		pendingSuggestions: (count: number) => `${count} suggestions to review`,
+		estimatedSavedSeconds: (seconds: string) => `Estimated save ${seconds}s`,
+		applyAccepted: "Apply Accepted",
+		clearSuggestions: "Clear Suggestions",
+		wordRange: (start: number, end: number) => `Word Range ${start}-${end}`,
+		accept: "Accept",
+		ignore: "Ignore",
+		noEditableWordsInSegment: "No editable words in this caption segment",
+	},
+} as const;
 
 function formatTime(seconds: number): string {
 	const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
@@ -170,7 +222,12 @@ function findRowIndexByWordIndex(
 	return -1;
 }
 
-export function TranscriptEditView() {
+export function TranscriptEditView({
+	locale = "zh",
+}: {
+	locale?: AgentLocale;
+}) {
+	const text = TRANSCRIPT_EDIT_TEXT[locale];
 	const editor = useEditor();
 	const document = useTranscriptDocument();
 	const pendingSuggestions = useAgentUiStore(
@@ -463,7 +520,7 @@ export function TranscriptEditView() {
 	const handleDeleteSelection = () => {
 		const result = deleteSelection();
 		if (!result.success) return;
-		toast.success("已根据选中文字裁剪时间线");
+		toast.success(text.toastDeleteSelectionSuccess);
 	};
 
 	const applyAcceptedSuggestions = () => {
@@ -472,7 +529,7 @@ export function TranscriptEditView() {
 			(suggestion) => suggestion.accepted,
 		);
 		if (accepted.length === 0) {
-			toast.info("没有可应用的建议");
+			toast.info(text.toastNoSuggestions);
 			return;
 		}
 
@@ -495,13 +552,13 @@ export function TranscriptEditView() {
 			wordsToDelete: [...words.values()],
 		});
 		if (!result.success) {
-			toast.error("建议应用失败，请重试");
+			toast.error(text.toastApplySuggestionsFailed);
 			return;
 		}
 
 		clearSelection();
 		clearTranscriptSuggestions();
-		toast.success(`已应用 ${accepted.length} 条建议`);
+		toast.success(text.toastApplySuggestionsSuccess(accepted.length));
 	};
 
 	const handleKeyboard = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -534,7 +591,7 @@ export function TranscriptEditView() {
 	if (!document || document.words.length === 0) {
 		return (
 			<div className="p-3 text-xs text-muted-foreground">
-				暂无可编辑词级转录，请先生成字幕或转录。
+				{text.noEditableTranscript}
 			</div>
 		);
 	}
@@ -547,10 +604,9 @@ export function TranscriptEditView() {
 			<div className="border-b border-border px-3 py-2">
 				<div className="flex items-center justify-between gap-2">
 					<div>
-						<p className="text-xs font-medium">文字即剪辑</p>
+						<p className="text-xs font-medium">{text.title}</p>
 						<p className="text-[11px] text-muted-foreground">
-							点击选词，Shift+点击范围，Delete 删除并自动 ripple；Ctrl+A
-							全选，Esc 清空
+							{text.instructions}
 						</p>
 					</div>
 					<div className="flex shrink-0 items-center gap-1">
@@ -561,7 +617,7 @@ export function TranscriptEditView() {
 							onClick={clearSelection}
 							disabled={selectedCount === 0}
 						>
-							清空选择
+							{text.clearSelection}
 						</Button>
 						<Button
 							variant="destructive"
@@ -570,31 +626,35 @@ export function TranscriptEditView() {
 							onClick={handleDeleteSelection}
 							disabled={selectedCount === 0}
 						>
-							删除选中 ({selectedCount})
+							{text.deleteSelection(selectedCount)}
 						</Button>
 					</div>
 				</div>
 				<div className="mt-1 text-[11px] text-muted-foreground">
-					词数 {document.words.length} · 来源{" "}
-					{document.source === "whisper" ? "Whisper" : "Caption 估算"}
+					{text.wordCountSource(
+						document.words.length,
+						document.source === "whisper"
+							? "Whisper"
+							: text.captionEstimatedSource,
+					)}
 				</div>
 
 				{normalizedSuggestions.length > 0 ? (
 					<div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2">
 						<div className="mb-2 flex items-center justify-between gap-2">
 							<p className="text-[11px] font-medium text-destructive">
-								待审阅建议 {normalizedSuggestions.length} 条
+								{text.pendingSuggestions(normalizedSuggestions.length)}
 							</p>
 							<div className="flex items-center gap-1">
 								<span className="text-[11px] text-muted-foreground">
-									预计节省 {estimatedSavedSeconds.toFixed(1)}s
+									{text.estimatedSavedSeconds(estimatedSavedSeconds.toFixed(1))}
 								</span>
 								<Button
 									size="sm"
 									className="h-6 px-2 text-[11px]"
 									onClick={applyAcceptedSuggestions}
 								>
-									应用已接受
+									{text.applyAccepted}
 								</Button>
 								<Button
 									variant="outline"
@@ -602,7 +662,7 @@ export function TranscriptEditView() {
 									className="h-6 px-2 text-[11px]"
 									onClick={() => clearTranscriptSuggestions()}
 								>
-									清空建议
+									{text.clearSuggestions}
 								</Button>
 							</div>
 						</div>
@@ -632,8 +692,10 @@ export function TranscriptEditView() {
 											{index + 1}. {suggestion.reason}
 										</p>
 										<p className="text-[10px] text-muted-foreground">
-											词区间 {suggestion.startWordIndex}-
-											{suggestion.endWordIndex}
+											{text.wordRange(
+												suggestion.startWordIndex,
+												suggestion.endWordIndex,
+											)}
 										</p>
 									</button>
 									<div className="flex items-center gap-1">
@@ -648,7 +710,7 @@ export function TranscriptEditView() {
 												})
 											}
 										>
-											接受
+											{text.accept}
 										</Button>
 										<Button
 											variant={!suggestion.accepted ? "secondary" : "outline"}
@@ -661,7 +723,7 @@ export function TranscriptEditView() {
 												})
 											}
 										>
-											忽略
+											{text.ignore}
 										</Button>
 									</div>
 								</div>
@@ -764,7 +826,7 @@ export function TranscriptEditView() {
 									</div>
 								) : (
 									<div className="text-[11px] text-muted-foreground">
-										该字幕段暂无可编辑词项
+										{text.noEditableWordsInSegment}
 									</div>
 								)}
 							</div>

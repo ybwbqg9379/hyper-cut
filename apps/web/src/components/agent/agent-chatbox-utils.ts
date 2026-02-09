@@ -1,4 +1,5 @@
 import type { AgentResponse, WorkflowStep } from "@/agent";
+import type { AgentLocale } from "./agent-locale";
 
 export type WorkflowFieldKind = "string" | "number" | "boolean" | "json";
 export type WorkflowScenarioFilter =
@@ -159,25 +160,43 @@ export function buildWorkflowArgumentsDraft(
 
 export function parseWorkflowFieldValue(
 	draft: WorkflowFieldDraft,
+	options?: {
+		locale?: AgentLocale;
+	},
 ): { ok: true; value: unknown } | { ok: false; message: string } {
+	const locale = options?.locale ?? "zh";
+
 	if (draft.kind === "string") {
 		return { ok: true, value: draft.value };
 	}
 
 	if (draft.kind === "number") {
 		if (draft.value.trim().length === 0) {
-			return { ok: false, message: "数字不能为空" };
+			return {
+				ok: false,
+				message: locale === "zh" ? "数字不能为空" : "Number is required",
+			};
 		}
 		const parsed = Number(draft.value);
 		if (!Number.isFinite(parsed)) {
-			return { ok: false, message: "请输入有效数字" };
+			return {
+				ok: false,
+				message:
+					locale === "zh" ? "请输入有效数字" : "Please enter a valid number",
+			};
 		}
 		return { ok: true, value: parsed };
 	}
 
 	if (draft.kind === "boolean") {
 		if (draft.value !== "true" && draft.value !== "false") {
-			return { ok: false, message: "布尔值必须为 true 或 false" };
+			return {
+				ok: false,
+				message:
+					locale === "zh"
+						? "布尔值必须为 true 或 false"
+						: "Boolean must be true or false",
+			};
 		}
 		return { ok: true, value: draft.value === "true" };
 	}
@@ -187,7 +206,12 @@ export function parseWorkflowFieldValue(
 	} catch (error) {
 		return {
 			ok: false,
-			message: error instanceof Error ? error.message : "JSON 解析失败",
+			message:
+				error instanceof Error
+					? error.message
+					: locale === "zh"
+						? "JSON 解析失败"
+						: "Failed to parse JSON",
 		};
 	}
 }
@@ -214,12 +238,21 @@ export function formatWorkflowValueForHint(value: unknown): string {
 
 export function formatWorkflowScenarioLabel(
 	scenario: WorkflowScenarioFilter,
+	locale: AgentLocale = "zh",
 ): string {
-	if (scenario === "all") return "全部场景";
-	if (scenario === "podcast") return "播客";
-	if (scenario === "talking-head") return "口播人像";
-	if (scenario === "course") return "课程";
-	return "通用";
+	if (locale === "zh") {
+		if (scenario === "all") return "全部场景";
+		if (scenario === "podcast") return "播客";
+		if (scenario === "talking-head") return "口播人像";
+		if (scenario === "course") return "课程";
+		return "通用";
+	}
+
+	if (scenario === "all") return "All Scenarios";
+	if (scenario === "podcast") return "Podcast";
+	if (scenario === "talking-head") return "Talking Head";
+	if (scenario === "course") return "Course";
+	return "General";
 }
 
 export function buildWorkflowStepFieldConfigs(
@@ -258,9 +291,11 @@ export function buildWorkflowStepDefaultArguments(
 export function validateWorkflowFieldValue({
 	field,
 	value,
+	locale = "zh",
 }: {
 	field: WorkflowStepFieldConfig;
 	value: unknown;
+	locale?: AgentLocale;
 }): string | null {
 	if (
 		field.kind === "number" &&
@@ -268,10 +303,14 @@ export function validateWorkflowFieldValue({
 		Number.isFinite(value)
 	) {
 		if (field.min !== undefined && value < field.min) {
-			return `应不小于 ${field.min}`;
+			return locale === "zh"
+				? `应不小于 ${field.min}`
+				: `Must be greater than or equal to ${field.min}`;
 		}
 		if (field.max !== undefined && value > field.max) {
-			return `应不大于 ${field.max}`;
+			return locale === "zh"
+				? `应不大于 ${field.max}`
+				: `Must be less than or equal to ${field.max}`;
 		}
 	}
 	if (
@@ -279,7 +318,9 @@ export function validateWorkflowFieldValue({
 		field.enum.length > 0 &&
 		!field.enum.some((candidate) => candidate === value)
 	) {
-		return `应为 ${field.enum.join(", ")} 之一`;
+		return locale === "zh"
+			? `应为 ${field.enum.join(", ")} 之一`
+			: `Must be one of ${field.enum.join(", ")}`;
 	}
 	return null;
 }
