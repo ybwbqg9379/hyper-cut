@@ -63,6 +63,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - 新增 baseline：`src/agent/compat/upstream-baseline.json`
   - 新增测试：`upstream-guard.test.ts`（护栏单测）与 `compat-smoke.test.ts`（工具/工作流/恢复链路 smoke）
   - CI `bun-ci.yml` 新增 `agent:upstream-guard:ci` 与 `test:agent-smoke`，替换原测试占位步骤
+- **Agent Final Hardening（Phase 10）**：全链路审查与发布前硬化收尾
+  - 完成 orchestrator/tools/workflows/providers/UI state 全链路代码审查并输出风险分级报告
+  - 修复 P1：provider 路由在请求取消时不再继续 fallback，避免取消请求触发额外模型调用
+  - 新增回归测试：`providers/__tests__/routed-provider.test.ts`（cancelled request no-fallback）
+  - 新增文档：`docs/plans/agent-final-review.md`
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

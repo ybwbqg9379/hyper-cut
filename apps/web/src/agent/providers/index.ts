@@ -9,6 +9,7 @@ import type {
 import { LMStudioProvider } from "./lm-studio-provider";
 import { GeminiProvider } from "./gemini-provider";
 import { parseEnvNumber } from "../utils/values";
+import { isCancellationError } from "../utils/cancellation";
 import { resolveProviderRoute, type ProviderTaskType } from "./router";
 
 /**
@@ -105,10 +106,16 @@ class RoutedProvider implements LLMProvider {
 		params: ChatParams,
 		options?: ProviderChatOptions,
 	): Promise<ChatResponse> {
+		if (options?.signal?.aborted) {
+			throw new Error("Provider request cancelled");
+		}
 		const routeProviders = this.getRouteProviders();
 		const errors: string[] = [];
 
 		for (const { type, provider } of routeProviders) {
+			if (options?.signal?.aborted) {
+				throw new Error("Provider request cancelled");
+			}
 			const available = await provider.isAvailable();
 			if (!available) {
 				errors.push(`${type}: unavailable`);
@@ -117,6 +124,9 @@ class RoutedProvider implements LLMProvider {
 			try {
 				return await provider.chat(params, options);
 			} catch (error) {
+				if (isCancellationError(error)) {
+					throw error;
+				}
 				errors.push(
 					`${type}: ${error instanceof Error ? error.message : "unknown error"}`,
 				);

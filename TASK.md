@@ -237,7 +237,7 @@ Commit message 约定：
 
 ### Phase 10: 全链路代码审查与硬化收尾
 
-- **Status**: ⏳ Pending
+- **Status**: ✅ Completed
 - **Description**: 全量复盘、风险清理、发布前稳定性收口。
 - **Implementation Scope**:
   - 对 Agent 核心链路做系统审查：
@@ -249,15 +249,15 @@ Commit message 约定：
   - 清理 tech debt、重复逻辑、无效路径
   - 补齐遗漏测试与文档
 - **Acceptance Criteria**:
-  - [ ] 全链路审查报告完成（含风险分级）
-  - [ ] P0/P1 问题全部修复
-  - [ ] 发布门禁全绿
+  - [x] 全链路审查报告完成（含风险分级）
+  - [x] P0/P1 问题全部修复
+  - [x] 发布门禁全绿
 - **Tests**:
-  - [ ] 全量测试通过
-  - [ ] 关键路径手工验收清单通过
+  - [x] 全量测试通过
+  - [x] 关键路径手工验收清单通过
 - **Docs**:
-  - [ ] `CHANGELOG.md` 最终汇总
-  - [ ] 新增 `docs/plans/agent-final-review.md`
+  - [x] `CHANGELOG.md` 最终汇总
+  - [x] 新增 `docs/plans/agent-final-review.md`
 
 ---
 
@@ -279,7 +279,7 @@ Commit message 约定：
 
 整体任务完成条件：
 
-- [ ] Phase 1-10 全部完成
-- [ ] 每个 Phase 均有独立 commit
-- [ ] 质量门禁在最终分支再次全绿
-- [ ] 完成最终全链路代码审查并输出结论
+- [x] Phase 1-10 全部完成
+- [x] 每个 Phase 均有独立 commit
+- [x] 质量门禁在最终分支再次全绿
+- [x] 完成最终全链路代码审查并输出结论

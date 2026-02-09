@@ -79,4 +79,55 @@ describe("routed provider", () => {
 			}),
 		).rejects.toThrow("No provider route available");
 	});
+
+	it("should not fallback when request is cancelled", async () => {
+		process.env.NEXT_PUBLIC_AGENT_PROVIDER_PRIVACY_MODE = "cloud-preferred";
+		process.env.NEXT_PUBLIC_LLM_PROVIDER = "gemini";
+		process.env.GEMINI_API_KEY = "test-key";
+		process.env.NEXT_PUBLIC_LM_STUDIO_URL = "http://localhost:1234/v1";
+
+		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (
+				url.includes("generativelanguage.googleapis.com") &&
+				url.includes("/models?")
+			) {
+				return new Response("{}", { status: 200 });
+			}
+			if (url.includes(":generateContent?key=")) {
+				throw new Error("Gemini request cancelled");
+			}
+			if (url.endsWith("/models")) {
+				return new Response(JSON.stringify({ data: [] }), { status: 200 });
+			}
+			if (url.endsWith("/chat/completions")) {
+				return new Response(
+					JSON.stringify({
+						choices: [
+							{
+								message: { content: "should-not-fallback" },
+								finish_reason: "stop",
+							},
+						],
+					}),
+					{ status: 200 },
+				);
+			}
+			return new Response("{}", { status: 404 });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const provider = createRoutedProvider({ taskType: "planning" });
+		await expect(
+			provider.chat({
+				messages: [{ role: "user", content: "hello" }],
+				tools: [],
+			}),
+		).rejects.toThrow("Gemini request cancelled");
+
+		const lmCalls = fetchMock.mock.calls.filter(([input]) =>
+			String(input).endsWith("/chat/completions"),
+		);
+		expect(lmCalls.length).toBe(0);
+	});
 });
