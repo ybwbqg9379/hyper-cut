@@ -134,6 +134,10 @@ describe("workflow productization", () => {
 		);
 		expect(applyCaptionLayout?.toolName).toBe("apply_layout_suggestion");
 		expect(applyCaptionLayout?.requiresConfirmation).toBe(true);
+		expect(applyCaptionLayout?.arguments).toMatchObject({
+			minConfidence: 0.7,
+			dryRun: false,
+		});
 		const addSfx = oneClick?.steps.find((step) => step.id === "add-sfx");
 		expect(addSfx?.optional).toBe(true);
 	});
@@ -154,5 +158,9 @@ describe("workflow productization", () => {
 		expect(analyzeFrames?.optional).toBe(true);
 		expect(applyCaptionLayout?.toolName).toBe("apply_layout_suggestion");
 		expect(applyCaptionLayout?.requiresConfirmation).toBe(true);
+		expect(applyCaptionLayout?.arguments).toMatchObject({
+			minConfidence: 0.7,
+			dryRun: false,
+		});
 	});
 });

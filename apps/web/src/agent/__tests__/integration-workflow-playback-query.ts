@@ -160,6 +160,8 @@ export function registerWorkflowPlaybackQueryTests() {
 						stepId: "apply-caption-layout",
 						arguments: {
 							target: "caption",
+							elementId: "el1",
+							trackId: "track1",
 							suggestion: {
 								target: "caption",
 								anchor: "bottom-center",

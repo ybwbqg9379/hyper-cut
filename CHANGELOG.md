@@ -10,6 +10,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `analyze_frames` 新增 `layoutSuggestions` 输出，包含 `target/anchor/margin/confidence/reason/positionElementArgs`
   - 新增 `apply_layout_suggestion` 工具：支持读取 `analyze_frames` 缓存建议，或直接传入 suggestion 对象后一键调用 `position_element`
   - `apply_layout_suggestion` 新增按 `target` 自动匹配元素能力（caption/logo/sticker），未传 `elementId` 也可落位
+  - `apply_layout_suggestion` 新增 `minConfidence`、`confirmLowConfidence` 与 `dryRun`，低置信度先返回预览并要求确认
+  - 自动匹配失败时返回结构化候选元素列表（Top 3），便于二次选择并重试
+  - 低置信度预览返回新增语义状态字段：`stateCode=REQUIRES_CONFIRMATION`、`confirmationReason=LOW_CONFIDENCE`
+  - `suggestion.confidence` 明确按安全范围归一化：输入会 clamp 到 `[0.55, 0.95]`
+  - `candidateElements` 新增 `rank` 字段（1 开始），便于前端与 Agent 稳定选择候选目标
   - `one-click-masterpiece` 与 `talking-head-polish` 工作流接入 `apply-caption-layout` 步骤，默认 `requiresConfirmation`
   - `src/agent/utils/spatial.ts` 新增视觉观察到布局建议的推荐逻辑（caption/logo/sticker 多目标）
   - 新增 capability 定义与绑定：`tool.vision.apply_layout_suggestion`

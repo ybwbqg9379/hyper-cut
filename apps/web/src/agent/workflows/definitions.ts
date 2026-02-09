@@ -796,6 +796,8 @@ export const WORKFLOWS: Workflow[] = [
 				toolName: "apply_layout_suggestion",
 				arguments: {
 					target: "caption",
+					minConfidence: 0.7,
+					dryRun: false,
 				},
 				argumentSchema: [
 					{
@@ -804,6 +806,20 @@ export const WORKFLOWS: Workflow[] = [
 						description: "布局建议目标类型",
 						defaultValue: "caption",
 						enum: ["caption", "logo", "sticker"],
+					},
+					{
+						key: "minConfidence",
+						type: "number",
+						description: "自动应用最低置信度阈值",
+						defaultValue: 0.7,
+						min: 0,
+						max: 1,
+					},
+					{
+						key: "dryRun",
+						type: "boolean",
+						description: "仅预览布局，不落库",
+						defaultValue: false,
 					},
 				],
 				summary: "基于视觉建议自动调整字幕位置",
@@ -1229,6 +1245,8 @@ export const WORKFLOWS: Workflow[] = [
 				toolName: "apply_layout_suggestion",
 				arguments: {
 					target: "caption",
+					minConfidence: 0.7,
+					dryRun: false,
 				},
 				argumentSchema: [
 					{
@@ -1237,6 +1255,20 @@ export const WORKFLOWS: Workflow[] = [
 						description: "布局建议目标类型",
 						defaultValue: "caption",
 						enum: ["caption", "logo", "sticker"],
+					},
+					{
+						key: "minConfidence",
+						type: "number",
+						description: "自动应用最低置信度阈值",
+						defaultValue: 0.7,
+						min: 0,
+						max: 1,
+					},
+					{
+						key: "dryRun",
+						type: "boolean",
+						description: "仅预览布局，不落库",
+						defaultValue: false,
 					},
 				],
 				summary: "根据视觉分析建议调整字幕位置",

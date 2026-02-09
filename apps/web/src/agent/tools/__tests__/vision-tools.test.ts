@@ -148,6 +148,59 @@ function createEditorMock() {
 	};
 }
 
+function createEditorMockWithoutCaption() {
+	const tracks = [
+		{
+			id: "video-track-1",
+			type: "video",
+			isMain: true,
+			elements: [
+				{
+					id: "video-clip-1",
+					type: "video",
+					name: "Main clip",
+					startTime: 0,
+					duration: 12,
+					trimStart: 0,
+					trimEnd: 0,
+					mediaId: "video-asset-1",
+					transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+					opacity: 1,
+				},
+			],
+		},
+	];
+
+	return {
+		timeline: {
+			getTracks: vi.fn(() => tracks),
+			getTotalDuration: vi.fn(() => 12),
+			updateElements: vi.fn(),
+		},
+		selection: {
+			getSelectedElements: vi.fn(() => []),
+		},
+		media: {
+			getAssets: vi.fn(() => [
+				{
+					id: "video-asset-1",
+					name: "Demo video",
+					type: "video",
+					duration: 12,
+					ephemeral: false,
+					file: new File([], "demo.mp4"),
+				},
+			]),
+		},
+		project: {
+			getActive: vi.fn(() => ({
+				metadata: { id: "project-1" },
+				settings: { canvasSize: { width: 1920, height: 1080 } },
+			})),
+		},
+	};
+}
+
 let editorMock: ReturnType<typeof createEditorMock>;
 
 function findTool(name: string) {
@@ -247,8 +300,115 @@ describe("vision tools", () => {
 					autoMatchedElement?: { matchReason?: string };
 				}
 			).autoMatchedElement,
-		).toMatchObject({
-			matchReason: "auto-caption-first",
+			).toMatchObject({
+				matchReason: "auto-caption-first",
+			});
+	});
+
+	it("apply_layout_suggestion should return preview when confidence is below threshold", async () => {
+		const result = await findTool("apply_layout_suggestion").execute({
+			elementId: "caption-1",
+			trackId: "text-track-1",
+			minConfidence: 0.8,
+			suggestion: {
+				target: "caption",
+				anchor: "bottom-center",
+				marginX: 0,
+				marginY: 0.08,
+				confidence: 0.5,
+			},
 		});
+
+		expect(result.success).toBe(true);
+		expect(
+			(
+				result.data as {
+					stateCode?: string;
+					confirmationReason?: string;
+					suggestion?: { confidence?: number };
+				}
+			).stateCode,
+		).toBe("REQUIRES_CONFIRMATION");
+		expect(
+			(
+				result.data as {
+					stateCode?: string;
+					confirmationReason?: string;
+					suggestion?: { confidence?: number };
+				}
+			).confirmationReason,
+		).toBe("LOW_CONFIDENCE");
+		expect(
+			(result.data as { errorCode?: string; applied?: boolean }).errorCode,
+		).toBe("LOW_CONFIDENCE_REQUIRES_CONFIRMATION");
+		expect(
+			(
+				result.data as {
+					stateCode?: string;
+					confirmationReason?: string;
+					suggestion?: { confidence?: number };
+				}
+			).suggestion?.confidence,
+		).toBe(0.55);
+		expect((result.data as { applied?: boolean }).applied).toBe(false);
+		expect(editorMock.timeline.updateElements).not.toHaveBeenCalled();
+	});
+
+	it("apply_layout_suggestion should support dryRun without timeline mutation", async () => {
+		const result = await findTool("apply_layout_suggestion").execute({
+			elementId: "caption-1",
+			trackId: "text-track-1",
+			dryRun: true,
+			suggestion: {
+				target: "caption",
+				anchor: "bottom-center",
+				marginX: 0,
+				marginY: 0.08,
+				confidence: 0.99,
+			},
+		});
+
+		expect(result.success).toBe(true);
+		expect((result.data as { dryRun?: boolean; applied?: boolean }).dryRun).toBe(
+			true,
+		);
+		expect(
+			(result.data as { suggestion?: { confidence?: number } }).suggestion
+				?.confidence,
+		).toBe(0.95);
+		expect((result.data as { applied?: boolean }).applied).toBe(false);
+		expect(editorMock.timeline.updateElements).not.toHaveBeenCalled();
+	});
+
+	it("apply_layout_suggestion should return fallback candidates when auto match fails", async () => {
+		editorMock = createEditorMockWithoutCaption();
+		mockGetInstance.mockReturnValue(editorMock);
+
+		const result = await findTool("apply_layout_suggestion").execute({
+			target: "caption",
+			suggestion: {
+				target: "caption",
+				anchor: "bottom-center",
+				marginX: 0,
+				marginY: 0.08,
+				confidence: 0.9,
+			},
+		});
+
+		expect(result.success).toBe(false);
+		expect(
+			(result.data as { errorCode?: string }).errorCode,
+		).toBe("AUTO_TARGET_NOT_FOUND");
+		expect(
+			(result.data as { candidateElements?: Array<unknown> }).candidateElements
+				?.length ?? 0,
+		).toBeGreaterThan(0);
+		expect(
+			(
+				result.data as {
+					candidateElements?: Array<{ rank?: number }>;
+				}
+			).candidateElements?.[0]?.rank,
+		).toBe(1);
 	});
 });

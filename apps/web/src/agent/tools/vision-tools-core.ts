@@ -231,6 +231,96 @@ function resolveTargetElementForLayout({
 	return null;
 }
 
+interface LayoutTargetCandidate {
+	trackId: string;
+	elementId: string;
+	elementType: TimelineElement["type"];
+	elementName: string;
+	startTime: number;
+	matchReason: string;
+	rank: number;
+}
+
+function scoreCandidateForTarget({
+	target,
+	element,
+}: {
+	target: SpatialLayoutTarget;
+	element: Exclude<TimelineElement, { type: "audio" }>;
+}): { score: number; reason: string } {
+	const base = 10;
+	if (target === "caption") {
+		if (element.type === "text" && isCaptionTextElement(element)) {
+			return { score: 100, reason: "caption-metadata" };
+		}
+		if (element.type === "text") {
+			return { score: 75, reason: "text-fallback" };
+		}
+		if (element.type === "sticker") {
+			return { score: 35, reason: "sticker-fallback" };
+		}
+		return { score: base, reason: "generic-fallback" };
+	}
+
+	if (target === "sticker") {
+		if (element.type === "sticker") {
+			return { score: 100, reason: "sticker-first" };
+		}
+		if (element.type === "image") {
+			return { score: 60, reason: "image-fallback" };
+		}
+		if (element.type === "text") {
+			return { score: 40, reason: "text-fallback" };
+		}
+		return { score: base, reason: "generic-fallback" };
+	}
+
+	const logoKeywordMatched = containsLogoKeyword(element.name);
+	if (logoKeywordMatched) {
+		return { score: 100, reason: "logo-keyword" };
+	}
+	if (element.type === "sticker") {
+		return { score: 85, reason: "logo-sticker-fallback" };
+	}
+	if (element.type === "image") {
+		return { score: 65, reason: "logo-image-fallback" };
+	}
+	if (element.type === "text") {
+		return { score: 45, reason: "logo-text-fallback" };
+	}
+	return { score: base, reason: "generic-fallback" };
+}
+
+function listLayoutTargetCandidates({
+	tracks,
+	target,
+	limit = 3,
+}: {
+	tracks: TimelineTrack[];
+	target: SpatialLayoutTarget;
+	limit?: number;
+}): LayoutTargetCandidate[] {
+	return collectPositionableElements({ tracks })
+		.map(({ track, element }) => {
+			const scored = scoreCandidateForTarget({ target, element });
+			return {
+				trackId: track.id,
+				elementId: element.id,
+				elementType: element.type,
+				elementName: element.name,
+				startTime: element.startTime,
+				matchReason: scored.reason,
+				score: scored.score,
+			};
+		})
+		.sort((a, b) => b.score - a.score || a.startTime - b.startTime)
+		.slice(0, Math.max(1, limit))
+		.map(({ score: _score, ...candidate }, index) => ({
+			...candidate,
+			rank: index + 1,
+		}));
+}
+
 function findVideoAssetIdFromSelection({
 	tracks,
 	selectedElements,
@@ -877,6 +967,9 @@ function toNumberInRange({
 	return Math.max(min, Math.min(max, raw));
 }
 
+const MANUAL_LAYOUT_CONFIDENCE_MIN = 0.55;
+const MANUAL_LAYOUT_CONFIDENCE_MAX = 0.95;
+
 function buildLayoutSuggestions({
 	analyses,
 }: {
@@ -918,8 +1011,8 @@ function toManualLayoutSuggestion(value: unknown): SpatialLayoutSuggestion | nul
 	});
 	const confidence = toNumberInRange({
 		value: record.confidence,
-		min: 0.55,
-		max: 0.95,
+		min: MANUAL_LAYOUT_CONFIDENCE_MIN,
+		max: MANUAL_LAYOUT_CONFIDENCE_MAX,
 		fallback: 0.75,
 	});
 	const reason = toStringOrDefault(record.reason, "手动指定布局建议");
@@ -1330,13 +1423,34 @@ export const applyLayoutSuggestionTool: AgentTool = {
 			suggestion: {
 				type: "object",
 				description:
-					"可直接传入建议对象（anchor/marginX/marginY），优先于缓存建议 (Inline suggestion object)",
+					`可直接传入建议对象（anchor/marginX/marginY/confidence），优先于缓存建议；confidence 会被限制在 ${MANUAL_LAYOUT_CONFIDENCE_MIN}-${MANUAL_LAYOUT_CONFIDENCE_MAX} (Inline suggestion object with clamped confidence)`,
+			},
+			minConfidence: {
+				type: "number",
+				description:
+					"自动应用最低置信度阈值（默认 0.7）(Minimum confidence threshold for auto apply)",
+			},
+			confirmLowConfidence: {
+				type: "boolean",
+				description:
+					"是否确认应用低置信度建议（默认 false）(Confirm applying low-confidence suggestion)",
+			},
+			dryRun: {
+				type: "boolean",
+				description:
+					"仅返回计划，不执行定位更新（默认 false）(Preview only without mutating timeline)",
 			},
 		},
 		required: [],
 	},
 	execute: async (params): Promise<ToolResult> => {
 		try {
+			const minConfidence = Math.max(
+				0,
+				Math.min(1, toNumberOrDefault(params.minConfidence, 0.7)),
+			);
+			const confirmLowConfidence = params.confirmLowConfidence === true;
+			const dryRun = params.dryRun === true;
 			const manualSuggestion = toManualLayoutSuggestion(params.suggestion);
 			let selectedSuggestion: SpatialLayoutSuggestion | null = manualSuggestion;
 			let selectedIndex = 0;
@@ -1441,6 +1555,81 @@ export const applyLayoutSuggestionTool: AgentTool = {
 					trackId = trackId ?? autoMatched.trackId;
 					autoMatchedElement = autoMatched;
 				}
+				if (!elementId) {
+					const candidateElements = listLayoutTargetCandidates({
+						tracks,
+						target: selectedSuggestion.target,
+						limit: 3,
+					});
+					return {
+						success: false,
+						message:
+							"自动匹配目标元素失败，请指定 elementId 或从候选列表选择",
+						data: {
+							errorCode: "AUTO_TARGET_NOT_FOUND",
+							target: selectedSuggestion.target,
+							suggestion: selectedSuggestion,
+							candidateElements,
+						},
+					};
+				}
+			}
+
+			if (
+				selectedSuggestion.confidence < minConfidence &&
+				!confirmLowConfidence
+			) {
+				return {
+					success: true,
+					message:
+						`布局建议置信度 ${selectedSuggestion.confidence.toFixed(2)} 低于阈值 ${minConfidence.toFixed(2)}，已返回预览待确认`,
+					data: {
+						errorCode: "LOW_CONFIDENCE_REQUIRES_CONFIRMATION",
+						stateCode: "REQUIRES_CONFIRMATION",
+						confirmationReason: "LOW_CONFIDENCE",
+						applied: false,
+						requiresConfirmation: true,
+						minConfidence,
+						suggestion: selectedSuggestion,
+						targetElement: {
+							elementId,
+							trackId,
+							autoMatchedElement: autoMatchedElement ?? undefined,
+						},
+						plannedPositionElementArgs: {
+							elementId,
+							trackId,
+							anchor: selectedSuggestion.anchor,
+							marginX: selectedSuggestion.marginX,
+							marginY: selectedSuggestion.marginY,
+						},
+					},
+				};
+			}
+
+			if (dryRun) {
+				return {
+					success: true,
+					message: "布局建议预览完成，未执行定位更新 (Dry-run only)",
+					data: {
+						applied: false,
+						dryRun: true,
+						minConfidence,
+						suggestion: selectedSuggestion,
+						targetElement: {
+							elementId,
+							trackId,
+							autoMatchedElement: autoMatchedElement ?? undefined,
+						},
+						plannedPositionElementArgs: {
+							elementId,
+							trackId,
+							anchor: selectedSuggestion.anchor,
+							marginX: selectedSuggestion.marginX,
+							marginY: selectedSuggestion.marginY,
+						},
+					},
+				};
 			}
 
 			const positionResult = await positionElementTool.execute({
@@ -1468,6 +1657,9 @@ export const applyLayoutSuggestionTool: AgentTool = {
 				data: {
 					videoAssetId: sourceVideoAssetId || undefined,
 					suggestionIndex: selectedIndex,
+					applied: true,
+					dryRun: false,
+					minConfidence,
 					suggestion: selectedSuggestion,
 					autoMatchedElement: autoMatchedElement ?? undefined,
 					positionResult: positionResult.data,
