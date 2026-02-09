@@ -129,5 +129,7 @@ describe("workflow productization", () => {
 		expect(applyCut?.arguments).toMatchObject({
 			dryRun: true,
 		});
+		const addSfx = oneClick?.steps.find((step) => step.id === "add-sfx");
+		expect(addSfx?.optional).toBe(true);
 	});
 });

@@ -73,6 +73,21 @@ interface ParsedStepOverride {
 
 const ONE_CLICK_WORKFLOW_NAME = "one-click-masterpiece";
 
+function extractWorkflowOptionalFailureCount(
+	toolCalls: AgentResponse["toolCalls"] | undefined,
+): number {
+	if (!Array.isArray(toolCalls)) return 0;
+	const workflowResult = toolCalls.find((call) => call.name === "run_workflow");
+	if (!workflowResult?.result?.data) return 0;
+	const data = workflowResult.result.data;
+	if (!data || typeof data !== "object" || Array.isArray(data)) {
+		return 0;
+	}
+	const optionalFailures = (data as { optionalFailures?: unknown })
+		.optionalFailures;
+	return Array.isArray(optionalFailures) ? optionalFailures.length : 0;
+}
+
 const AGENT_CHATBOX_TEXT = {
 	zh: {
 		tabChat: "聊天",
@@ -116,6 +131,7 @@ const AGENT_CHATBOX_TEXT = {
 		oneClickButton: "立即一键成片",
 		oneClickWorkflowError: "一键成片失败：当前时间线时长无效",
 		oneClickMessagePrefix: "一键成片",
+		oneClickSummaryTitle: "一键成片执行完成",
 		workflowRequiredError: "请先选择一个工作流",
 		workflowNotFoundError: "未找到所选工作流，请重新选择",
 		stepFieldInvalid: "步骤 {step} 的参数 {field} 无效：{reason}",
@@ -178,6 +194,7 @@ const AGENT_CHATBOX_TEXT = {
 		oneClickWorkflowError:
 			"One-click pipeline failed: invalid timeline duration",
 		oneClickMessagePrefix: "One-click pipeline",
+		oneClickSummaryTitle: "One-click pipeline completed",
 		workflowRequiredError: "Please select a workflow first",
 		workflowNotFoundError: "Selected workflow not found, please reselect",
 		stepFieldInvalid: "Invalid argument {field} for step {step}: {reason}",
@@ -675,11 +692,35 @@ export function AgentChatbox() {
 			workflowName: ONE_CLICK_WORKFLOW_NAME,
 			stepOverrides,
 			confirmRequiredSteps: true,
+			enableQualityLoop: true,
+			qualityMaxIterations: 2,
+			qualityTargetDuration: targetDurationSeconds,
+			qualityDurationTolerance: 0.18,
 		});
 		appendAssistantResponse(response);
+		let terminalResponse = response;
 		if (response.requiresConfirmation && response.status === "planned") {
 			const confirmed = await confirmPlan();
 			appendAssistantResponse(confirmed);
+			terminalResponse = confirmed;
+		}
+		if (terminalResponse.success && terminalResponse.status === "completed") {
+			const finalDurationSeconds = editor.timeline.getTotalDuration();
+			const optionalFailureCount = extractWorkflowOptionalFailureCount(
+				terminalResponse.toolCalls,
+			);
+			const optionalFailureHint =
+				optionalFailureCount > 0
+					? locale === "zh"
+						? `，可选增强步骤跳过 ${optionalFailureCount} 个`
+						: `, skipped ${optionalFailureCount} optional enhancement step(s)`
+					: "";
+			toast.success(text.oneClickSummaryTitle, {
+				description:
+					locale === "zh"
+						? `时长 ${currentDurationSeconds.toFixed(2)}s -> ${finalDurationSeconds.toFixed(2)}s（目标 ${targetDurationSeconds.toFixed(2)}s）${optionalFailureHint}`
+						: `Duration ${currentDurationSeconds.toFixed(2)}s -> ${finalDurationSeconds.toFixed(2)}s (target ${targetDurationSeconds.toFixed(2)}s)${optionalFailureHint}`,
+			});
 		}
 	};
 

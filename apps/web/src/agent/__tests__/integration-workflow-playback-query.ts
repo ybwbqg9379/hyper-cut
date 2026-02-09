@@ -112,6 +112,35 @@ export function registerWorkflowPlaybackQueryTests() {
 			expect(result.success).toBe(true);
 			expect(result.message).toContain("执行完成");
 		});
+
+		it("run_workflow should continue when optional step fails", async () => {
+			const tool = getToolByName("run_workflow");
+			const result = await tool.execute({
+				workflowName: "one-click-masterpiece",
+				startFromStepId: "add-sfx",
+				stepOverrides: [
+					{
+						stepId: "add-sfx",
+						arguments: {
+							resultIndex: -1,
+						},
+					},
+				],
+				confirmRequiredSteps: true,
+			});
+
+			expect(result.success).toBe(true);
+			expect(result.message).toContain("可选步骤失败");
+			const optionalFailures = (
+				result.data as
+					| { optionalFailures?: Array<{ stepId?: string }> }
+					| undefined
+			)?.optionalFailures;
+			expect(Array.isArray(optionalFailures)).toBe(true);
+			expect(
+				optionalFailures?.some((failure) => failure.stepId === "add-sfx"),
+			).toBe(true);
+		});
 	});
 
 	describe("Playback Tools", () => {

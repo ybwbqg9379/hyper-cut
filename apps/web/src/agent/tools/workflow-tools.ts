@@ -15,6 +15,14 @@ import { listWorkflows, resolveWorkflowFromParams } from "../workflows";
 import { toBooleanOrDefault, toNonEmptyString } from "../utils/values";
 import { EXECUTION_CANCELLED_ERROR_CODE } from "../utils/cancellation";
 
+function readErrorCode(data: unknown): string | undefined {
+	if (!data || typeof data !== "object" || Array.isArray(data)) {
+		return undefined;
+	}
+	const value = (data as Record<string, unknown>).errorCode;
+	return typeof value === "string" ? value : undefined;
+}
+
 function buildExecutableToolMap(): Map<string, AgentTool> {
 	const toolMap = new Map<string, AgentTool>();
 	const tools = [
@@ -82,6 +90,7 @@ export const listWorkflowsTool: AgentTool = {
 						arguments: step.arguments,
 						argumentSchema: step.argumentSchema,
 						requiresConfirmation: step.requiresConfirmation === true,
+						optional: step.optional === true,
 					})),
 				})),
 			},
@@ -170,7 +179,14 @@ export const runWorkflowTool: AgentTool = {
 		const stepResults: Array<{
 			stepId: string;
 			toolName: string;
+			optional?: boolean;
 			result: Pick<ToolResult, "success" | "message">;
+		}> = [];
+		const optionalFailures: Array<{
+			stepId: string;
+			toolName: string;
+			message: string;
+			errorCode?: string;
 		}> = [];
 		const executableSteps = steps.slice(startIndex);
 
@@ -245,6 +261,37 @@ export const runWorkflowTool: AgentTool = {
 
 			const targetTool = executableTools.get(step.toolName);
 			if (!targetTool) {
+				if (step.optional) {
+					const skippedMessage = `可选步骤 ${step.id} (${step.toolName}) 工具不存在，已跳过`;
+					optionalFailures.push({
+						stepId: step.id,
+						toolName: step.toolName,
+						message: skippedMessage,
+						errorCode: "WORKFLOW_TOOL_NOT_FOUND",
+					});
+					stepResults.push({
+						stepId: step.id,
+						toolName: step.toolName,
+						optional: true,
+						result: {
+							success: false,
+							message: skippedMessage,
+						},
+					});
+					context?.reportProgress?.({
+						message: `步骤 ${index + 1}/${executableSteps.length} 已跳过(可选): ${step.toolName}`,
+						data: {
+							stepId: step.id,
+							toolName: step.toolName,
+							stepIndex: index + 1,
+							totalSteps: executableSteps.length,
+							success: false,
+							optional: true,
+							resultMessage: skippedMessage,
+						},
+					});
+					continue;
+				}
 				return {
 					success: false,
 					message:
@@ -262,6 +309,7 @@ export const runWorkflowTool: AgentTool = {
 			stepResults.push({
 				stepId: step.id,
 				toolName: step.toolName,
+				...(step.optional ? { optional: true } : {}),
 				result: {
 					success: result.success,
 					message: result.message,
@@ -283,6 +331,27 @@ export const runWorkflowTool: AgentTool = {
 			});
 
 			if (!result.success) {
+				if (step.optional) {
+					optionalFailures.push({
+						stepId: step.id,
+						toolName: step.toolName,
+						message: result.message,
+						errorCode: readErrorCode(result.data),
+					});
+					context?.reportProgress?.({
+						message: `步骤 ${index + 1}/${executableSteps.length} 可选失败已跳过: ${step.toolName}`,
+						data: {
+							stepId: step.id,
+							toolName: step.toolName,
+							stepIndex: index + 1,
+							totalSteps: executableSteps.length,
+							success: false,
+							optional: true,
+							resultMessage: result.message,
+						},
+					});
+					continue;
+				}
 				return {
 					success: false,
 					message:
@@ -300,11 +369,13 @@ export const runWorkflowTool: AgentTool = {
 		return {
 			success: true,
 			message:
-				`工作流 ${resolved.resolved.workflow.name} 执行完成，` +
-				`共 ${stepResults.length} 步`,
+				optionalFailures.length > 0
+					? `工作流 ${resolved.resolved.workflow.name} 执行完成，共 ${stepResults.length} 步（可选步骤失败 ${optionalFailures.length} 个，已自动跳过）`
+					: `工作流 ${resolved.resolved.workflow.name} 执行完成，共 ${stepResults.length} 步`,
 			data: {
 				workflowName: resolved.resolved.workflow.name,
 				stepResults,
+				optionalFailures,
 			},
 		};
 	},

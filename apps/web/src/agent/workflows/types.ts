@@ -28,6 +28,7 @@ export interface WorkflowStep {
 	argumentSchema?: WorkflowStepArgumentSchema[];
 	summary?: string;
 	requiresConfirmation?: boolean;
+	optional?: boolean;
 	operation?: "read" | "write";
 	dependsOn?: string[];
 	resourceLocks?: string[];

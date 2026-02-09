@@ -663,6 +663,7 @@ export const WORKFLOWS: Workflow[] = [
 					prompt: "总结镜头构图、主体动作与可剪辑节点，输出简洁结论。",
 				},
 				summary: "执行关键帧视觉分析",
+				optional: true,
 				operation: "read",
 			},
 			{
@@ -672,6 +673,7 @@ export const WORKFLOWS: Workflow[] = [
 					strategy: "auto",
 				},
 				summary: "结合分镜与字幕给出剪辑建议",
+				optional: true,
 				operation: "read",
 			},
 			{
@@ -790,6 +792,52 @@ export const WORKFLOWS: Workflow[] = [
 				summary: "应用字幕风格模板",
 			},
 			{
+				id: "search-sfx",
+				toolName: "search_sound_effect",
+				arguments: {
+					query: "whoosh transition",
+					commercialOnly: true,
+					minRating: 3,
+				},
+				summary: "搜索可用转场音效",
+				optional: true,
+				operation: "read",
+			},
+			{
+				id: "add-sfx",
+				toolName: "add_sound_effect",
+				arguments: {
+					query: "whoosh transition",
+					resultIndex: 0,
+					startTime: 0.25,
+					commercialOnly: true,
+					minRating: 3,
+				},
+				summary: "添加转场音效增强节奏",
+				optional: true,
+			},
+			{
+				id: "search-sticker",
+				toolName: "search_sticker",
+				arguments: {
+					query: "sparkle",
+					limit: 5,
+				},
+				summary: "搜索装饰贴纸",
+				optional: true,
+				operation: "read",
+			},
+			{
+				id: "add-sticker",
+				toolName: "add_sticker",
+				arguments: {
+					query: "sparkle",
+					startTime: 0.6,
+				},
+				summary: "添加装饰贴纸",
+				optional: true,
+			},
+			{
 				id: "generate-hooks",
 				toolName: "generate_hook_variants",
 				arguments: {
@@ -800,6 +848,7 @@ export const WORKFLOWS: Workflow[] = [
 					useLLM: true,
 				},
 				summary: "生成 4 个 Hook 变体",
+				optional: true,
 			},
 			{
 				id: "quality-report",
