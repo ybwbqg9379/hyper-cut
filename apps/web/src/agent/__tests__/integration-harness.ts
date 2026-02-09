@@ -324,9 +324,11 @@ vi.mock("@/core", () => {
 			getCurrentTime: vi.fn(() => 5), // Returns seconds, not milliseconds
 			seek: vi.fn(),
 			setVolume: vi.fn(),
+			setScrubbing: vi.fn(),
 			toggleMute: vi.fn(),
 			getVolume: vi.fn(() => 0.8),
 			isMuted: vi.fn(() => false),
+			getIsScrubbing: vi.fn(() => false),
 		},
 		selection: {
 			getSelectedElements: vi.fn(() => [

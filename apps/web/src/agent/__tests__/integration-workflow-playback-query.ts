@@ -190,6 +190,21 @@ export function registerWorkflowPlaybackQueryTests() {
 			expect(result.success).toBe(false);
 		});
 
+		it("seek_to_time should fail when scrubbing is active", async () => {
+			const tool = getToolByName("seek_to_time");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				playback: { getIsScrubbing: ReturnType<typeof vi.fn> };
+			};
+
+			editor.playback.getIsScrubbing.mockReturnValueOnce(true);
+			const result = await tool.execute({ time: 10 });
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({
+				errorCode: "SCRUBBING_IN_PROGRESS",
+			});
+		});
+
 		it("set_volume should update playback volume", async () => {
 			const tool = getToolByName("set_volume");
 			const { EditorCore } = await import("@/core");

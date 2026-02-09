@@ -571,5 +571,20 @@ export function registerAssetProjectSplitTests() {
 				splitTime: 30,
 			});
 		});
+
+		it("split_at_time should fail when scrubbing is active", async () => {
+			const tool = getToolByName("split_at_time");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				playback: { getIsScrubbing: ReturnType<typeof vi.fn> };
+			};
+
+			editor.playback.getIsScrubbing.mockReturnValueOnce(true);
+			const result = await tool.execute({ time: 30 });
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({
+				errorCode: "SCRUBBING_IN_PROGRESS",
+			});
+		});
 	});
 }

@@ -6,6 +6,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **Agent 上游能力增强（P0-a / P0-b / P2-a）**：统一元素更新执行层，补齐 scrubbing 感知，并收紧字号参数约束
+  - `update_element_transform` 与 `update_sticker_color` 迁移到 `editor.timeline.updateElements()`，与 `update_text_style` 对齐同一更新通道
+  - `collect-from-managers` / `upstream-baseline` 新增 `manager.playback.getIsScrubbing` 与 `manager.playback.setScrubbing`
+  - `seek_to_time` 与 `split_at_time` 新增 scrubbing 前置检查，用户拖动 playhead 时返回 `SCRUBBING_IN_PROGRESS`
+  - `update_text_style` 与 `insert_text` 的 `fontSize` 增加 `MIN_FONT_SIZE ~ MAX_FONT_SIZE` 范围校验，避免 LLM 越界写入
+  - 更新 Agent 绑定与回归测试，覆盖 `updateElements` 路径、scrubbing 拦截与字号越界分支
+
 - **Agent 内容智能化（P0 + P1）**：新增内容策划、自动剪辑、多版本分发与质量评估工具链
   - 新增 `content-tools-core.ts` 与 `content-tools.ts`，提供内容导向工具集合
   - 新增 6 个工具：
@@ -231,6 +238,7 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Fixed
 
+- **Upstream guard blocking 清零**：`manager.playback.getIsScrubbing / setScrubbing` 已进入 capability 与 tool binding 映射，`agent:upstream-guard` 不再报 blocking
 - **填充词单次删除后时间戳失效**：`useTranscriptEditing` 删除一个 filler 后剩余高亮全部消失，因为 ripple 压缩后旧时间戳不再匹配。修复：删除后自动重新检测
 - **`EN_FILLER_WORDS` 重构丢失 "you"/"know" 独立词条**：拆分为 `EN_FILLER_WORDS`（单词级）和 `EN_FILLER_PHRASES`（短语级），恢复 `transcript-analyzer` 的 `computeContentDensity` 行为
 - **多词填充词检测死代码**：`isEnglishFiller` 的多词匹配循环无效。改为 bigram 双 pass 扫描（先检测相邻词短语，再检测单词）

@@ -19,7 +19,11 @@ import {
 	validateElementTrackCompatibility,
 	calculateTotalDuration,
 } from "@/lib/timeline";
-import { DEFAULT_TEXT_ELEMENT } from "@/constants/text-constants";
+import {
+	DEFAULT_TEXT_ELEMENT,
+	MIN_FONT_SIZE,
+	MAX_FONT_SIZE,
+} from "@/constants/text-constants";
 import {
 	TRANSCRIPTION_LANGUAGES,
 	TRANSCRIPTION_MODELS,
@@ -30,7 +34,6 @@ import { decodeAudioToFloat32 } from "@/lib/media/audio";
 import { buildCaptionChunks } from "@/lib/transcription/caption";
 import { createCaptionMetadata } from "@/lib/transcription/caption-metadata";
 import { transcriptionService } from "@/services/transcription/service";
-import { UpdateElementTransformCommand } from "@/lib/commands/timeline";
 import {
 	invokeActionWithCheck,
 	invokeDestructiveActionWithCheck,
@@ -1293,10 +1296,14 @@ export const updateTextStyleTool: AgentTool = {
 			}
 
 			if (params.fontSize !== undefined) {
-				if (!isFiniteNumber(params.fontSize) || params.fontSize <= 0) {
+				if (
+					!isFiniteNumber(params.fontSize) ||
+					params.fontSize < MIN_FONT_SIZE ||
+					params.fontSize > MAX_FONT_SIZE
+				) {
 					return {
 						success: false,
-						message: "fontSize 必须是正数 (fontSize must be > 0)",
+						message: `fontSize 必须在 ${MIN_FONT_SIZE}-${MAX_FONT_SIZE} 之间 (fontSize must be between ${MIN_FONT_SIZE}-${MAX_FONT_SIZE})`,
 						data: { errorCode: "INVALID_FONT_SIZE" },
 					};
 				}
@@ -2121,12 +2128,13 @@ export const updateElementTransformTool: AgentTool = {
 				};
 			}
 
-			const command = new UpdateElementTransformCommand(
-				resolved.track.id,
-				resolved.element.id,
-				updates,
-			);
-			editor.command.execute({ command });
+			editor.timeline.updateElements({
+				updates: [{
+					trackId: resolved.track.id,
+					elementId: resolved.element.id,
+					updates,
+				}],
+			});
 
 			return {
 				success: true,
@@ -2244,12 +2252,13 @@ export const updateStickerColorTool: AgentTool = {
 				};
 			}
 
-			const command = new UpdateElementTransformCommand(
-				resolved.track.id,
-				resolved.element.id,
-				{ color },
-			);
-			editor.command.execute({ command });
+			editor.timeline.updateElements({
+				updates: [{
+					trackId: resolved.track.id,
+					elementId: resolved.element.id,
+					updates: { color },
+				}],
+			});
 
 			return {
 				success: true,
@@ -2641,6 +2650,20 @@ export const insertTextTool: AgentTool = {
 				}
 			}
 
+			if (params.fontSize !== undefined) {
+				if (
+					!isFiniteNumber(params.fontSize) ||
+					params.fontSize < MIN_FONT_SIZE ||
+					params.fontSize > MAX_FONT_SIZE
+				) {
+					return {
+						success: false,
+						message: `fontSize 必须在 ${MIN_FONT_SIZE}-${MAX_FONT_SIZE} 之间 (fontSize must be between ${MIN_FONT_SIZE}-${MAX_FONT_SIZE})`,
+						data: { errorCode: "INVALID_FONT_SIZE" },
+					};
+				}
+			}
+
 			if (params.textAlign !== undefined) {
 				if (
 					!TEXT_ALIGN_VALUES.includes(
@@ -2871,6 +2894,14 @@ export const splitAtTimeTool: AgentTool = {
 				return {
 					success: false,
 					message: `时间 ${time}s 超出时间线总时长 ${duration.toFixed(2)}s (Time exceeds timeline duration)`,
+				};
+			}
+
+			if (editor.playback.getIsScrubbing()) {
+				return {
+					success: false,
+					message: "正在拖动进度条，请稍候 (Scrubbing in progress, try again later)",
+					data: { errorCode: "SCRUBBING_IN_PROGRESS" },
 				};
 			}
 

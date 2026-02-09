@@ -113,6 +113,18 @@ const MANAGER_METHODS: ManagerMethodDescriptor[] = [
 	},
 	{
 		manager: "playback",
+		method: "setScrubbing",
+		description: "Set playback scrubbing state",
+		sourceRef: "@/core/managers/playback-manager.ts",
+	},
+	{
+		manager: "playback",
+		method: "getIsScrubbing",
+		description: "Read playback scrubbing state",
+		sourceRef: "@/core/managers/playback-manager.ts",
+	},
+	{
+		manager: "playback",
 		method: "subscribe",
 		description: "Subscribe playback state changes",
 		sourceRef: "@/core/managers/playback-manager.ts",

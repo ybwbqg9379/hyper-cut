@@ -230,6 +230,18 @@ export function registerRegistryTimelineTests() {
 			expect(result.success).toBe(false);
 		});
 
+		it("update_text_style should fail on out-of-range fontSize", async () => {
+			const tool = getToolByName("update_text_style");
+
+			const result = await tool.execute({
+				elementId: "text1",
+				trackId: "track3",
+				fontSize: 1000,
+			});
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({ errorCode: "INVALID_FONT_SIZE" });
+		});
+
 		it("move_element should move selected element", async () => {
 			const tool = getToolByName("move_element");
 			const { EditorCore } = await import("@/core");
@@ -386,11 +398,11 @@ export function registerRegistryTimelineTests() {
 			expect(result.success).toBe(false);
 		});
 
-		it("update_element_transform should execute command for transform updates", async () => {
+		it("update_element_transform should call updateElements for transform updates", async () => {
 			const tool = getToolByName("update_element_transform");
 			const { EditorCore } = await import("@/core");
 			const editor = EditorCore.getInstance() as unknown as {
-				command: { execute: ReturnType<typeof vi.fn> };
+				timeline: { updateElements: ReturnType<typeof vi.fn> };
 			};
 
 			const result = await tool.execute({
@@ -399,7 +411,16 @@ export function registerRegistryTimelineTests() {
 				opacity: 0.8,
 			});
 			expect(result.success).toBe(true);
-			expect(editor.command.execute).toHaveBeenCalled();
+			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
+				updates: [{
+					trackId: "track1",
+					elementId: "el1",
+					updates: {
+						transform: { scale: 1.2, position: { x: 10, y: 20 }, rotate: 15 },
+						opacity: 0.8,
+					},
+				}],
+			});
 		});
 
 		it("update_element_transform should fail on unsupported element", async () => {
@@ -413,11 +434,11 @@ export function registerRegistryTimelineTests() {
 			expect(result.success).toBe(false);
 		});
 
-		it("update_sticker_color should execute command for sticker updates", async () => {
+		it("update_sticker_color should call updateElements for sticker updates", async () => {
 			const tool = getToolByName("update_sticker_color");
 			const { EditorCore } = await import("@/core");
 			const editor = EditorCore.getInstance() as unknown as {
-				command: { execute: ReturnType<typeof vi.fn> };
+				timeline: { updateElements: ReturnType<typeof vi.fn> };
 			};
 
 			const result = await tool.execute({
@@ -426,7 +447,13 @@ export function registerRegistryTimelineTests() {
 				color: "#ff5500",
 			});
 			expect(result.success).toBe(true);
-			expect(editor.command.execute).toHaveBeenCalled();
+			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
+				updates: [{
+					trackId: "track4",
+					elementId: "sticker1",
+					updates: { color: "#ff5500" },
+				}],
+			});
 		});
 
 		it("update_sticker_color should fail on non-sticker element", async () => {
@@ -456,6 +483,18 @@ export function registerRegistryTimelineTests() {
 
 			const result = await tool.execute({ content: "Hello", startTime: -1 });
 			expect(result.success).toBe(false);
+		});
+
+		it("insert_text should fail on out-of-range fontSize", async () => {
+			const tool = getToolByName("insert_text");
+
+			const result = await tool.execute({
+				content: "Hello",
+				startTime: 2,
+				fontSize: 1000,
+			});
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({ errorCode: "INVALID_FONT_SIZE" });
 		});
 
 		it("remove_silence should detect and process silent segments", async () => {

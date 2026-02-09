@@ -376,6 +376,13 @@ export const seekToTimeTool: AgentTool = {
 			}
 
 			const editor = EditorCore.getInstance();
+			if (editor.playback.getIsScrubbing()) {
+				return {
+					success: false,
+					message: "正在拖动进度条，请稍候 (Scrubbing in progress, try again later)",
+					data: { errorCode: "SCRUBBING_IN_PROGRESS" },
+				};
+			}
 			const duration = editor.timeline.getTotalDuration();
 			const clampedTime = Math.max(0, Math.min(duration, time));
 

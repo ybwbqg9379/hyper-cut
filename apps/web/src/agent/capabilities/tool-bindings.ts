@@ -313,7 +313,10 @@ export const AGENT_NATIVE_CAPABILITIES: CapabilityDefinition[] = [
 
 export const TOOL_CAPABILITY_BINDINGS: Record<string, string[]> = {
 	split_at_playhead: ["action.split"],
-	split_at_time: ["manager.timeline.splitElements"],
+	split_at_time: [
+		"manager.timeline.splitElements",
+		"manager.playback.getIsScrubbing",
+	],
 	delete_selected: ["action.delete-selected"],
 	delete_element_by_id: ["manager.timeline.deleteElements"],
 	split_left: ["action.split-left"],
@@ -332,8 +335,8 @@ export const TOOL_CAPABILITY_BINDINGS: Record<string, string[]> = {
 	move_elements: ["manager.timeline.updateElementStartTime"],
 	trim_element: ["manager.timeline.updateElementTrim"],
 	resize_element: ["manager.timeline.updateElementDuration"],
-	update_element_transform: ["tool.timeline.update_element_transform"],
-	update_sticker_color: ["tool.timeline.update_sticker_color"],
+	update_element_transform: ["manager.timeline.updateElements"],
+	update_sticker_color: ["manager.timeline.updateElements"],
 	remove_silence: ["tool.timeline.remove_silence"],
 	insert_text: ["manager.timeline.insertElement"],
 	toggle_play: ["action.toggle-play"],
@@ -341,7 +344,7 @@ export const TOOL_CAPABILITY_BINDINGS: Record<string, string[]> = {
 	seek_backward: ["action.seek-backward"],
 	jump_forward: ["action.jump-forward"],
 	jump_backward: ["action.jump-backward"],
-	seek_to_time: ["manager.playback.seek"],
+	seek_to_time: ["manager.playback.seek", "manager.playback.getIsScrubbing"],
 	go_to_start: ["action.goto-start"],
 	go_to_end: ["action.goto-end"],
 	set_volume: ["manager.playback.setVolume"],
