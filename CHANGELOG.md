@@ -13,6 +13,10 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `AgentChatbox` 与 `agent-ui-store` 新增 transcript suggestions 状态与联动：工具返回建议后自动切换到转录页并进入编辑模式
   - 新增工作流 `text-based-cleanup`（填充词检测 → 语义建议 → 智能缩时）
   - 新增测试：`transcript-document.test.ts`、`transcript-edit-operations.test.ts`、`transcript-edit-tools.test.ts`
+- **Text-Based Editing 性能优化（10K+ 词）**：转录编辑视图新增段级虚拟化渲染
+  - `TranscriptEditView` 改为可见区域窗口渲染（overscan + 动态高度校正 + 顶/底 spacer）
+  - 播放高亮在虚拟化场景下支持“词不可见时按段滚动定位”，避免长列表跟随失效
+  - 大幅减少长转录首屏渲染与滚动重排开销
 - **Agent Capability Registry（Phase 1）**：新增能力镜像层与工具能力绑定
   - 新增 `src/agent/capabilities/`：`types`、`collect-from-actions`、`collect-from-managers`、`registry`、`tool-bindings`、`index`
   - 新增只读工具 `list_capabilities`，支持按 `source/risk` 过滤能力定义

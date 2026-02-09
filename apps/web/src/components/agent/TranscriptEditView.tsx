@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type KeyboardEvent,
+} from "react";
 import { useEditor } from "@/hooks/use-editor";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -45,6 +52,59 @@ function clampSuggestion(
 	};
 }
 
+interface VirtualSegmentRow {
+	key: string;
+	index: number;
+	offsetTop: number;
+	height: number;
+	startWordIndex: number;
+	endWordIndex: number;
+	startTime: number;
+	endTime: number;
+}
+
+const SEGMENT_ROW_BASE_HEIGHT = 48;
+const SEGMENT_ROW_LINE_HEIGHT = 20;
+const SEGMENT_ROW_WORDS_PER_LINE = 9;
+const SEGMENT_OVERSCAN_PX = 640;
+
+function lowerBoundByRowEnd(
+	rows: VirtualSegmentRow[],
+	targetTop: number,
+): number {
+	let left = 0;
+	let right = rows.length;
+	while (left < right) {
+		const middle = Math.floor((left + right) / 2);
+		const row = rows[middle];
+		const rowEnd = row.offsetTop + row.height;
+		if (rowEnd < targetTop) {
+			left = middle + 1;
+			continue;
+		}
+		right = middle;
+	}
+	return Math.max(0, Math.min(rows.length - 1, left));
+}
+
+function upperBoundByRowStart(
+	rows: VirtualSegmentRow[],
+	targetBottom: number,
+): number {
+	let left = 0;
+	let right = rows.length;
+	while (left < right) {
+		const middle = Math.floor((left + right) / 2);
+		const row = rows[middle];
+		if (row.offsetTop <= targetBottom) {
+			left = middle + 1;
+			continue;
+		}
+		right = middle;
+	}
+	return Math.max(0, Math.min(rows.length - 1, left - 1));
+}
+
 export function TranscriptEditView() {
 	const editor = useEditor();
 	const document = useTranscriptDocument();
@@ -72,7 +132,15 @@ export function TranscriptEditView() {
 
 	const keyboardRef = useRef<HTMLTextAreaElement | null>(null);
 	const wordRefMap = useRef<Map<number, HTMLButtonElement>>(new Map());
+	const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 	const currentTime = editor.playback.getCurrentTime();
+	const [measuredHeights, setMeasuredHeights] = useState<
+		Record<string, number>
+	>({});
+	const [scrollMetrics, setScrollMetrics] = useState({
+		scrollTop: 0,
+		viewportHeight: 0,
+	});
 
 	const normalizedSuggestions = useMemo(() => {
 		if (!document || !pendingSuggestions || pendingSuggestions.length === 0) {
@@ -151,14 +219,168 @@ export function TranscriptEditView() {
 	}, []);
 
 	useEffect(() => {
+		const container = scrollAreaRef.current;
+		if (!container) return;
+
+		let rafId = 0;
+		const measure = () => {
+			cancelAnimationFrame(rafId);
+			rafId = requestAnimationFrame(() => {
+				setScrollMetrics({
+					scrollTop: container.scrollTop,
+					viewportHeight: container.clientHeight,
+				});
+			});
+		};
+
+		measure();
+		container.addEventListener("scroll", measure, { passive: true });
+		window.addEventListener("resize", measure);
+		return () => {
+			cancelAnimationFrame(rafId);
+			container.removeEventListener("scroll", measure);
+			window.removeEventListener("resize", measure);
+		};
+	}, []);
+
+	const virtualRows = useMemo(() => {
+		if (!document) return [];
+		let offsetTop = 0;
+		const rows: VirtualSegmentRow[] = [];
+		for (let index = 0; index < document.segments.length; index += 1) {
+			const segment = document.segments[index];
+			const key = `${segment.captionTrackId}:${segment.captionElementId}`;
+			const wordsCount = Math.max(
+				0,
+				segment.wordRange[1] - segment.wordRange[0] + 1,
+			);
+			const estimatedHeight =
+				SEGMENT_ROW_BASE_HEIGHT +
+				Math.max(1, Math.ceil(wordsCount / SEGMENT_ROW_WORDS_PER_LINE)) *
+					SEGMENT_ROW_LINE_HEIGHT;
+			const measuredHeight = measuredHeights[key];
+			const height =
+				typeof measuredHeight === "number" && measuredHeight > 0
+					? measuredHeight
+					: estimatedHeight;
+			rows.push({
+				key,
+				index,
+				offsetTop,
+				height,
+				startWordIndex: segment.wordRange[0],
+				endWordIndex: segment.wordRange[1],
+				startTime: segment.startTime,
+				endTime: segment.endTime,
+			});
+			offsetTop += height + 8;
+		}
+		return rows;
+	}, [document, measuredHeights]);
+
+	const totalVirtualHeight = useMemo(() => {
+		if (virtualRows.length === 0) return 0;
+		const lastRow = virtualRows[virtualRows.length - 1];
+		return lastRow.offsetTop + lastRow.height;
+	}, [virtualRows]);
+
+	const visibleRange = useMemo(() => {
+		if (virtualRows.length === 0) {
+			return { startIndex: 0, endIndex: -1 };
+		}
+
+		const startTarget = Math.max(
+			0,
+			scrollMetrics.scrollTop - SEGMENT_OVERSCAN_PX,
+		);
+		const endTarget =
+			scrollMetrics.scrollTop +
+			scrollMetrics.viewportHeight +
+			SEGMENT_OVERSCAN_PX;
+		const startIndex = lowerBoundByRowEnd(virtualRows, startTarget);
+		const endIndex = upperBoundByRowStart(virtualRows, endTarget);
+		return {
+			startIndex,
+			endIndex: Math.max(startIndex, endIndex),
+		};
+	}, [scrollMetrics, virtualRows]);
+
+	const visibleRows = useMemo(() => {
+		if (visibleRange.endIndex < visibleRange.startIndex) return [];
+		return virtualRows.slice(
+			visibleRange.startIndex,
+			visibleRange.endIndex + 1,
+		);
+	}, [virtualRows, visibleRange]);
+
+	const topSpacerHeight = useMemo(() => {
+		if (visibleRows.length === 0) return 0;
+		return visibleRows[0]?.offsetTop ?? 0;
+	}, [visibleRows]);
+
+	const bottomSpacerHeight = useMemo(() => {
+		if (visibleRows.length === 0) return 0;
+		const lastVisible = visibleRows[visibleRows.length - 1];
+		const renderedEnd = lastVisible.offsetTop + lastVisible.height;
+		return Math.max(0, totalVirtualHeight - renderedEnd);
+	}, [totalVirtualHeight, visibleRows]);
+
+	const measureSegmentRow = useCallback(
+		({ key, node }: { key: string; node: HTMLDivElement | null }) => {
+			if (!node) return;
+			const nextHeight = Math.ceil(node.getBoundingClientRect().height);
+			if (nextHeight <= 0) return;
+			setMeasuredHeights((previous) => {
+				if (previous[key] === nextHeight) {
+					return previous;
+				}
+				return { ...previous, [key]: nextHeight };
+			});
+		},
+		[],
+	);
+
+	useEffect(() => {
 		if (activeWordIndex === null) return;
 		const element = wordRefMap.current.get(activeWordIndex);
-		element?.scrollIntoView({
-			block: "center",
-			inline: "center",
-			behavior: "smooth",
-		});
-	}, [activeWordIndex]);
+		if (element) {
+			element.scrollIntoView({
+				block: "center",
+				inline: "center",
+				behavior: "smooth",
+			});
+			return;
+		}
+
+		const container = scrollAreaRef.current;
+		if (!container || virtualRows.length === 0) return;
+		const activeSegmentRow = virtualRows.find(
+			(row) =>
+				activeWordIndex >= row.startWordIndex &&
+				activeWordIndex <= row.endWordIndex,
+		);
+		if (!activeSegmentRow) return;
+
+		const targetTop = Math.max(
+			0,
+			activeSegmentRow.offsetTop - container.clientHeight * 0.35,
+		);
+		const targetBottom = targetTop + container.clientHeight;
+		const rowBottom = activeSegmentRow.offsetTop + activeSegmentRow.height;
+		const rowIsVisible =
+			activeSegmentRow.offsetTop >= container.scrollTop &&
+			rowBottom <= container.scrollTop + container.clientHeight;
+		if (rowIsVisible) return;
+		if (
+			targetBottom <= container.scrollTop ||
+			targetTop >= container.scrollTop
+		) {
+			container.scrollTo({
+				top: targetTop,
+				behavior: "smooth",
+			});
+		}
+	}, [activeWordIndex, virtualRows]);
 
 	const focusWord = (wordIndex: number) => {
 		if (!document) return;
@@ -394,14 +616,28 @@ export function TranscriptEditView() {
 				className="sr-only"
 			/>
 
-			<ScrollArea className="min-h-0 flex-1">
-				<div className="space-y-2 p-3">
-					{document.segments.map((segment) => {
+			<ScrollArea ref={scrollAreaRef} className="min-h-0 flex-1">
+				<div
+					className="p-3"
+					style={{
+						minHeight: `${Math.max(totalVirtualHeight, scrollMetrics.viewportHeight)}px`,
+					}}
+				>
+					{topSpacerHeight > 0 ? (
+						<div
+							style={{ height: `${topSpacerHeight}px` }}
+							aria-hidden="true"
+						/>
+					) : null}
+					{visibleRows.map((row) => {
+						const segment = document.segments[row.index];
+						if (!segment) return null;
 						const hasWords = segment.wordRange[1] >= segment.wordRange[0];
 						return (
 							<div
-								key={`${segment.captionTrackId}:${segment.captionElementId}`}
-								className="rounded-md border border-border p-2"
+								key={row.key}
+								ref={(node) => measureSegmentRow({ key: row.key, node })}
+								className="mb-2 rounded-md border border-border p-2 last:mb-0"
 							>
 								<div className="mb-1 text-[11px] text-muted-foreground">
 									{formatTime(segment.startTime)} -{" "}
@@ -471,6 +707,12 @@ export function TranscriptEditView() {
 							</div>
 						);
 					})}
+					{bottomSpacerHeight > 0 ? (
+						<div
+							style={{ height: `${bottomSpacerHeight}px` }}
+							aria-hidden="true"
+						/>
+					) : null}
 				</div>
 			</ScrollArea>
 		</div>
