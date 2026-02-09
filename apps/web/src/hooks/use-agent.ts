@@ -196,6 +196,10 @@ export function useAgent() {
 			stepOverrides,
 			startFromStepId,
 			confirmRequiredSteps,
+			enableQualityLoop,
+			qualityMaxIterations,
+			qualityTargetDuration,
+			qualityDurationTolerance,
 		}: {
 			workflowName: string;
 			stepOverrides?: Array<{
@@ -205,6 +209,10 @@ export function useAgent() {
 			}>;
 			startFromStepId?: string;
 			confirmRequiredSteps?: boolean;
+			enableQualityLoop?: boolean;
+			qualityMaxIterations?: number;
+			qualityTargetDuration?: number;
+			qualityDurationTolerance?: number;
 		}): Promise<AgentResponse> => {
 			setIsProcessing(true);
 			setError(null);
@@ -214,6 +222,10 @@ export function useAgent() {
 					stepOverrides,
 					startFromStepId,
 					confirmRequiredSteps,
+					enableQualityLoop,
+					qualityMaxIterations,
+					qualityTargetDuration,
+					qualityDurationTolerance,
 				});
 				setLastResponse(response);
 				return response;

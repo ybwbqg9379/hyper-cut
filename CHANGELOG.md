@@ -44,6 +44,13 @@ All notable changes to this project (forked from HyperCut) will be documented in
   - `AgentChatbox` 工作流面板新增场景筛选、模板说明、schema 参数提示与运行前校验
   - `list_workflows` 输出新增 `scenario/templateDescription/tags/argumentSchema`
   - 新增测试：`workflow-productization.test.ts`；增强 `integration-workflow-playback-query.ts`
+- **Agent Quality Loop（Phase 7）**：新增执行后质量评估与自动二次迭代
+  - 新增 `src/agent/services/quality-evaluator.ts`，输出结构化质量报告（语义完整性/静音率/字幕覆盖率/时长达标率）
+  - Orchestrator 在 `run_workflow` 成功后自动评分，不达标按上限触发二次迭代
+  - 达到迭代上限仍未达标时返回 `QUALITY_TARGET_NOT_MET`，并附退化结果
+  - `run_workflow` 参数新增质量循环控制项：`enableQualityLoop`、`qualityMaxIterations`、`qualityTargetDuration`、`qualityDurationTolerance`
+  - `useAgent.runWorkflow` 增加质量循环参数透传
+  - 新增测试：`quality-evaluator.test.ts`；增强 `orchestrator.test.ts` 覆盖自动迭代与停止条件
 - **Agentic Video Editing**: AI-driven video editing via natural language commands
   - New `src/agent/` module with LLM orchestration layer
   - LM Studio provider (MVP) with Qwen3 VL 8B model support

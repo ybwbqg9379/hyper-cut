@@ -16,6 +16,14 @@ vi.mock("../providers", () => ({
 	createProvider: vi.fn(),
 	getConfiguredProviderType: vi.fn(() => "lm-studio"),
 }));
+const { evaluateQuality } = vi.hoisted(() => ({
+	evaluateQuality: vi.fn(),
+}));
+vi.mock("../services/quality-evaluator", () => ({
+	qualityEvaluatorService: {
+		evaluate: evaluateQuality,
+	},
+}));
 
 import { createProvider } from "../providers";
 
@@ -31,6 +39,39 @@ describe("AgentOrchestrator", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		evaluateQuality.mockReturnValue({
+			passed: true,
+			overallScore: 0.9,
+			timelineDurationSeconds: 60,
+			metrics: {
+				semanticCompleteness: {
+					value: 0.9,
+					score: 0.9,
+					passed: true,
+					threshold: 0.65,
+				},
+				silenceRate: {
+					value: 0.1,
+					score: 0.9,
+					passed: true,
+					threshold: 0.45,
+				},
+				subtitleCoverage: {
+					value: 0.9,
+					score: 0.9,
+					passed: true,
+					threshold: 0.55,
+				},
+				durationCompliance: {
+					value: 0.9,
+					score: 0.9,
+					passed: true,
+					threshold: 0.7,
+				},
+			},
+			reasons: [],
+			evaluatedAt: "2026-02-09T00:00:00.000Z",
+		});
 	});
 
 	it("should execute tool calls and return final response", async () => {
@@ -628,6 +669,207 @@ describe("AgentOrchestrator", () => {
 				toolName: "run_workflow",
 			}),
 		);
+	});
+
+	it("runWorkflow should auto-iterate when quality is not met", async () => {
+		const provider = buildProvider();
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		evaluateQuality
+			.mockReturnValueOnce({
+				passed: false,
+				overallScore: 0.52,
+				timelineDurationSeconds: 80,
+				targetDurationSeconds: 45,
+				metrics: {
+					semanticCompleteness: {
+						value: 0.8,
+						score: 0.8,
+						passed: true,
+						threshold: 0.65,
+					},
+					silenceRate: {
+						value: 0.2,
+						score: 0.8,
+						passed: true,
+						threshold: 0.45,
+					},
+					subtitleCoverage: {
+						value: 0.7,
+						score: 0.7,
+						passed: true,
+						threshold: 0.55,
+					},
+					durationCompliance: {
+						value: 0.3,
+						score: 0.3,
+						passed: false,
+						threshold: 0.7,
+					},
+				},
+				reasons: ["时长未达标"],
+				evaluatedAt: "2026-02-09T00:00:00.000Z",
+			})
+			.mockReturnValueOnce({
+				passed: true,
+				overallScore: 0.88,
+				timelineDurationSeconds: 46,
+				targetDurationSeconds: 45,
+				metrics: {
+					semanticCompleteness: {
+						value: 0.88,
+						score: 0.88,
+						passed: true,
+						threshold: 0.65,
+					},
+					silenceRate: {
+						value: 0.15,
+						score: 0.85,
+						passed: true,
+						threshold: 0.45,
+					},
+					subtitleCoverage: {
+						value: 0.8,
+						score: 0.8,
+						passed: true,
+						threshold: 0.55,
+					},
+					durationCompliance: {
+						value: 0.9,
+						score: 0.9,
+						passed: true,
+						threshold: 0.7,
+					},
+				},
+				reasons: [],
+				evaluatedAt: "2026-02-09T00:00:01.000Z",
+			});
+
+		const runWorkflowExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "workflow ok" });
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "run_workflow",
+					description: "Run workflow",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: runWorkflowExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.runWorkflow({
+			workflowName: "podcast-to-clips",
+			confirmRequiredSteps: true,
+		});
+
+		expect(runWorkflowExecute).toHaveBeenCalledTimes(2);
+		expect(result.success).toBe(true);
+		expect(result.toolCalls?.[0]?.result.message).toContain("质量评分");
+	});
+
+	it("runWorkflow should stop with QUALITY_TARGET_NOT_MET when max iterations reached", async () => {
+		const provider = buildProvider();
+		(createProvider as ReturnType<typeof vi.fn>).mockReturnValue(provider);
+
+		evaluateQuality
+			.mockReturnValueOnce({
+				passed: false,
+				overallScore: 0.45,
+				timelineDurationSeconds: 95,
+				targetDurationSeconds: 45,
+				metrics: {
+					semanticCompleteness: {
+						value: 0.82,
+						score: 0.82,
+						passed: true,
+						threshold: 0.65,
+					},
+					silenceRate: {
+						value: 0.2,
+						score: 0.8,
+						passed: true,
+						threshold: 0.45,
+					},
+					subtitleCoverage: {
+						value: 0.7,
+						score: 0.7,
+						passed: true,
+						threshold: 0.55,
+					},
+					durationCompliance: {
+						value: 0.2,
+						score: 0.2,
+						passed: false,
+						threshold: 0.7,
+					},
+				},
+				reasons: ["时长未达标"],
+				evaluatedAt: "2026-02-09T00:00:00.000Z",
+			})
+			.mockReturnValueOnce({
+				passed: false,
+				overallScore: 0.5,
+				timelineDurationSeconds: 92,
+				targetDurationSeconds: 45,
+				metrics: {
+					semanticCompleteness: {
+						value: 0.84,
+						score: 0.84,
+						passed: true,
+						threshold: 0.65,
+					},
+					silenceRate: {
+						value: 0.18,
+						score: 0.82,
+						passed: true,
+						threshold: 0.45,
+					},
+					subtitleCoverage: {
+						value: 0.72,
+						score: 0.72,
+						passed: true,
+						threshold: 0.55,
+					},
+					durationCompliance: {
+						value: 0.24,
+						score: 0.24,
+						passed: false,
+						threshold: 0.7,
+					},
+				},
+				reasons: ["时长未达标"],
+				evaluatedAt: "2026-02-09T00:00:01.000Z",
+			});
+
+		const runWorkflowExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "workflow ok" });
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "run_workflow",
+					description: "Run workflow",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: runWorkflowExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.runWorkflow({
+			workflowName: "podcast-to-clips",
+			confirmRequiredSteps: true,
+			qualityMaxIterations: 2,
+		});
+
+		expect(runWorkflowExecute).toHaveBeenCalledTimes(2);
+		expect(result.success).toBe(false);
+		expect(result.toolCalls?.[0]?.result.data).toMatchObject({
+			errorCode: "QUALITY_TARGET_NOT_MET",
+		});
 	});
 
 	it("should execute pending plan after confirmation", async () => {

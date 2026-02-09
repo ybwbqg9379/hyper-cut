@@ -112,6 +112,23 @@ export const runWorkflowTool: AgentTool = {
 				description:
 					"从指定步骤开始执行，用于暂停后的恢复 (Resume workflow from a specific step id)",
 			},
+			enableQualityLoop: {
+				type: "boolean",
+				description:
+					"是否启用工作流质量评估与自动二次迭代（默认按 workflow 策略）",
+			},
+			qualityMaxIterations: {
+				type: "number",
+				description: "质量不达标时最多迭代次数（包含首轮，默认 2，范围 1-4）",
+			},
+			qualityTargetDuration: {
+				type: "number",
+				description: "质量评估目标时长（秒），可覆盖工作流默认值",
+			},
+			qualityDurationTolerance: {
+				type: "number",
+				description: "目标时长容差比例（0.05~0.5）",
+			},
 		},
 		required: ["workflowName"],
 	},

@@ -30,6 +30,10 @@ import {
 	extractToolErrorCode,
 	resolveRecoveryPolicyDecision,
 } from "./recovery/policies";
+import {
+	qualityEvaluatorService,
+	type QualityReport,
+} from "./services/quality-evaluator";
 
 /**
  * System prompt for the video editing agent
@@ -91,6 +95,20 @@ const TOOL_NAME_ALIASES = new Map<string, string>([
 const WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE =
 	"WORKFLOW_CONFIRMATION_REQUIRED";
 const TOOL_EXECUTION_TIMEOUT_ERROR_CODE = "TOOL_EXECUTION_TIMEOUT";
+const QUALITY_TARGET_NOT_MET_ERROR_CODE = "QUALITY_TARGET_NOT_MET";
+const DEFAULT_WORKFLOW_QUALITY_MAX_ITERATIONS = 2;
+const DEFAULT_WORKFLOW_QUALITY_DURATION_TOLERANCE = 0.2;
+const QUALITY_LOOP_ENABLED_WORKFLOWS = new Set([
+	"long-to-short",
+	"quick-social-clip",
+	"podcast-to-clips",
+	"talking-head-polish",
+]);
+const WORKFLOW_TARGET_DURATION_HINTS: Record<string, number> = {
+	"long-to-short": 60,
+	"quick-social-clip": 60,
+	"podcast-to-clips": 45,
+};
 
 interface PendingPlanState {
 	plan: AgentExecutionPlan;
@@ -204,6 +222,8 @@ function compactRunWorkflowData(data: unknown): unknown {
 		"nextStep",
 		"resumeHint",
 		"startFromStepId",
+		"qualityReport",
+		"qualityLoop",
 	]) {
 		if (record[key] !== undefined) {
 			compacted[key] = compactUnknown(record[key]);
@@ -254,6 +274,10 @@ function toFiniteNumber(value: unknown): number | undefined {
 		return undefined;
 	}
 	return value;
+}
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, value));
 }
 
 function compactGenerateHighlightPlanData(data: unknown): unknown {
@@ -362,6 +386,19 @@ function asObjectRecord(value: unknown): Record<string, unknown> | null {
 		return null;
 	}
 	return value as Record<string, unknown>;
+}
+
+function toOptionalPositiveNumber(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+		return undefined;
+	}
+	return value;
+}
+
+function toOptionalPositiveInt(value: unknown): number | undefined {
+	const numeric = toOptionalPositiveNumber(value);
+	if (numeric === undefined) return undefined;
+	return Math.floor(numeric);
 }
 
 function asWorkflowStepOverrides(value: unknown):
@@ -995,15 +1032,240 @@ export class AgentOrchestrator {
 		});
 	}
 
+	private isAwaitingWorkflowConfirmation(result: ToolResult): boolean {
+		const record = asObjectRecord(result.data);
+		if (!record) return false;
+		return (
+			record.status === "awaiting_confirmation" ||
+			record.errorCode === WORKFLOW_CONFIRMATION_REQUIRED_ERROR_CODE
+		);
+	}
+
+	private toWorkflowQualityResult({
+		toolResult,
+		reports,
+		passed,
+		iteration,
+		maxIterations,
+	}: {
+		toolResult: ToolResult;
+		reports: QualityReport[];
+		passed: boolean;
+		iteration: number;
+		maxIterations: number;
+	}): ToolResult {
+		const latestReport = reports[reports.length - 1];
+		const dataRecord = asObjectRecord(toolResult.data) ?? {};
+		const data: Record<string, unknown> = {
+			...dataRecord,
+			qualityReport: latestReport,
+			qualityLoop: {
+				passed,
+				iteration,
+				maxIterations,
+				reports,
+			},
+		};
+		if (!passed) {
+			data.errorCode = QUALITY_TARGET_NOT_MET_ERROR_CODE;
+		}
+		const qualitySummary = latestReport
+			? `质量评分 ${latestReport.overallScore.toFixed(2)} (${passed ? "达标" : "未达标"})`
+			: "质量评分不可用";
+
+		return {
+			success: passed ? toolResult.success : false,
+			message: `${toolResult.message}\n${qualitySummary}`,
+			data,
+		};
+	}
+
+	private async applyWorkflowQualityLoop({
+		toolCall,
+		initialResult,
+		meta,
+	}: {
+		toolCall: PlannedToolCall;
+		initialResult: ToolResult;
+		meta: ToolExecutionMeta;
+	}): Promise<ToolResult> {
+		if (toolCall.name !== "run_workflow") {
+			return initialResult;
+		}
+		if (this.isAwaitingWorkflowConfirmation(initialResult)) {
+			return initialResult;
+		}
+
+		const args = asObjectRecord(toolCall.arguments);
+		const workflowName =
+			typeof args?.workflowName === "string" ? args.workflowName.trim() : "";
+		if (!workflowName) {
+			return initialResult;
+		}
+
+		const explicitEnable =
+			typeof args?.enableQualityLoop === "boolean"
+				? args.enableQualityLoop
+				: undefined;
+		const explicitMaxIterations = toOptionalPositiveInt(
+			args?.qualityMaxIterations,
+		);
+		const shouldEnable =
+			explicitEnable ??
+			(explicitMaxIterations !== undefined
+				? true
+				: QUALITY_LOOP_ENABLED_WORKFLOWS.has(workflowName));
+		if (!shouldEnable) {
+			return initialResult;
+		}
+
+		const maxIterations = Math.min(
+			Math.max(
+				explicitMaxIterations ?? DEFAULT_WORKFLOW_QUALITY_MAX_ITERATIONS,
+				1,
+			),
+			4,
+		);
+		const targetDurationSeconds =
+			toOptionalPositiveNumber(args?.qualityTargetDuration) ??
+			WORKFLOW_TARGET_DURATION_HINTS[workflowName];
+		const durationToleranceRatio = clamp(
+			toOptionalPositiveNumber(args?.qualityDurationTolerance) ??
+				DEFAULT_WORKFLOW_QUALITY_DURATION_TOLERANCE,
+			0.05,
+			0.5,
+		);
+
+		let currentResult = initialResult;
+		const reports: QualityReport[] = [];
+
+		for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+			const report = qualityEvaluatorService.evaluate({
+				targetDurationSeconds,
+				durationToleranceRatio,
+			});
+			reports.push(report);
+			this.emitExecutionEvent({
+				type: "tool_progress",
+				requestId: meta.requestId,
+				mode: meta.mode,
+				status: report.passed ? "running" : "error",
+				toolName: toolCall.name,
+				toolCallId: meta.toolCallId,
+				planStepId: meta.planStepId,
+				stepIndex: meta.stepIndex,
+				totalSteps: meta.totalSteps,
+				dagState: report.passed ? "running" : "failed",
+				message:
+					`工作流质量评估 ${iteration}/${maxIterations}: ` +
+					`score=${report.overallScore.toFixed(2)} ` +
+					(report.passed ? "达标" : "未达标"),
+				progress: {
+					message: "workflow_quality_evaluated",
+					data: report,
+				},
+			});
+
+			if (report.passed) {
+				return this.toWorkflowQualityResult({
+					toolResult: currentResult,
+					reports,
+					passed: true,
+					iteration,
+					maxIterations,
+				});
+			}
+
+			if (iteration >= maxIterations) {
+				return this.toWorkflowQualityResult({
+					toolResult: currentResult,
+					reports,
+					passed: false,
+					iteration,
+					maxIterations,
+				});
+			}
+
+			this.emitExecutionEvent({
+				type: "tool_progress",
+				requestId: meta.requestId,
+				mode: meta.mode,
+				status: "running",
+				toolName: toolCall.name,
+				toolCallId: meta.toolCallId,
+				planStepId: meta.planStepId,
+				stepIndex: meta.stepIndex,
+				totalSteps: meta.totalSteps,
+				dagState: "running",
+				message: `质量未达标，开始自动二次迭代 ${iteration + 1}/${maxIterations}`,
+				progress: {
+					message: "workflow_quality_iteration_retry",
+					data: {
+						iteration: iteration + 1,
+						maxIterations,
+						workflowName,
+					},
+				},
+			});
+
+			const retryCallId = `${toolCall.id}:quality-${iteration + 1}`;
+			const retryResult = await this.executeToolCallWithRecovery(
+				{
+					...toolCall,
+					id: retryCallId,
+					arguments: {
+						...(toolCall.arguments ?? {}),
+						confirmRequiredSteps: true,
+					},
+				},
+				{
+					...meta,
+					toolCallId: retryCallId,
+				},
+				{ skipQualityLoop: true },
+			);
+
+			if (this.isToolResultCancelled(retryResult)) {
+				return retryResult;
+			}
+			if (
+				!retryResult.success ||
+				this.isAwaitingWorkflowConfirmation(retryResult)
+			) {
+				return this.toWorkflowQualityResult({
+					toolResult: retryResult,
+					reports,
+					passed: false,
+					iteration,
+					maxIterations,
+				});
+			}
+			currentResult = retryResult;
+		}
+
+		return currentResult;
+	}
+
 	private async executeToolCallWithRecovery(
 		toolCall: PlannedToolCall,
 		meta: ToolExecutionMeta,
+		options?: { skipQualityLoop?: boolean },
 	): Promise<ToolResult> {
 		let retryCount = 0;
 		let currentToolCall: PlannedToolCall = toolCall;
 		while (true) {
 			const result = await this.executeToolCall(currentToolCall, meta);
-			if (result.success || this.isToolResultCancelled(result)) {
+			if (this.isToolResultCancelled(result)) {
+				return result;
+			}
+			if (result.success) {
+				if (!options?.skipQualityLoop) {
+					return await this.applyWorkflowQualityLoop({
+						toolCall: currentToolCall,
+						initialResult: result,
+						meta,
+					});
+				}
 				return result;
 			}
 
@@ -1637,6 +1899,10 @@ export class AgentOrchestrator {
 		stepOverrides,
 		startFromStepId,
 		confirmRequiredSteps,
+		enableQualityLoop,
+		qualityMaxIterations,
+		qualityTargetDuration,
+		qualityDurationTolerance,
 	}: {
 		workflowName: string;
 		stepOverrides?: Array<{
@@ -1646,6 +1912,10 @@ export class AgentOrchestrator {
 		}>;
 		startFromStepId?: string;
 		confirmRequiredSteps?: boolean;
+		enableQualityLoop?: boolean;
+		qualityMaxIterations?: number;
+		qualityTargetDuration?: number;
+		qualityDurationTolerance?: number;
 	}): Promise<AgentResponse> {
 		const requestId = this.createRequestId("workflow");
 		if (this.planningEnabled && this.isExecutingPlan) {
@@ -1690,6 +1960,27 @@ export class AgentOrchestrator {
 		}
 		if (confirmRequiredSteps !== undefined) {
 			argumentsPayload.confirmRequiredSteps = confirmRequiredSteps;
+		}
+		if (enableQualityLoop !== undefined) {
+			argumentsPayload.enableQualityLoop = enableQualityLoop;
+		}
+		if (
+			typeof qualityMaxIterations === "number" &&
+			Number.isFinite(qualityMaxIterations)
+		) {
+			argumentsPayload.qualityMaxIterations = qualityMaxIterations;
+		}
+		if (
+			typeof qualityTargetDuration === "number" &&
+			Number.isFinite(qualityTargetDuration)
+		) {
+			argumentsPayload.qualityTargetDuration = qualityTargetDuration;
+		}
+		if (
+			typeof qualityDurationTolerance === "number" &&
+			Number.isFinite(qualityDurationTolerance)
+		) {
+			argumentsPayload.qualityDurationTolerance = qualityDurationTolerance;
 		}
 
 		this.appendHistory({
@@ -1750,7 +2041,7 @@ export class AgentOrchestrator {
 			stepIndex: 1,
 			totalSteps: 1,
 		});
-		const toolResult = await this.executeToolCall(workflowCall, {
+		const toolResult = await this.executeToolCallWithRecovery(workflowCall, {
 			requestId,
 			mode: "workflow",
 			toolCallId: workflowCall.id,

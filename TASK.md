@@ -170,7 +170,7 @@ Commit message 约定：
 
 ### Phase 7: 质量评估器 + 自动二次迭代
 
-- **Status**: 🔄 In Progress
+- **Status**: ✅ Completed
 - **Description**: 执行后自动打分，不达标自动触发二次规划。
 - **Implementation Scope**:
   - 新增 `apps/web/src/agent/services/quality-evaluator.ts`
@@ -181,20 +181,20 @@ Commit message 约定：
     - 时长达标率
   - Orchestrator 集成“目标驱动最多 N 次迭代”
 - **Acceptance Criteria**:
-  - [ ] 可输出结构化质量报告
-  - [ ] 不达标可自动二次迭代
-  - [ ] 达到迭代上限后有清晰退化结果
+  - [x] 可输出结构化质量报告
+  - [x] 不达标可自动二次迭代
+  - [x] 达到迭代上限后有清晰退化结果
 - **Tests**:
-  - [ ] evaluator 单元测试
-  - [ ] 迭代停止条件测试
-  - [ ] 端到端质量闭环测试
+  - [x] evaluator 单元测试
+  - [x] 迭代停止条件测试
+  - [x] 端到端质量闭环测试
 - **Docs**:
-  - [ ] `CHANGELOG.md`
-  - [ ] `docs/plans/agent-quality-loop.md`
+  - [x] `CHANGELOG.md`
+  - [x] `docs/plans/agent-quality-loop.md`
 
 ### Phase 8: 多 Provider 路由（隐私分级）
 
-- **Status**: ⏳ Pending
+- **Status**: 🔄 In Progress
 - **Description**: 本地优先，云端兜底，按任务类型和隐私等级路由。
 - **Implementation Scope**:
   - 新增 `apps/web/src/agent/providers/router.ts`
