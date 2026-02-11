@@ -878,8 +878,7 @@ export const applyCaptionPresetTool: AgentTool = {
 		) {
 			return {
 				success: false,
-				message:
-					`字幕模板字号超出范围（${MIN_FONT_SIZE}-${MAX_FONT_SIZE}）(Caption preset fontSize is out of range)`,
+				message: `字幕模板字号超出范围（${MIN_FONT_SIZE}-${MAX_FONT_SIZE}）(Caption preset fontSize is out of range)`,
 				data: {
 					errorCode: "INVALID_PRESET_FONT_SIZE",
 					preset,

@@ -149,12 +149,12 @@ const AGENT_CHATBOX_TEXT = {
 		toastSilenceRemoved: "静音删除已完成",
 		toastTranscriptSuggestionTitle: "已生成文本裁剪建议",
 		toastTranscriptSuggestionDesc: "请在转录面板中审阅并应用建议。",
-			toastExecutionCancelled: "执行已取消",
-			toastAwaitingConfirmation: "等待确认",
-			toastOperationCompleted: "操作完成",
-			confirmLayoutMessagePrefix: "确认布局应用",
-			retryLayoutCandidateMessagePrefix: "使用候选重试布局",
-		},
+		toastExecutionCancelled: "执行已取消",
+		toastAwaitingConfirmation: "等待确认",
+		toastOperationCompleted: "操作完成",
+		confirmLayoutMessagePrefix: "确认布局应用",
+		retryLayoutCandidateMessagePrefix: "使用候选重试布局",
+	},
 	en: {
 		tabChat: "Chat",
 		tabTranscript: "Transcript",
@@ -215,13 +215,13 @@ const AGENT_CHATBOX_TEXT = {
 		toastTranscriptSuggestionTitle: "Transcript trim suggestions generated",
 		toastTranscriptSuggestionDesc:
 			"Review and apply suggestions in the transcript panel.",
-			toastExecutionCancelled: "Execution cancelled",
-			toastAwaitingConfirmation: "Awaiting confirmation",
-			toastOperationCompleted: "Operation completed",
-			confirmLayoutMessagePrefix: "Confirm layout apply",
-			retryLayoutCandidateMessagePrefix: "Retry layout with candidate",
-		},
-	} as const;
+		toastExecutionCancelled: "Execution cancelled",
+		toastAwaitingConfirmation: "Awaiting confirmation",
+		toastOperationCompleted: "Operation completed",
+		confirmLayoutMessagePrefix: "Confirm layout apply",
+		retryLayoutCandidateMessagePrefix: "Retry layout with candidate",
+	},
+} as const;
 
 /**
  * AgentChatbox
@@ -287,11 +287,11 @@ export function AgentChatbox() {
 		cancelPlan,
 		cancelExecution,
 		updatePlanStep,
-			removePlanStep,
-			runWorkflow,
-			executeTool,
-			clearHistory,
-			checkProvider,
+		removePlanStep,
+		runWorkflow,
+		executeTool,
+		clearHistory,
+		checkProvider,
 		isProcessing,
 		error,
 		executionEvents,
@@ -532,13 +532,14 @@ export function AgentChatbox() {
 			status: response.status,
 			nextStep: response.nextStep,
 			resumeHint: response.resumeHint,
-				toolCalls: response.toolCalls,
-				plan: response.plan,
-				requiresConfirmation: response.requiresConfirmation,
-				layoutConfirmation: layoutConfirmation ?? undefined,
-				layoutCandidateRetries: layoutCandidateRetries.length > 0 ? layoutCandidateRetries : undefined,
-			};
-			setMessages((prev) => [...prev, assistantMessage]);
+			toolCalls: response.toolCalls,
+			plan: response.plan,
+			requiresConfirmation: response.requiresConfirmation,
+			layoutConfirmation: layoutConfirmation ?? undefined,
+			layoutCandidateRetries:
+				layoutCandidateRetries.length > 0 ? layoutCandidateRetries : undefined,
+		};
+		setMessages((prev) => [...prev, assistantMessage]);
 
 		if (response.requiresConfirmation && response.plan) {
 			setPendingPlanId(response.plan.id);
@@ -1040,14 +1041,14 @@ export function AgentChatbox() {
 								}}
 								onUpdateStep={handleUpdateStep}
 								onRemoveStep={handleRemoveStep}
-									onConfirmPlan={handleConfirmPlan}
-									onCancelPlan={handleCancelPlan}
-									onResumeWorkflow={handleResumeWorkflow}
-									onConfirmLayoutSuggestion={handleConfirmLayoutSuggestion}
-									onRetryLayoutWithCandidate={handleRetryLayoutWithCandidate}
-									controlsDisabled={isProcessing}
-									resumeDisabled={isProcessing || Boolean(pendingPlanId)}
-									locale={locale}
+								onConfirmPlan={handleConfirmPlan}
+								onCancelPlan={handleCancelPlan}
+								onResumeWorkflow={handleResumeWorkflow}
+								onConfirmLayoutSuggestion={handleConfirmLayoutSuggestion}
+								onRetryLayoutWithCandidate={handleRetryLayoutWithCandidate}
+								controlsDisabled={isProcessing}
+								resumeDisabled={isProcessing || Boolean(pendingPlanId)}
+								locale={locale}
 							/>
 						))}
 

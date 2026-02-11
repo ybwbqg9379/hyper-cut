@@ -379,7 +379,8 @@ export const seekToTimeTool: AgentTool = {
 			if (editor.playback.getIsScrubbing()) {
 				return {
 					success: false,
-					message: "正在拖动进度条，请稍候 (Scrubbing in progress, try again later)",
+					message:
+						"正在拖动进度条，请稍候 (Scrubbing in progress, try again later)",
 					data: { errorCode: "SCRUBBING_IN_PROGRESS" },
 				};
 			}

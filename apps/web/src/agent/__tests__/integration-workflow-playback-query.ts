@@ -179,8 +179,8 @@ export function registerWorkflowPlaybackQueryTests() {
 		});
 	});
 
-		describe("Vision Tools", () => {
-			it("apply_layout_suggestion should position element from inline suggestion", async () => {
+	describe("Vision Tools", () => {
+		it("apply_layout_suggestion should position element from inline suggestion", async () => {
 			__resetVisionToolCachesForTests();
 			const tool = getToolByName("apply_layout_suggestion");
 			const { EditorCore } = await import("@/core");
@@ -200,228 +200,230 @@ export function registerWorkflowPlaybackQueryTests() {
 			});
 			expect(result.success).toBe(true);
 			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
-				updates: [{
-					trackId: "track1",
-					elementId: "el1",
-					updates: {
-						transform: {
-							scale: 1,
-							rotate: 0,
-							position: { x: 844.8, y: -475.2 },
+				updates: [
+					{
+						trackId: "track1",
+						elementId: "el1",
+						updates: {
+							transform: {
+								scale: 1,
+								rotate: 0,
+								position: { x: 844.8, y: -475.2 },
+							},
 						},
 					},
-				}],
-				});
+				],
 			});
+		});
 
-			it("apply_layout_suggestion should support confirmation flow for low-confidence suggestions", async () => {
-				__resetVisionToolCachesForTests();
-				const tool = getToolByName("apply_layout_suggestion");
-				const { EditorCore } = await import("@/core");
-				const editor = EditorCore.getInstance() as unknown as {
-					timeline: { updateElements: ReturnType<typeof vi.fn> };
-				};
-				editor.timeline.updateElements.mockClear();
+		it("apply_layout_suggestion should support confirmation flow for low-confidence suggestions", async () => {
+			__resetVisionToolCachesForTests();
+			const tool = getToolByName("apply_layout_suggestion");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: { updateElements: ReturnType<typeof vi.fn> };
+			};
+			editor.timeline.updateElements.mockClear();
 
-				const previewResult = await tool.execute({
-					elementId: "el1",
-					trackId: "track1",
-					minConfidence: 0.8,
-					suggestion: {
-						target: "caption",
-						anchor: "bottom-center",
-						marginX: 0,
-						marginY: 0.08,
-						confidence: 0.6,
-					},
-				});
-				expect(previewResult.success).toBe(true);
-				expect(previewResult.data).toMatchObject({
-					stateCode: "REQUIRES_CONFIRMATION",
-					confirmationReason: "LOW_CONFIDENCE",
-					applied: false,
-				});
-				expect(editor.timeline.updateElements).not.toHaveBeenCalled();
-
-				const confirmResult = await tool.execute({
-					elementId: "el1",
-					trackId: "track1",
-					minConfidence: 0.8,
-					confirmLowConfidence: true,
-					suggestion: {
-						target: "caption",
-						anchor: "bottom-center",
-						marginX: 0,
-						marginY: 0.08,
-						confidence: 0.6,
-					},
-				});
-				expect(confirmResult.success).toBe(true);
-				expect(editor.timeline.updateElements).toHaveBeenCalledTimes(1);
+			const previewResult = await tool.execute({
+				elementId: "el1",
+				trackId: "track1",
+				minConfidence: 0.8,
+				suggestion: {
+					target: "caption",
+					anchor: "bottom-center",
+					marginX: 0,
+					marginY: 0.08,
+					confidence: 0.6,
+				},
 			});
+			expect(previewResult.success).toBe(true);
+			expect(previewResult.data).toMatchObject({
+				stateCode: "REQUIRES_CONFIRMATION",
+				confirmationReason: "LOW_CONFIDENCE",
+				applied: false,
+			});
+			expect(editor.timeline.updateElements).not.toHaveBeenCalled();
 
-			it("apply_layout_suggestion should allow retry with fallback candidate after auto-match failure", async () => {
-				__resetVisionToolCachesForTests();
-				const tool = getToolByName("apply_layout_suggestion");
-				const { EditorCore } = await import("@/core");
-				const editor = EditorCore.getInstance() as unknown as {
-					timeline: {
-						getTracks: ReturnType<typeof vi.fn>;
-						updateElements: ReturnType<typeof vi.fn>;
-					};
+			const confirmResult = await tool.execute({
+				elementId: "el1",
+				trackId: "track1",
+				minConfidence: 0.8,
+				confirmLowConfidence: true,
+				suggestion: {
+					target: "caption",
+					anchor: "bottom-center",
+					marginX: 0,
+					marginY: 0.08,
+					confidence: 0.6,
+				},
+			});
+			expect(confirmResult.success).toBe(true);
+			expect(editor.timeline.updateElements).toHaveBeenCalledTimes(1);
+		});
+
+		it("apply_layout_suggestion should allow retry with fallback candidate after auto-match failure", async () => {
+			__resetVisionToolCachesForTests();
+			const tool = getToolByName("apply_layout_suggestion");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: {
+					getTracks: ReturnType<typeof vi.fn>;
+					updateElements: ReturnType<typeof vi.fn>;
 				};
-				editor.timeline.updateElements.mockClear();
-				editor.timeline.getTracks.mockReturnValueOnce([
-					{
-						id: "track1",
-						type: "video",
-						isMain: true,
-						elements: [
-							{
-								id: "el1",
-								type: "video",
-								startTime: 0,
-								duration: 10,
-								trimStart: 0,
-								trimEnd: 0,
-								mediaId: "asset1",
-								transform: {
-									scale: 1,
-									position: { x: 0, y: 0 },
-									rotate: 0,
-								},
-								opacity: 1,
+			};
+			editor.timeline.updateElements.mockClear();
+			editor.timeline.getTracks.mockReturnValueOnce([
+				{
+					id: "track1",
+					type: "video",
+					isMain: true,
+					elements: [
+						{
+							id: "el1",
+							type: "video",
+							startTime: 0,
+							duration: 10,
+							trimStart: 0,
+							trimEnd: 0,
+							mediaId: "asset1",
+							transform: {
+								scale: 1,
+								position: { x: 0, y: 0 },
+								rotate: 0,
 							},
-						],
-					},
-				]);
+							opacity: 1,
+						},
+					],
+				},
+			]);
 
-				const failedResult = await tool.execute({
+			const failedResult = await tool.execute({
+				target: "caption",
+				suggestion: {
 					target: "caption",
-					suggestion: {
-						target: "caption",
-						anchor: "bottom-center",
-						marginX: 0,
-						marginY: 0.08,
-						confidence: 0.9,
-					},
-				});
-				expect(failedResult.success).toBe(false);
-				expect(failedResult.data).toMatchObject({
-					errorCode: "AUTO_TARGET_NOT_FOUND",
-				});
-
-				const candidateElements = (
-					failedResult.data as {
-						candidateElements?: Array<{ elementId?: string; trackId?: string }>;
-					}
-				).candidateElements;
-				expect(Array.isArray(candidateElements)).toBe(true);
-				expect(candidateElements?.[0]).toMatchObject({
-					elementId: "el1",
-					trackId: "track1",
-				});
-
-				const retryResult = await tool.execute({
-					elementId: candidateElements?.[0]?.elementId,
-					trackId: candidateElements?.[0]?.trackId,
-					confirmLowConfidence: true,
-					suggestion: {
-						target: "caption",
-						anchor: "bottom-center",
-						marginX: 0,
-						marginY: 0.08,
-						confidence: 0.9,
-					},
-				});
-				expect(retryResult.success).toBe(true);
-				expect(editor.timeline.updateElements).toHaveBeenCalledTimes(1);
+					anchor: "bottom-center",
+					marginX: 0,
+					marginY: 0.08,
+					confidence: 0.9,
+				},
+			});
+			expect(failedResult.success).toBe(false);
+			expect(failedResult.data).toMatchObject({
+				errorCode: "AUTO_TARGET_NOT_FOUND",
 			});
 
-			it("apply_layout_suggestion should return multiple ranked candidates when auto-match fails on default tracks", async () => {
-				__resetVisionToolCachesForTests();
-				const tool = getToolByName("apply_layout_suggestion");
-
-				const result = await tool.execute({
-					target: "caption",
-					suggestion: {
-						target: "caption",
-						anchor: "bottom-center",
-						marginX: 0,
-						marginY: 0.08,
-						confidence: 0.9,
-					},
-				});
-				expect(result.success).toBe(false);
-				expect(result.data).toMatchObject({
-					errorCode: "AUTO_TARGET_NOT_FOUND",
-				});
-				const candidates = (
-					result.data as {
-						candidateElements?: Array<{
-							elementId?: string;
-							trackId?: string;
-							rank?: number;
-						}>;
-					}
-				).candidateElements;
-				expect(Array.isArray(candidates)).toBe(true);
-				expect(candidates?.length).toBeGreaterThanOrEqual(2);
-				expect(candidates?.[0].rank).toBe(1);
-				expect(candidates?.[1].rank).toBe(2);
+			const candidateElements = (
+				failedResult.data as {
+					candidateElements?: Array<{ elementId?: string; trackId?: string }>;
+				}
+			).candidateElements;
+			expect(Array.isArray(candidateElements)).toBe(true);
+			expect(candidateElements?.[0]).toMatchObject({
+				elementId: "el1",
+				trackId: "track1",
 			});
 
-			it("apply_layout_suggestion should succeed when retrying with a non-first candidate", async () => {
-				__resetVisionToolCachesForTests();
-				const tool = getToolByName("apply_layout_suggestion");
-				const { EditorCore } = await import("@/core");
-				const editor = EditorCore.getInstance() as unknown as {
-					timeline: { updateElements: ReturnType<typeof vi.fn> };
-				};
-				editor.timeline.updateElements.mockClear();
-
-				const failedResult = await tool.execute({
+			const retryResult = await tool.execute({
+				elementId: candidateElements?.[0]?.elementId,
+				trackId: candidateElements?.[0]?.trackId,
+				confirmLowConfidence: true,
+				suggestion: {
 					target: "caption",
-					suggestion: {
-						target: "caption",
-						anchor: "bottom-center",
-						marginX: 0,
-						marginY: 0.08,
-						confidence: 0.9,
-					},
-				});
-				expect(failedResult.success).toBe(false);
-				const candidates = (
-					failedResult.data as {
-						candidateElements?: Array<{
-							elementId?: string;
-							trackId?: string;
-							rank?: number;
-						}>;
-					}
-				).candidateElements;
-				expect(candidates?.length).toBeGreaterThanOrEqual(2);
-
-				const second = candidates?.[1];
-				expect(second).toBeDefined();
-				const retryResult = await tool.execute({
-					elementId: second?.elementId,
-					trackId: second?.trackId,
-					confirmLowConfidence: true,
-					suggestion: {
-						target: "caption",
-						anchor: "bottom-center",
-						marginX: 0,
-						marginY: 0.08,
-						confidence: 0.9,
-					},
-				});
-				expect(retryResult.success).toBe(true);
-				expect(editor.timeline.updateElements).toHaveBeenCalledTimes(1);
+					anchor: "bottom-center",
+					marginX: 0,
+					marginY: 0.08,
+					confidence: 0.9,
+				},
 			});
+			expect(retryResult.success).toBe(true);
+			expect(editor.timeline.updateElements).toHaveBeenCalledTimes(1);
+		});
 
-			it("apply_layout_suggestion should fail when no cached suggestions are available", async () => {
-				__resetVisionToolCachesForTests();
+		it("apply_layout_suggestion should return multiple ranked candidates when auto-match fails on default tracks", async () => {
+			__resetVisionToolCachesForTests();
+			const tool = getToolByName("apply_layout_suggestion");
+
+			const result = await tool.execute({
+				target: "caption",
+				suggestion: {
+					target: "caption",
+					anchor: "bottom-center",
+					marginX: 0,
+					marginY: 0.08,
+					confidence: 0.9,
+				},
+			});
+			expect(result.success).toBe(false);
+			expect(result.data).toMatchObject({
+				errorCode: "AUTO_TARGET_NOT_FOUND",
+			});
+			const candidates = (
+				result.data as {
+					candidateElements?: Array<{
+						elementId?: string;
+						trackId?: string;
+						rank?: number;
+					}>;
+				}
+			).candidateElements;
+			expect(Array.isArray(candidates)).toBe(true);
+			expect(candidates?.length).toBeGreaterThanOrEqual(2);
+			expect(candidates?.[0].rank).toBe(1);
+			expect(candidates?.[1].rank).toBe(2);
+		});
+
+		it("apply_layout_suggestion should succeed when retrying with a non-first candidate", async () => {
+			__resetVisionToolCachesForTests();
+			const tool = getToolByName("apply_layout_suggestion");
+			const { EditorCore } = await import("@/core");
+			const editor = EditorCore.getInstance() as unknown as {
+				timeline: { updateElements: ReturnType<typeof vi.fn> };
+			};
+			editor.timeline.updateElements.mockClear();
+
+			const failedResult = await tool.execute({
+				target: "caption",
+				suggestion: {
+					target: "caption",
+					anchor: "bottom-center",
+					marginX: 0,
+					marginY: 0.08,
+					confidence: 0.9,
+				},
+			});
+			expect(failedResult.success).toBe(false);
+			const candidates = (
+				failedResult.data as {
+					candidateElements?: Array<{
+						elementId?: string;
+						trackId?: string;
+						rank?: number;
+					}>;
+				}
+			).candidateElements;
+			expect(candidates?.length).toBeGreaterThanOrEqual(2);
+
+			const second = candidates?.[1];
+			expect(second).toBeDefined();
+			const retryResult = await tool.execute({
+				elementId: second?.elementId,
+				trackId: second?.trackId,
+				confirmLowConfidence: true,
+				suggestion: {
+					target: "caption",
+					anchor: "bottom-center",
+					marginX: 0,
+					marginY: 0.08,
+					confidence: 0.9,
+				},
+			});
+			expect(retryResult.success).toBe(true);
+			expect(editor.timeline.updateElements).toHaveBeenCalledTimes(1);
+		});
+
+		it("apply_layout_suggestion should fail when no cached suggestions are available", async () => {
+			__resetVisionToolCachesForTests();
 			const tool = getToolByName("apply_layout_suggestion");
 			const result = await tool.execute({
 				elementId: "el1",

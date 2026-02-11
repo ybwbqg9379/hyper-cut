@@ -217,7 +217,10 @@ function escapeRegex(value: string): string {
 
 function includesAnyEnglishKeyword(text: string, keywords: string[]): boolean {
 	return keywords.some((keyword) => {
-		const pattern = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
+		const pattern = new RegExp(
+			`\\b${escapeRegex(keyword.toLowerCase())}\\b`,
+			"i",
+		);
 		return pattern.test(text);
 	});
 }
@@ -273,7 +276,9 @@ function buildOccupancyProfile(
 		return count + size;
 	}, 0);
 	const textOnScreenCount = observations.reduce((count, item) => {
-		const size = Array.isArray(item.textOnScreen) ? item.textOnScreen.length : 0;
+		const size = Array.isArray(item.textOnScreen)
+			? item.textOnScreen.length
+			: 0;
 		return count + size;
 	}, 0);
 
@@ -357,7 +362,11 @@ function scoreCandidate({
 	if (profile.centerBusy) {
 		score -= getCenterPenalty(candidate.anchor);
 	}
-	if (target === "logo" && profile.textDense && candidate.anchor.startsWith("top")) {
+	if (
+		target === "logo" &&
+		profile.textDense &&
+		candidate.anchor.startsWith("top")
+	) {
 		score -= 0.08;
 	}
 	if (target === "sticker" && profile.peopleCount >= 2) {
@@ -402,7 +411,9 @@ export function buildLayoutSuggestionsFromObservations(
 			.sort((a, b) => b.score - a.score);
 		const best = ranked[0];
 		const secondScore = ranked[1]?.score ?? best.score - 0.3;
-		const confidence = clampConfidence(0.6 + Math.max(0, best.score - secondScore));
+		const confidence = clampConfidence(
+			0.6 + Math.max(0, best.score - secondScore),
+		);
 		const marginX = roundTo3(best.candidate.marginX);
 		const marginY = roundTo3(best.candidate.marginY);
 		return {

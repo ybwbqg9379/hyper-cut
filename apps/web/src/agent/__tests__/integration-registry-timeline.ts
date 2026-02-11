@@ -412,14 +412,16 @@ export function registerRegistryTimelineTests() {
 			});
 			expect(result.success).toBe(true);
 			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
-				updates: [{
-					trackId: "track1",
-					elementId: "el1",
-					updates: {
-						transform: { scale: 1.2, position: { x: 10, y: 20 }, rotate: 15 },
-						opacity: 0.8,
+				updates: [
+					{
+						trackId: "track1",
+						elementId: "el1",
+						updates: {
+							transform: { scale: 1.2, position: { x: 10, y: 20 }, rotate: 15 },
+							opacity: 0.8,
+						},
 					},
-				}],
+				],
 			});
 		});
 
@@ -449,17 +451,19 @@ export function registerRegistryTimelineTests() {
 			});
 			expect(result.success).toBe(true);
 			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
-				updates: [{
-					trackId: "track1",
-					elementId: "el1",
-					updates: {
-						transform: {
-							scale: 1,
-							rotate: 0,
-							position: { x: 768, y: -432 },
+				updates: [
+					{
+						trackId: "track1",
+						elementId: "el1",
+						updates: {
+							transform: {
+								scale: 1,
+								rotate: 0,
+								position: { x: 768, y: -432 },
+							},
 						},
 					},
-				}],
+				],
 			});
 		});
 
@@ -533,11 +537,13 @@ export function registerRegistryTimelineTests() {
 			});
 			expect(result.success).toBe(true);
 			expect(editor.timeline.updateElements).toHaveBeenCalledWith({
-				updates: [{
-					trackId: "track4",
-					elementId: "sticker1",
-					updates: { color: "#ff5500" },
-				}],
+				updates: [
+					{
+						trackId: "track4",
+						elementId: "sticker1",
+						updates: { color: "#ff5500" },
+					},
+				],
 			});
 		});
 

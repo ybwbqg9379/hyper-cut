@@ -73,7 +73,8 @@ const TEXT_ALIGN_VALUES = ["left", "center", "right"] as const;
 const TEXT_WEIGHT_VALUES = ["normal", "bold"] as const;
 const TEXT_STYLE_VALUES = ["normal", "italic"] as const;
 const TEXT_DECORATION_VALUES = ["none", "underline", "line-through"] as const;
-const CJK_CHAR_REGEX = /[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/gu;
+const CJK_CHAR_REGEX =
+	/[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/gu;
 const LATIN_TOKEN_REGEX = /[a-z]+/giu;
 
 function isNonEmptyString(value: unknown): value is string {
@@ -1598,11 +1599,13 @@ export const updateTextStyleTool: AgentTool = {
 			}
 
 			editor.timeline.updateElements({
-				updates: [{
-					trackId: resolved.track.id,
-					elementId: resolved.element.id,
-					updates,
-				}],
+				updates: [
+					{
+						trackId: resolved.track.id,
+						elementId: resolved.element.id,
+						updates,
+					},
+				],
 			});
 
 			return {
@@ -2310,11 +2313,13 @@ export const updateElementTransformTool: AgentTool = {
 			}
 
 			editor.timeline.updateElements({
-				updates: [{
-					trackId: resolved.track.id,
-					elementId: resolved.element.id,
-					updates,
-				}],
+				updates: [
+					{
+						trackId: resolved.track.id,
+						elementId: resolved.element.id,
+						updates,
+					},
+				],
 			});
 
 			return {
@@ -2398,8 +2403,7 @@ export const positionElementTool: AgentTool = {
 			) {
 				return {
 					success: false,
-					message:
-						`marginX/marginY 必须在 0-${MAX_SPATIAL_MARGIN_RATIO} 之间 (marginX/marginY must be between 0-${MAX_SPATIAL_MARGIN_RATIO})`,
+					message: `marginX/marginY 必须在 0-${MAX_SPATIAL_MARGIN_RATIO} 之间 (marginX/marginY must be between 0-${MAX_SPATIAL_MARGIN_RATIO})`,
 					data: { errorCode: "INVALID_MARGIN" },
 				};
 			}
@@ -2482,16 +2486,18 @@ export const positionElementTool: AgentTool = {
 			});
 
 			editor.timeline.updateElements({
-				updates: [{
-					trackId: resolved.track.id,
-					elementId: resolved.element.id,
-					updates: {
-						transform: {
-							...resolved.element.transform,
-							position,
+				updates: [
+					{
+						trackId: resolved.track.id,
+						elementId: resolved.element.id,
+						updates: {
+							transform: {
+								...resolved.element.transform,
+								position,
+							},
 						},
 					},
-				}],
+				],
 			});
 
 			return {
@@ -2614,11 +2620,13 @@ export const updateStickerColorTool: AgentTool = {
 			}
 
 			editor.timeline.updateElements({
-				updates: [{
-					trackId: resolved.track.id,
-					elementId: resolved.element.id,
-					updates: { color },
-				}],
+				updates: [
+					{
+						trackId: resolved.track.id,
+						elementId: resolved.element.id,
+						updates: { color },
+					},
+				],
 			});
 
 			return {
@@ -3253,7 +3261,8 @@ export const splitAtTimeTool: AgentTool = {
 			if (editor.playback.getIsScrubbing()) {
 				return {
 					success: false,
-					message: "正在拖动进度条，请稍候 (Scrubbing in progress, try again later)",
+					message:
+						"正在拖动进度条，请稍候 (Scrubbing in progress, try again later)",
 					data: { errorCode: "SCRUBBING_IN_PROGRESS" },
 				};
 			}

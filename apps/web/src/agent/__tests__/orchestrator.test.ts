@@ -1254,8 +1254,7 @@ describe("AgentOrchestrator", () => {
 			qualityWarningCode: "QUALITY_TARGET_NOT_MET",
 		});
 		expect(
-			(result.toolCalls?.[0]?.result.data as Record<string, unknown>)
-				.errorCode,
+			(result.toolCalls?.[0]?.result.data as Record<string, unknown>).errorCode,
 		).toBeUndefined();
 	});
 

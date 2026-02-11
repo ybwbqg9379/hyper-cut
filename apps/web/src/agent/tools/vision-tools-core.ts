@@ -165,13 +165,11 @@ function resolveTargetElementForLayout({
 }: {
 	tracks: TimelineTrack[];
 	target: SpatialLayoutTarget;
-}):
-	| {
-			trackId: string;
-			elementId: string;
-			matchReason: string;
-	  }
-	| null {
+}): {
+	trackId: string;
+	elementId: string;
+	matchReason: string;
+} | null {
 	const positionableElements = collectPositionableElements({ tracks });
 	const stickerCandidates = positionableElements.filter(
 		(item) => item.element.type === "sticker",
@@ -179,7 +177,9 @@ function resolveTargetElementForLayout({
 	const captionCandidates = positionableElements.filter(
 		(item) =>
 			item.element.type === "text" &&
-			isCaptionTextElement(item.element as Extract<TimelineElement, { type: "text" }>),
+			isCaptionTextElement(
+				item.element as Extract<TimelineElement, { type: "text" }>,
+			),
 	);
 
 	if (target === "caption") {
@@ -987,7 +987,9 @@ function buildLayoutSuggestions({
 	);
 }
 
-function toManualLayoutSuggestion(value: unknown): SpatialLayoutSuggestion | null {
+function toManualLayoutSuggestion(
+	value: unknown,
+): SpatialLayoutSuggestion | null {
 	if (!value || typeof value !== "object") return null;
 	const record = value as Record<string, unknown>;
 	const targetValue = isSpatialLayoutTarget(record.target)
@@ -1412,8 +1414,7 @@ export const applyLayoutSuggestionTool: AgentTool = {
 			target: {
 				type: "string",
 				enum: ["caption", "logo", "sticker"],
-				description:
-					"建议目标类型（caption/logo/sticker）(Layout target type)",
+				description: "建议目标类型（caption/logo/sticker）(Layout target type)",
 			},
 			suggestionIndex: {
 				type: "number",
@@ -1422,8 +1423,7 @@ export const applyLayoutSuggestionTool: AgentTool = {
 			},
 			suggestion: {
 				type: "object",
-				description:
-					`可直接传入建议对象（anchor/marginX/marginY/confidence），优先于缓存建议；confidence 会被限制在 ${MANUAL_LAYOUT_CONFIDENCE_MIN}-${MANUAL_LAYOUT_CONFIDENCE_MAX} (Inline suggestion object with clamped confidence)`,
+				description: `可直接传入建议对象（anchor/marginX/marginY/confidence），优先于缓存建议；confidence 会被限制在 ${MANUAL_LAYOUT_CONFIDENCE_MIN}-${MANUAL_LAYOUT_CONFIDENCE_MAX} (Inline suggestion object with clamped confidence)`,
 			},
 			minConfidence: {
 				type: "number",
@@ -1467,10 +1467,7 @@ export const applyLayoutSuggestionTool: AgentTool = {
 				sourceVideoAssetId = asset.id;
 				const cachedEntry = frameAnalysisCache.get(asset.id);
 				const targetValue = params.target;
-				if (
-					targetValue !== undefined &&
-					!isSpatialLayoutTarget(targetValue)
-				) {
+				if (targetValue !== undefined && !isSpatialLayoutTarget(targetValue)) {
 					return {
 						success: false,
 						message:
@@ -1533,16 +1530,19 @@ export const applyLayoutSuggestionTool: AgentTool = {
 			}
 
 			let elementId =
-				typeof params.elementId === "string" && params.elementId.trim().length > 0
+				typeof params.elementId === "string" &&
+				params.elementId.trim().length > 0
 					? params.elementId.trim()
 					: undefined;
 			let trackId =
 				typeof params.trackId === "string" && params.trackId.trim().length > 0
 					? params.trackId.trim()
 					: undefined;
-			let autoMatchedElement:
-				| { trackId: string; elementId: string; matchReason: string }
-				| null = null;
+			let autoMatchedElement: {
+				trackId: string;
+				elementId: string;
+				matchReason: string;
+			} | null = null;
 			if (!elementId) {
 				const editor = EditorCore.getInstance();
 				const tracks = editor.timeline.getTracks();
@@ -1563,8 +1563,7 @@ export const applyLayoutSuggestionTool: AgentTool = {
 					});
 					return {
 						success: false,
-						message:
-							"自动匹配目标元素失败，请指定 elementId 或从候选列表选择",
+						message: "自动匹配目标元素失败，请指定 elementId 或从候选列表选择",
 						data: {
 							errorCode: "AUTO_TARGET_NOT_FOUND",
 							target: selectedSuggestion.target,
@@ -1581,8 +1580,7 @@ export const applyLayoutSuggestionTool: AgentTool = {
 			) {
 				return {
 					success: true,
-					message:
-						`布局建议置信度 ${selectedSuggestion.confidence.toFixed(2)} 低于阈值 ${minConfidence.toFixed(2)}，已返回预览待确认`,
+					message: `布局建议置信度 ${selectedSuggestion.confidence.toFixed(2)} 低于阈值 ${minConfidence.toFixed(2)}，已返回预览待确认`,
 					data: {
 						errorCode: "LOW_CONFIDENCE_REQUIRES_CONFIRMATION",
 						stateCode: "REQUIRES_CONFIRMATION",
@@ -1668,8 +1666,7 @@ export const applyLayoutSuggestionTool: AgentTool = {
 		} catch (error) {
 			return {
 				success: false,
-				message:
-					`应用布局建议失败: ${error instanceof Error ? error.message : "Unknown error"}`,
+				message: `应用布局建议失败: ${error instanceof Error ? error.message : "Unknown error"}`,
 				data: { errorCode: "APPLY_LAYOUT_SUGGESTION_FAILED" },
 			};
 		}

@@ -300,9 +300,9 @@ describe("vision tools", () => {
 					autoMatchedElement?: { matchReason?: string };
 				}
 			).autoMatchedElement,
-			).toMatchObject({
-				matchReason: "auto-caption-first",
-			});
+		).toMatchObject({
+			matchReason: "auto-caption-first",
+		});
 	});
 
 	it("apply_layout_suggestion should return preview when confidence is below threshold", async () => {
@@ -369,9 +369,9 @@ describe("vision tools", () => {
 		});
 
 		expect(result.success).toBe(true);
-		expect((result.data as { dryRun?: boolean; applied?: boolean }).dryRun).toBe(
-			true,
-		);
+		expect(
+			(result.data as { dryRun?: boolean; applied?: boolean }).dryRun,
+		).toBe(true);
 		expect(
 			(result.data as { suggestion?: { confidence?: number } }).suggestion
 				?.confidence,
@@ -396,9 +396,9 @@ describe("vision tools", () => {
 		});
 
 		expect(result.success).toBe(false);
-		expect(
-			(result.data as { errorCode?: string }).errorCode,
-		).toBe("AUTO_TARGET_NOT_FOUND");
+		expect((result.data as { errorCode?: string }).errorCode).toBe(
+			"AUTO_TARGET_NOT_FOUND",
+		);
 		expect(
 			(result.data as { candidateElements?: Array<unknown> }).candidateElements
 				?.length ?? 0,

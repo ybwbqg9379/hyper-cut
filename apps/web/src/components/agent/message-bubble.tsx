@@ -275,7 +275,7 @@ export function MessageBubble({
 					</div>
 				) : null}
 
-					{message.resumeHint ? (
+				{message.resumeHint ? (
 					<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2 space-y-2">
 						<div className="text-xs text-muted-foreground">
 							{isZh ? (
@@ -311,59 +311,60 @@ export function MessageBubble({
 							{isZh ? "继续执行确认步骤" : "Continue with Confirmation Step"}
 						</Button>
 					</div>
-					) : null}
+				) : null}
 
-					{message.layoutConfirmation ? (
-						<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2 space-y-2">
-							<div className="text-xs text-muted-foreground">
-								{isZh
-									? `布局建议置信度 ${message.layoutConfirmation.confidence?.toFixed(2) ?? "--"} 低于阈值 ${message.layoutConfirmation.minConfidence?.toFixed(2) ?? "--"}，请确认是否应用。`
-									: `Layout confidence ${message.layoutConfirmation.confidence?.toFixed(2) ?? "--"} is below threshold ${message.layoutConfirmation.minConfidence?.toFixed(2) ?? "--"}. Confirm to apply.`}
-							</div>
+				{message.layoutConfirmation ? (
+					<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2 space-y-2">
+						<div className="text-xs text-muted-foreground">
+							{isZh
+								? `布局建议置信度 ${message.layoutConfirmation.confidence?.toFixed(2) ?? "--"} 低于阈值 ${message.layoutConfirmation.minConfidence?.toFixed(2) ?? "--"}，请确认是否应用。`
+								: `Layout confidence ${message.layoutConfirmation.confidence?.toFixed(2) ?? "--"} is below threshold ${message.layoutConfirmation.minConfidence?.toFixed(2) ?? "--"}. Confirm to apply.`}
+						</div>
+						<Button
+							size="sm"
+							variant="secondary"
+							onClick={() => {
+								const confirmation = message.layoutConfirmation;
+								if (!confirmation) return;
+								onConfirmLayoutSuggestion(confirmation.arguments);
+							}}
+							disabled={resumeDisabled}
+							className="h-7 px-2 text-xs"
+						>
+							<Play className="size-3 mr-1" />
+							{isZh ? "确认应用布局" : "Confirm Layout Apply"}
+						</Button>
+					</div>
+				) : null}
+
+				{message.layoutCandidateRetries &&
+				message.layoutCandidateRetries.length > 0 ? (
+					<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2 space-y-2">
+						<div className="text-xs text-muted-foreground">
+							{isZh
+								? "自动匹配失败，请选择候选元素重试："
+								: "Auto-match failed. Select a candidate to retry:"}
+						</div>
+						{message.layoutCandidateRetries.map((candidate) => (
 							<Button
+								key={`${candidate.elementId}-${candidate.rank}`}
 								size="sm"
 								variant="secondary"
-								onClick={() => {
-									const confirmation = message.layoutConfirmation;
-									if (!confirmation) return;
-									onConfirmLayoutSuggestion(confirmation.arguments);
-								}}
+								onClick={() => onRetryLayoutWithCandidate(candidate.arguments)}
 								disabled={resumeDisabled}
-								className="h-7 px-2 text-xs"
+								className="h-7 px-2 text-xs w-full justify-start"
 							>
-								<Play className="size-3 mr-1" />
-								{isZh ? "确认应用布局" : "Confirm Layout Apply"}
+								<Play className="size-3 mr-1 shrink-0" />
+								<span className="truncate">
+									#{candidate.rank}{" "}
+									{candidate.elementName ?? candidate.elementId}
+								</span>
 							</Button>
-						</div>
-					) : null}
+						))}
+					</div>
+				) : null}
 
-					{message.layoutCandidateRetries && message.layoutCandidateRetries.length > 0 ? (
-						<div className="mt-2 rounded-md border border-border/50 bg-background/60 px-2 py-2 space-y-2">
-							<div className="text-xs text-muted-foreground">
-								{isZh
-									? "自动匹配失败，请选择候选元素重试："
-									: "Auto-match failed. Select a candidate to retry:"}
-							</div>
-							{message.layoutCandidateRetries.map((candidate) => (
-								<Button
-									key={`${candidate.elementId}-${candidate.rank}`}
-									size="sm"
-									variant="secondary"
-									onClick={() => onRetryLayoutWithCandidate(candidate.arguments)}
-									disabled={resumeDisabled}
-									className="h-7 px-2 text-xs w-full justify-start"
-								>
-									<Play className="size-3 mr-1 shrink-0" />
-									<span className="truncate">
-										#{candidate.rank}{" "}
-										{candidate.elementName ?? candidate.elementId}
-									</span>
-								</Button>
-							))}
-						</div>
-					) : null}
-
-					{message.toolCalls && message.toolCalls.length > 0 && (
+				{message.toolCalls && message.toolCalls.length > 0 && (
 					<div className="mt-2 pt-2 border-t border-border/20 space-y-1">
 						{message.toolCalls.map((tc, index) => (
 							<div

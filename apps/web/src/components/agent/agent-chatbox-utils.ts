@@ -511,7 +511,9 @@ export function extractLayoutConfirmationFromToolCalls(
 		}
 
 		const suggestionRecord = asObjectRecord(dataRecord.suggestion);
-		const plannedArgsRecord = asObjectRecord(dataRecord.plannedPositionElementArgs);
+		const plannedArgsRecord = asObjectRecord(
+			dataRecord.plannedPositionElementArgs,
+		);
 		if (!suggestionRecord || !plannedArgsRecord) continue;
 
 		const minConfidence = toFiniteNumber(dataRecord.minConfidence);
