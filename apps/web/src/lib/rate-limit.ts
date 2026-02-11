@@ -15,6 +15,11 @@ export const baseRateLimit = new Ratelimit({
 });
 
 export async function checkRateLimit({ request }: { request: Request }) {
+	// Skip Redis-backed rate limiting in local development to reduce setup friction.
+	if (webEnv.NODE_ENV === "development") {
+		return { success: true, limited: false };
+	}
+
 	const ip = request.headers.get("x-forwarded-for") ?? "anonymous";
 	const { success } = await baseRateLimit.limit(ip);
 	return { success, limited: !success };
