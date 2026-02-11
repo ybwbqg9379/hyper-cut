@@ -163,7 +163,8 @@ export function buildStickerElement({
 		startTime,
 		trimStart: 0,
 		trimEnd: 0,
-		transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+		// Sticker source is rendered in contain mode, so use a smaller default scale.
+		transform: { scale: 0.2, position: { x: 0, y: 0 }, rotate: 0 },
 		opacity: 1,
 	};
 }

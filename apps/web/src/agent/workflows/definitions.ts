@@ -622,6 +622,13 @@ export const WORKFLOWS: Workflow[] = [
 		templateDescription:
 			"无需手动配置，点击即执行全链路。默认目标时长为当前时间线的一半。",
 		tags: ["one-click", "showcase", "end-to-end"],
+		quality: {
+			enabled: true,
+			maxIterations: 2,
+			targetDurationSeconds: 60,
+			durationToleranceRatio: 0.18,
+			failureMode: "warn",
+		},
 		steps: [
 			{
 				id: "baseline-summary",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useDeepCompareEffect from "use-deep-compare-effect";
 import { useEditor } from "@/hooks/use-editor";
 import { useRafLoop } from "@/hooks/use-raf-loop";
@@ -51,8 +51,8 @@ function RenderTreeController() {
 
 export function PreviewPanel() {
 	return (
-		<div className="bg-panel relative flex h-full min-h-0 w-full min-w-0 flex-col rounded-sm">
-			<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-2">
+		<div className="bg-panel relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-sm">
+			<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden p-2">
 				<PreviewCanvas />
 				<RenderTreeController />
 				<AgentPreviewOverlay />
@@ -160,12 +160,17 @@ function AgentPreviewOverlay() {
 
 function PreviewCanvas() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const canvasHostRef = useRef<HTMLDivElement>(null);
 	const lastFrameRef = useRef(-1);
 	const lastSceneRef = useRef<RootNode | null>(null);
 	const renderingRef = useRef(false);
 	const { width, height } = usePreviewSize();
 	const editor = useEditor();
 	const activeProject = editor.project.getActive();
+	const [displaySize, setDisplaySize] = useState(() => ({
+		width: Number.isFinite(width) ? Math.max(1, Number(width)) : 1,
+		height: Number.isFinite(height) ? Math.max(1, Number(height)) : 1,
+	}));
 
 	const renderer = useMemo(() => {
 		return new CanvasRenderer({
@@ -253,23 +258,68 @@ function PreviewCanvas() {
 		};
 	}, [setHighlightPreviewPlaybackEnabled]);
 
+	useEffect(() => {
+		const host = canvasHostRef.current;
+		const sourceWidth = Number.isFinite(width) ? Math.max(1, Number(width)) : 1;
+		const sourceHeight = Number.isFinite(height)
+			? Math.max(1, Number(height))
+			: 1;
+		if (!host) {
+			return;
+		}
+
+		const updateSize = () => {
+			const hostWidth = host.clientWidth;
+			const hostHeight = host.clientHeight;
+			if (hostWidth <= 0 || hostHeight <= 0) {
+				return;
+			}
+			const scale = Math.min(hostWidth / sourceWidth, hostHeight / sourceHeight);
+			const nextWidth = Math.max(1, Math.round(sourceWidth * scale));
+			const nextHeight = Math.max(1, Math.round(sourceHeight * scale));
+			setDisplaySize((prev) =>
+				prev.width === nextWidth && prev.height === nextHeight
+					? prev
+					: { width: nextWidth, height: nextHeight },
+			);
+		};
+
+		updateSize();
+		const resizeObserver = new ResizeObserver(updateSize);
+		resizeObserver.observe(host);
+		return () => {
+			resizeObserver.disconnect();
+		};
+	}, [width, height]);
+
 	useRafLoop(render);
 
 	return (
-		<div className="relative">
-			<canvas
-				ref={canvasRef}
-				width={width}
-				height={height}
-				className="block max-h-full max-w-full border"
+		<div
+			ref={canvasHostRef}
+			className="relative flex h-full w-full items-center justify-center overflow-hidden"
+		>
+			<div
+				className="relative shrink-0"
 				style={{
-					background:
-						activeProject.settings.background.type === "blur"
-							? "transparent"
-							: activeProject?.settings.background.color,
+					width: `${displaySize.width}px`,
+					height: `${displaySize.height}px`,
 				}}
-			/>
-			<PreviewInteractionOverlay canvasRef={canvasRef} />
+			>
+				<canvas
+					ref={canvasRef}
+					width={width}
+					height={height}
+					className="block h-full w-full border"
+					style={{
+						background:
+							activeProject.settings.background.type === "blur"
+								? "transparent"
+								: activeProject?.settings.background.color,
+					}}
+				/>
+				<PreviewInteractionOverlay canvasRef={canvasRef} />
+			</div>
 		</div>
 	);
 }

@@ -1,17 +1,6 @@
 import type { CanvasRenderer } from "../canvas-renderer";
 import { BaseNode } from "./base-node";
 import type { TextElement } from "@/types/timeline";
-import { FONT_SIZE_SCALE_REFERENCE } from "@/constants/text-constants";
-
-function scaleFontSize({
-	fontSize,
-	canvasHeight,
-}: {
-	fontSize: number;
-	canvasHeight: number;
-}): number {
-	return fontSize * (canvasHeight / FONT_SIZE_SCALE_REFERENCE);
-}
 
 export type TextNodeParams = TextElement & {
 	canvasCenter: { x: number; y: number };
@@ -150,10 +139,7 @@ export class TextNode extends BaseNode<TextNodeParams> {
 
 		const fontWeight = this.params.fontWeight === "bold" ? "bold" : "normal";
 		const fontStyle = this.params.fontStyle === "italic" ? "italic" : "normal";
-		const scaledFontSize = scaleFontSize({
-			fontSize: this.params.fontSize,
-			canvasHeight: this.params.canvasHeight,
-		});
+		const scaledFontSize = Math.max(1, this.params.fontSize);
 		renderer.context.font = `${fontStyle} ${fontWeight} ${scaledFontSize}px ${this.params.fontFamily}`;
 		renderer.context.textAlign = this.params.textAlign;
 		renderer.context.textBaseline = this.params.textBaseline || "middle";
@@ -174,10 +160,7 @@ export class TextNode extends BaseNode<TextNodeParams> {
 			maxWidth: isCaption ? maxCaptionWidth : Number.MAX_SAFE_INTEGER,
 			autoWrap: isCaption,
 		});
-		const lineHeight = Math.max(
-			this.params.fontSize * 1.2,
-			this.params.fontSize + 4,
-		);
+		const lineHeight = Math.max(scaledFontSize * 1.2, scaledFontSize + 4);
 		const blockHeight = textLines.length * lineHeight;
 		const firstLineCenterY = -blockHeight / 2 + lineHeight / 2;
 		const padX = 8;
@@ -190,9 +173,9 @@ export class TextNode extends BaseNode<TextNodeParams> {
 				const lineCenterY = firstLineCenterY + index * lineHeight;
 				const metrics = renderer.context.measureText(line);
 				const ascent =
-					metrics.actualBoundingBoxAscent ?? this.params.fontSize * 0.8;
+					metrics.actualBoundingBoxAscent ?? scaledFontSize * 0.8;
 				const descent =
-					metrics.actualBoundingBoxDescent ?? this.params.fontSize * 0.2;
+					metrics.actualBoundingBoxDescent ?? scaledFontSize * 0.2;
 				const textW = metrics.width;
 				const textH = ascent + descent;
 

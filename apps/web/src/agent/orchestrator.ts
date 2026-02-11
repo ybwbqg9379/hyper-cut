@@ -222,6 +222,7 @@ function compactRunWorkflowData(data: unknown): unknown {
 	const compacted: Record<string, unknown> = {};
 	for (const key of [
 		"errorCode",
+		"qualityWarningCode",
 		"status",
 		"workflowName",
 		"nextStep",
@@ -1117,15 +1118,18 @@ export class AgentOrchestrator {
 		passed,
 		iteration,
 		maxIterations,
+		failOnUnmetQuality,
 	}: {
 		toolResult: ToolResult;
 		reports: QualityReport[];
 		passed: boolean;
 		iteration: number;
 		maxIterations: number;
+		failOnUnmetQuality: boolean;
 	}): ToolResult {
 		const latestReport = reports[reports.length - 1];
 		const dataRecord = asObjectRecord(toolResult.data) ?? {};
+		const shouldFailForQuality = !passed && failOnUnmetQuality;
 		const data: Record<string, unknown> = {
 			...dataRecord,
 			qualityReport: latestReport,
@@ -1133,18 +1137,26 @@ export class AgentOrchestrator {
 				passed,
 				iteration,
 				maxIterations,
+				enforced: failOnUnmetQuality,
 				reports,
 			},
 		};
-		if (!passed) {
+		if (shouldFailForQuality) {
 			data.errorCode = QUALITY_TARGET_NOT_MET_ERROR_CODE;
+		} else if (!passed) {
+			data.qualityWarningCode = QUALITY_TARGET_NOT_MET_ERROR_CODE;
 		}
+		const qualityStatus = passed
+			? "达标"
+			: failOnUnmetQuality
+				? "未达标"
+				: "未达标，已降级放行";
 		const qualitySummary = latestReport
-			? `质量评分 ${latestReport.overallScore.toFixed(2)} (${passed ? "达标" : "未达标"})`
+			? `质量评分 ${latestReport.overallScore.toFixed(2)} (${qualityStatus})`
 			: "质量评分不可用";
 
 		return {
-			success: passed ? toolResult.success : false,
+			success: shouldFailForQuality ? false : toolResult.success,
 			message: `${toolResult.message}\n${qualitySummary}`,
 			data,
 		};
@@ -1209,6 +1221,8 @@ export class AgentOrchestrator {
 			0.05,
 			0.5,
 		);
+		const failOnUnmetQuality =
+			(workflowQualityConfig?.failureMode ?? "strict") !== "warn";
 
 		let currentResult = initialResult;
 		const reports: QualityReport[] = [];
@@ -1247,6 +1261,7 @@ export class AgentOrchestrator {
 					passed: true,
 					iteration,
 					maxIterations,
+					failOnUnmetQuality,
 				});
 			}
 
@@ -1257,6 +1272,7 @@ export class AgentOrchestrator {
 					passed: false,
 					iteration,
 					maxIterations,
+					failOnUnmetQuality,
 				});
 			}
 
@@ -1312,6 +1328,7 @@ export class AgentOrchestrator {
 					passed: false,
 					iteration,
 					maxIterations,
+					failOnUnmetQuality,
 				});
 			}
 			currentResult = retryResult;

@@ -6,6 +6,18 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **字幕与贴纸可读性修复（One-click 关键体验）**
+  - 修复文本渲染二次放大：`text-node` 改为按元素字号直出，去除按画布高度再次放大，避免字幕“巨大且发糊”
+  - 修复多行字幕重叠：行高与背景包围盒改为使用实际渲染字号，避免同屏文字叠成白块
+  - 修复贴纸默认尺寸：`buildStickerElement` 默认 `transform.scale` 从 `1` 调整为 `0.2`，防止新贴纸铺满画布
+  - 增强自动语音识别：`generate_captions(language=auto)` 新增中文兜底重试策略（检测到英文单字母碎片化结果时自动重试 `zh` 并择优）
+
+- **One-click 质量门控降级放行**：`one-click-masterpiece` 在质量循环未达标时改为告警完成，不再将整次 `run_workflow` 标记为失败
+  - `workflows/types.ts` 新增 `quality.failureMode`（`strict | warn`）
+  - `one-click-masterpiece` 配置 `quality.failureMode = "warn"`，保留质量评分与自动二次迭代
+  - 编排层输出 `qualityWarningCode: QUALITY_TARGET_NOT_MET`，仅 `strict` 模式继续返回失败码
+  - 新增编排器回归测试覆盖非阻断质量门控路径
+
 - **Agent Vision → Layout 产品化收尾**
   - 空间分析英文关键词已使用 `\b` 词边界匹配，新增覆盖 bright/copyright/stop/desktop/context/texture 等误报防护测试及显式关键词命中验证
   - 自动匹配失败时候选列表升级为完整可选列表（不再仅显示第一个候选），用户可选择任意候选 #1/#2/#3 重试

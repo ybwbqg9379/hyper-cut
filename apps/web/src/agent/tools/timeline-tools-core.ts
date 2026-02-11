@@ -5,7 +5,11 @@ import type {
 	TimelineTrack,
 } from "@/types/timeline";
 import type { LanguageCode } from "@/types/language";
-import type { TranscriptionModelId } from "@/types/transcription";
+import type {
+	TranscriptionModelId,
+	TranscriptionLanguage,
+	TranscriptionResult,
+} from "@/types/transcription";
 import { EditorCore } from "@/core";
 import {
 	getElementsAtTime,
@@ -66,6 +70,8 @@ const TEXT_ALIGN_VALUES = ["left", "center", "right"] as const;
 const TEXT_WEIGHT_VALUES = ["normal", "bold"] as const;
 const TEXT_STYLE_VALUES = ["normal", "italic"] as const;
 const TEXT_DECORATION_VALUES = ["none", "underline", "line-through"] as const;
+const CJK_CHAR_REGEX = /[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/gu;
+const LATIN_TOKEN_REGEX = /[a-z]+/giu;
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
@@ -82,6 +88,89 @@ function inferAutoCaptionLanguage(): LanguageCode | undefined {
 	const locale = navigator.language?.toLowerCase() ?? "";
 	if (locale.startsWith("zh")) {
 		return "zh";
+	}
+	return undefined;
+}
+
+function collectTranscriptText(transcription: TranscriptionResult): string {
+	const segmentText = transcription.segments
+		.map((segment) => segment.text)
+		.join(" ");
+	const text = `${transcription.text} ${segmentText}`.trim();
+	return text.replace(/\s+/g, " ").trim();
+}
+
+function analyzeTranscriptText(transcription: TranscriptionResult): {
+	cjkCharCount: number;
+	latinTokenCount: number;
+	singleLatinTokenRatio: number;
+	longLatinTokenRatio: number;
+} {
+	const text = collectTranscriptText(transcription);
+	const cjkCharCount = Array.from(text.matchAll(CJK_CHAR_REGEX)).length;
+	const latinTokens = Array.from(text.matchAll(LATIN_TOKEN_REGEX)).map(
+		(match) => match[0],
+	);
+	const latinTokenCount = latinTokens.length;
+	if (latinTokenCount === 0) {
+		return {
+			cjkCharCount,
+			latinTokenCount,
+			singleLatinTokenRatio: 0,
+			longLatinTokenRatio: 0,
+		};
+	}
+
+	const singleLatinTokens = latinTokens.filter(
+		(token) => token.trim().length === 1,
+	).length;
+	const longLatinTokens = latinTokens.filter(
+		(token) => token.trim().length >= 3,
+	).length;
+	return {
+		cjkCharCount,
+		latinTokenCount,
+		singleLatinTokenRatio: singleLatinTokens / latinTokenCount,
+		longLatinTokenRatio: longLatinTokens / latinTokenCount,
+	};
+}
+
+function shouldRetryAutoWithZh(transcription: TranscriptionResult): boolean {
+	const summary = analyzeTranscriptText(transcription);
+	return (
+		summary.cjkCharCount === 0 &&
+		summary.latinTokenCount >= 10 &&
+		summary.singleLatinTokenRatio >= 0.45 &&
+		summary.longLatinTokenRatio <= 0.35
+	);
+}
+
+function scoreTranscriptQuality(transcription: TranscriptionResult): number {
+	const summary = analyzeTranscriptText(transcription);
+	return (
+		summary.cjkCharCount * 0.015 +
+		summary.longLatinTokenRatio * 1.2 -
+		summary.singleLatinTokenRatio * 1.5
+	);
+}
+
+function inferCaptionLanguage({
+	transcription,
+	fallback,
+}: {
+	transcription: TranscriptionResult;
+	fallback: TranscriptionLanguage;
+}): LanguageCode | undefined {
+	if (fallback === "zh" || fallback === "en") {
+		return fallback;
+	}
+
+	const summary = analyzeTranscriptText(transcription);
+	if (summary.cjkCharCount > 0) {
+		return "zh";
+	}
+	if (summary.latinTokenCount >= 3 && summary.longLatinTokenRatio >= 0.5) {
+		return "en";
 	}
 	return undefined;
 }
@@ -1031,23 +1120,50 @@ export const generateCaptionsTool: AgentTool = {
 				};
 			}
 
-			const transcription = await transcriptionService.transcribe({
+			const requestedLanguage: TranscriptionLanguage =
+				languageParam === "auto"
+					? (autoLanguage ?? "auto")
+					: (languageParam as LanguageCode);
+
+			let transcription = await transcriptionService.transcribe({
 				audioData: samples,
 				sampleRate,
-				language:
-					languageParam === "auto"
-						? autoLanguage
-						: (languageParam as LanguageCode),
+				language: requestedLanguage,
 				modelId: modelId as TranscriptionModelId,
 			});
+			let resolvedLanguage: TranscriptionLanguage = requestedLanguage;
+
+			if (languageParam === "auto" && requestedLanguage === "auto") {
+				const shouldRetryZh = shouldRetryAutoWithZh(transcription);
+				if (shouldRetryZh) {
+					const zhTranscription = await transcriptionService.transcribe({
+						audioData: samples,
+						sampleRate,
+						language: "zh",
+						modelId: modelId as TranscriptionModelId,
+					});
+
+					const autoScore = scoreTranscriptQuality(transcription);
+					const zhScore = scoreTranscriptQuality(zhTranscription);
+					if (zhScore > autoScore + 0.12) {
+						transcription = zhTranscription;
+						resolvedLanguage = "zh";
+					}
+				}
+			}
+
+			const captionLanguage =
+				languageParam === "auto"
+					? inferCaptionLanguage({
+							transcription,
+							fallback: resolvedLanguage,
+						})
+					: (languageParam as LanguageCode);
 
 			const captionChunks = buildCaptionChunks({
 				segments: transcription.segments,
 				words: transcription.words,
-				language:
-					languageParam === "auto"
-						? (autoLanguage ?? transcription.language)
-						: languageParam,
+				language: captionLanguage,
 				...(wordsPerChunk !== undefined ? { wordsPerChunk } : {}),
 				...(minDuration !== undefined ? { minDuration } : {}),
 			});
@@ -1056,7 +1172,11 @@ export const generateCaptionsTool: AgentTool = {
 				return {
 					success: true,
 					message: "未检测到可生成的字幕 (No captions generated)",
-					data: { captionCount: 0, language: transcription.language, modelId },
+					data: {
+						captionCount: 0,
+						language: captionLanguage ?? resolvedLanguage,
+						modelId,
+					},
 				};
 			}
 
@@ -1134,7 +1254,7 @@ export const generateCaptionsTool: AgentTool = {
 						metadata: createCaptionMetadata({
 							origin: "agent-tool",
 							segmentIndex: i,
-							language: transcription.language,
+							language: captionLanguage,
 							modelId,
 						}),
 					},
@@ -1148,7 +1268,7 @@ export const generateCaptionsTool: AgentTool = {
 					captionCount: captionChunks.length,
 					trackId: captionTrackId,
 					source,
-					language: transcription.language,
+					language: captionLanguage ?? resolvedLanguage,
 					modelId,
 				},
 			};

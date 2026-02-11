@@ -1151,6 +1151,114 @@ describe("AgentOrchestrator", () => {
 		});
 	});
 
+	it("runWorkflow should warn instead of failing when quality gate is non-blocking", async () => {
+		const provider = buildProvider();
+		(createRoutedProvider as ReturnType<typeof vi.fn>).mockReturnValue(
+			provider,
+		);
+
+		evaluateQuality
+			.mockReturnValueOnce({
+				passed: false,
+				overallScore: 0.63,
+				timelineDurationSeconds: 18.15,
+				targetDurationSeconds: 19.74,
+				metrics: {
+					semanticCompleteness: {
+						value: 0.64,
+						score: 0.64,
+						passed: false,
+						threshold: 0.65,
+					},
+					silenceRate: {
+						value: 0.18,
+						score: 0.82,
+						passed: true,
+						threshold: 0.45,
+					},
+					subtitleCoverage: {
+						value: 0.58,
+						score: 0.58,
+						passed: true,
+						threshold: 0.55,
+					},
+					durationCompliance: {
+						value: 0.92,
+						score: 0.92,
+						passed: true,
+						threshold: 0.7,
+					},
+				},
+				reasons: ["语义完整性偏低"],
+				evaluatedAt: "2026-02-11T00:00:00.000Z",
+			})
+			.mockReturnValueOnce({
+				passed: false,
+				overallScore: 0.63,
+				timelineDurationSeconds: 18.15,
+				targetDurationSeconds: 19.74,
+				metrics: {
+					semanticCompleteness: {
+						value: 0.64,
+						score: 0.64,
+						passed: false,
+						threshold: 0.65,
+					},
+					silenceRate: {
+						value: 0.18,
+						score: 0.82,
+						passed: true,
+						threshold: 0.45,
+					},
+					subtitleCoverage: {
+						value: 0.58,
+						score: 0.58,
+						passed: true,
+						threshold: 0.55,
+					},
+					durationCompliance: {
+						value: 0.92,
+						score: 0.92,
+						passed: true,
+						threshold: 0.7,
+					},
+				},
+				reasons: ["语义完整性偏低"],
+				evaluatedAt: "2026-02-11T00:00:01.000Z",
+			});
+
+		const runWorkflowExecute = vi
+			.fn()
+			.mockResolvedValue({ success: true, message: "workflow ok" });
+		const orchestrator = new AgentOrchestrator(
+			[
+				{
+					name: "run_workflow",
+					description: "Run workflow",
+					parameters: { type: "object", properties: {}, required: [] },
+					execute: runWorkflowExecute,
+				},
+			],
+			{ planningEnabled: false },
+		);
+
+		const result = await orchestrator.runWorkflow({
+			workflowName: "one-click-masterpiece",
+			confirmRequiredSteps: true,
+			qualityMaxIterations: 2,
+		});
+
+		expect(runWorkflowExecute).toHaveBeenCalledTimes(2);
+		expect(result.success).toBe(true);
+		expect(result.toolCalls?.[0]?.result.data).toMatchObject({
+			qualityWarningCode: "QUALITY_TARGET_NOT_MET",
+		});
+		expect(
+			(result.toolCalls?.[0]?.result.data as Record<string, unknown>)
+				.errorCode,
+		).toBeUndefined();
+	});
+
 	it("should execute pending plan after confirmation", async () => {
 		const provider = buildProvider();
 		const toolExecute = vi.fn().mockResolvedValue({

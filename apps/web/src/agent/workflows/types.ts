@@ -14,11 +14,14 @@ export interface WorkflowStepArgumentSchema {
 	enum?: Array<string | number | boolean>;
 }
 
+export type WorkflowQualityFailureMode = "strict" | "warn";
+
 export interface WorkflowQualityConfig {
 	enabled?: boolean;
 	maxIterations?: number;
 	targetDurationSeconds?: number;
 	durationToleranceRatio?: number;
+	failureMode?: WorkflowQualityFailureMode;
 }
 
 export interface WorkflowStep {
