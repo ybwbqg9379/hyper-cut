@@ -42,6 +42,9 @@ interface SuggestedCandidate {
 
 const DEFAULT_SUGGESTION_COUNT = 10;
 const DEFAULT_SMART_TRIM_TARGET_SECONDS = 60;
+const DEFAULT_MAX_WORD_DELETION_RATIO = 1;
+const MIN_WORD_DELETION_RATIO = 0.1;
+const MAX_WORD_DELETION_RATIO = 1;
 
 let staleWhisperRef: object | null = null;
 
@@ -265,6 +268,73 @@ function dedupeAndNormalizeSuggestions({
 	}
 
 	return suggestions;
+}
+
+function clampSuggestionsByWordDeletionRatio({
+	suggestions,
+	totalWords,
+	maxWordDeletionRatio,
+}: {
+	suggestions: TranscriptCutSuggestion[];
+	totalWords: number;
+	maxWordDeletionRatio: number;
+}): {
+	suggestions: TranscriptCutSuggestion[];
+	deletedWords: number;
+	deletedWordRatio: number;
+	limitedByWordRatio: boolean;
+} {
+	if (totalWords <= 0) {
+		return {
+			suggestions: [],
+			deletedWords: 0,
+			deletedWordRatio: 0,
+			limitedByWordRatio: false,
+		};
+	}
+
+	const clampedRatio = Math.max(
+		MIN_WORD_DELETION_RATIO,
+		Math.min(MAX_WORD_DELETION_RATIO, maxWordDeletionRatio),
+	);
+	if (clampedRatio >= 1) {
+		const deletedWords = suggestions.reduce(
+			(sum, suggestion) =>
+				sum +
+				Math.max(0, suggestion.endWordIndex - suggestion.startWordIndex + 1),
+			0,
+		);
+		return {
+			suggestions,
+			deletedWords,
+			deletedWordRatio: deletedWords / totalWords,
+			limitedByWordRatio: false,
+		};
+	}
+
+	const maxWordsToDelete = Math.max(1, Math.floor(totalWords * clampedRatio));
+	const selected: TranscriptCutSuggestion[] = [];
+	let deletedWords = 0;
+
+	for (const suggestion of suggestions) {
+		const wordCount = Math.max(
+			0,
+			suggestion.endWordIndex - suggestion.startWordIndex + 1,
+		);
+		if (wordCount === 0) continue;
+		if (deletedWords + wordCount > maxWordsToDelete) {
+			break;
+		}
+		selected.push(suggestion);
+		deletedWords += wordCount;
+	}
+
+	return {
+		suggestions: selected,
+		deletedWords,
+		deletedWordRatio: deletedWords / totalWords,
+		limitedByWordRatio: selected.length < suggestions.length,
+	};
 }
 
 function buildFallbackSuggestions({
@@ -808,6 +878,11 @@ export const transcriptSmartTrimTool: AgentTool = {
 				type: "boolean",
 				description: "仅预览建议，不实际修改（默认 true）",
 			},
+			maxWordDeletionRatio: {
+				type: "number",
+				description:
+					"最多删除词数占比（0.1-1，默认 1 不限制）。用于避免语义被过度裁剪",
+			},
 		},
 		required: ["targetDurationSeconds"],
 	},
@@ -829,6 +904,14 @@ export const transcriptSmartTrimTool: AgentTool = {
 				: DEFAULT_SMART_TRIM_TARGET_SECONDS;
 		const strategy = normalizeSmartTrimStrategy(params.strategy);
 		const dryRun = params.dryRun !== false;
+		const maxWordDeletionRatio =
+			isFiniteNumber(params.maxWordDeletionRatio) &&
+			params.maxWordDeletionRatio > 0
+				? Math.max(
+						MIN_WORD_DELETION_RATIO,
+						Math.min(MAX_WORD_DELETION_RATIO, params.maxWordDeletionRatio),
+					)
+				: DEFAULT_MAX_WORD_DELETION_RATIO;
 		const currentDuration = editor.timeline.getTotalDuration();
 
 		if (currentDuration <= targetDurationSeconds) {
@@ -854,15 +937,27 @@ export const transcriptSmartTrimTool: AgentTool = {
 			targetDurationSeconds,
 		});
 
-		if (suggestions.length === 0) {
+		const wordRatioGuard = clampSuggestionsByWordDeletionRatio({
+			suggestions,
+			totalWords: document.words.length,
+			maxWordDeletionRatio,
+		});
+		const guardedSuggestions = wordRatioGuard.suggestions;
+
+		if (guardedSuggestions.length === 0) {
 			return {
 				success: true,
-				message: "未找到可用于缩时的片段建议。",
+				message:
+					wordRatioGuard.limitedByWordRatio || suggestions.length > 0
+						? "智能缩时建议被删词比例保护拦截，未执行实际裁剪。"
+						: "未找到可用于缩时的片段建议。",
 				data: {
 					targetDurationSeconds,
 					currentDurationSeconds: Number(currentDuration.toFixed(3)),
 					dryRun,
-					suggestions: [],
+					suggestions: guardedSuggestions,
+					maxWordDeletionRatio,
+					deletedWordRatio: Number(wordRatioGuard.deletedWordRatio.toFixed(4)),
 				},
 			};
 		}
@@ -872,7 +967,7 @@ export const transcriptSmartTrimTool: AgentTool = {
 				toolName: "transcript_smart_trim",
 				dryRun: true,
 				document,
-				suggestions,
+				suggestions: guardedSuggestions,
 			});
 		}
 
@@ -880,7 +975,7 @@ export const transcriptSmartTrimTool: AgentTool = {
 			const applied = await applySuggestions({
 				label: "transcript_smart_trim",
 				document,
-				suggestions,
+				suggestions: guardedSuggestions,
 			});
 			if (!applied.success) {
 				return {
@@ -898,7 +993,10 @@ export const transcriptSmartTrimTool: AgentTool = {
 					currentDurationSeconds: Number(currentDuration.toFixed(3)),
 					dryRun: false,
 					strategy,
-					suggestions,
+					suggestions: guardedSuggestions,
+					maxWordDeletionRatio,
+					deletedWordRatio: Number(wordRatioGuard.deletedWordRatio.toFixed(4)),
+					limitedByWordRatio: wordRatioGuard.limitedByWordRatio,
 					diff: applied.diff,
 				},
 			};

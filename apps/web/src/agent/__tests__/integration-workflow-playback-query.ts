@@ -118,12 +118,12 @@ export function registerWorkflowPlaybackQueryTests() {
 			const tool = getToolByName("run_workflow");
 			const result = await tool.execute({
 				workflowName: "one-click-masterpiece",
-				startFromStepId: "add-sfx",
+				startFromStepId: "analyze-frames",
 				stepOverrides: [
 					{
-						stepId: "add-sfx",
+						stepId: "analyze-frames",
 						arguments: {
-							resultIndex: -1,
+							videoAssetId: "__missing_asset__",
 						},
 					},
 				],
@@ -139,7 +139,9 @@ export function registerWorkflowPlaybackQueryTests() {
 			)?.optionalFailures;
 			expect(Array.isArray(optionalFailures)).toBe(true);
 			expect(
-				optionalFailures?.some((failure) => failure.stepId === "add-sfx"),
+				optionalFailures?.some(
+					(failure) => failure.stepId === "analyze-frames",
+				),
 			).toBe(true);
 		});
 
@@ -153,7 +155,7 @@ export function registerWorkflowPlaybackQueryTests() {
 			};
 
 			const result = await tool.execute({
-				workflowName: "one-click-masterpiece",
+				workflowName: "talking-head-polish",
 				startFromStepId: "apply-caption-layout",
 				stepOverrides: [
 					{

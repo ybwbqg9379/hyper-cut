@@ -7,9 +7,14 @@ All notable changes to this project (forked from HyperCut) will be documented in
 ### Added
 
 - **One-click 字幕稳定性调整（单轮质检 + 后置字幕）**
+  - `one-click-masterpiece` 收敛为轻量链路：`detect_scenes + analyze_frames + generate_captions + evaluate_timeline_quality`，移除默认特效/贴纸/高光裁剪步骤，降低流程复杂度
+  - 一键入口目标时长改为“当前时长”，不再默认按 1/2 目标压缩，避免质量评分因时长偏差持续告警
   - `one-click-masterpiece` 的质量循环默认迭代次数从 `2` 调整为 `1`，保留质量评估但不再自动重跑整条链路
   - 一键入口 `qualityMaxIterations` 同步改为 `1`，避免首轮结果被后续轮次覆盖
   - 字幕步骤改为后置：`generate_captions / apply_caption_preset / apply_layout_suggestion` 移到裁剪与静音压缩之后，减少字幕被后续删减流程二次损耗
+  - 回归修复：为 `suggest_transcript_cuts` 增加前置 `generate_captions`（`bootstrap-captions`），确保文本裁剪步骤始终有可用转录上下文
+  - 新增 `transcript_smart_trim.maxWordDeletionRatio`（删词比例保护，默认 `1` 不限制），避免目标缩时下过度删除语义段导致字幕显著缩水
+  - `one-click-masterpiece` 的 `smart-trim` 默认策略改为 `filler-first`，并设置 `maxWordDeletionRatio=0.45`，优先删填充词并限制语义损耗
 
 - **字幕与贴纸可读性修复（One-click 关键体验）**
   - 修复文本渲染二次放大：`text-node` 改为按元素字号直出，去除按画布高度再次放大，避免字幕“巨大且发糊”

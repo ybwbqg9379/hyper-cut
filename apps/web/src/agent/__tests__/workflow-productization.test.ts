@@ -72,22 +72,10 @@ describe("workflow productization", () => {
 		});
 	});
 
-	it("should allow one-click workflow target overrides", () => {
+	it("should allow one-click workflow quality target overrides", () => {
 		const resolved = resolveWorkflowFromParams({
 			workflowName: "one-click-masterpiece",
 			stepOverrides: [
-				{
-					stepId: "smart-trim",
-					arguments: {
-						targetDurationSeconds: 22.5,
-					},
-				},
-				{
-					stepId: "generate-plan",
-					arguments: {
-						targetDuration: 22.5,
-					},
-				},
 				{
 					stepId: "quality-report",
 					arguments: {
@@ -101,21 +89,13 @@ describe("workflow productization", () => {
 		if (!resolved.ok) {
 			throw new Error("Expected valid one-click override to pass");
 		}
-		const smartTrim = resolved.resolved.steps.find(
-			(step) => step.id === "smart-trim",
-		);
-		const generatePlan = resolved.resolved.steps.find(
-			(step) => step.id === "generate-plan",
-		);
 		const quality = resolved.resolved.steps.find(
 			(step) => step.id === "quality-report",
 		);
-		expect(smartTrim?.arguments.targetDurationSeconds).toBe(22.5);
-		expect(generatePlan?.arguments.targetDuration).toBe(22.5);
 		expect(quality?.arguments.targetDurationSeconds).toBe(22.5);
 	});
 
-	it("should keep one-click highlight apply step in dry-run safety mode", () => {
+	it("should keep one-click lightweight core steps", () => {
 		const workflows = listWorkflows();
 		const oneClick = workflows.find(
 			(workflow) => workflow.name === "one-click-masterpiece",
@@ -124,22 +104,22 @@ describe("workflow productization", () => {
 		const detectScenes = oneClick?.steps.find(
 			(step) => step.id === "detect-scenes",
 		);
-		const applyCut = oneClick?.steps.find((step) => step.id === "apply-cut");
-		expect(detectScenes?.toolName).toBe("detect_scenes");
-		expect(applyCut?.arguments).toMatchObject({
-			dryRun: true,
-		});
-		const applyCaptionLayout = oneClick?.steps.find(
-			(step) => step.id === "apply-caption-layout",
+		const analyzeFrames = oneClick?.steps.find(
+			(step) => step.id === "analyze-frames",
 		);
-		expect(applyCaptionLayout?.toolName).toBe("apply_layout_suggestion");
-		expect(applyCaptionLayout?.requiresConfirmation).toBe(true);
-		expect(applyCaptionLayout?.arguments).toMatchObject({
-			minConfidence: 0.7,
-			dryRun: false,
-		});
+		const generateCaptions = oneClick?.steps.find(
+			(step) => step.id === "generate-captions",
+		);
+		const qualityReport = oneClick?.steps.find(
+			(step) => step.id === "quality-report",
+		);
 		const addSfx = oneClick?.steps.find((step) => step.id === "add-sfx");
-		expect(addSfx?.optional).toBe(true);
+		expect(detectScenes?.toolName).toBe("detect_scenes");
+		expect(analyzeFrames?.toolName).toBe("analyze_frames");
+		expect(analyzeFrames?.optional).toBe(true);
+		expect(generateCaptions?.toolName).toBe("generate_captions");
+		expect(qualityReport?.toolName).toBe("evaluate_timeline_quality");
+		expect(addSfx).toBeUndefined();
 	});
 
 	it("should include caption layout step for talking-head workflow", () => {

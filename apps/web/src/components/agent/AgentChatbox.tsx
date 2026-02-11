@@ -722,18 +722,8 @@ export function AgentChatbox() {
 			return;
 		}
 
-		const targetDurationSeconds = Number(
-			(currentDurationSeconds / 2).toFixed(2),
-		);
+		const targetDurationSeconds = Number(currentDurationSeconds.toFixed(2));
 		const stepOverrides: ParsedStepOverride[] = [
-			{
-				stepId: "smart-trim",
-				arguments: { targetDurationSeconds },
-			},
-			{
-				stepId: "generate-plan",
-				arguments: { targetDuration: targetDurationSeconds },
-			},
 			{
 				stepId: "quality-report",
 				arguments: { targetDurationSeconds },
