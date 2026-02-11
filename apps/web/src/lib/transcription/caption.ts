@@ -41,23 +41,32 @@ function shouldInsertSpaceBetween({
 		return false;
 	}
 
-	const prevIsLatinWord = LATIN_WORD_REGEX.test(prevTrimmed);
-	const nextIsLatinWord = LATIN_WORD_REGEX.test(nextTrimmed);
+	const prevLatinCandidate = prevTrimmed
+		.replace(/^[^a-z0-9]+/i, "")
+		.replace(/[^a-z0-9]+$/i, "");
+	const nextLatinCandidate = nextTrimmed
+		.replace(/^[^a-z0-9]+/i, "")
+		.replace(/[^a-z0-9]+$/i, "");
+	const prevIsLatinWord = LATIN_WORD_REGEX.test(prevLatinCandidate);
+	const nextIsLatinWord = LATIN_WORD_REGEX.test(nextLatinCandidate);
 	return prevIsLatinWord && nextIsLatinWord;
 }
 
 function joinCaptionTokens(tokens: string[]): string {
 	let text = "";
+	let previousToken = "";
 	for (const rawToken of tokens) {
 		const token = rawToken.trim();
 		if (!token) continue;
 		if (!text) {
 			text = token;
+			previousToken = token;
 			continue;
 		}
-		text += shouldInsertSpaceBetween({ prev: text, next: token })
+		text += shouldInsertSpaceBetween({ prev: previousToken, next: token })
 			? ` ${token}`
 			: token;
+		previousToken = token;
 	}
 	return text.trim();
 }

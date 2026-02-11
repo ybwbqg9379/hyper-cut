@@ -756,7 +756,7 @@ export function AgentChatbox() {
 			stepOverrides,
 			confirmRequiredSteps: true,
 			enableQualityLoop: true,
-			qualityMaxIterations: 2,
+			qualityMaxIterations: 1,
 			qualityTargetDuration: targetDurationSeconds,
 			qualityDurationTolerance: 0.18,
 		});

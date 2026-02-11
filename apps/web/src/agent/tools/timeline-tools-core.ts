@@ -36,7 +36,10 @@ import {
 import { extractTimelineAudio } from "@/lib/media/mediabunny";
 import { decodeAudioToFloat32 } from "@/lib/media/audio";
 import { buildCaptionChunks } from "@/lib/transcription/caption";
-import { createCaptionMetadata } from "@/lib/transcription/caption-metadata";
+import {
+	createCaptionMetadata,
+	isCaptionTextElement,
+} from "@/lib/transcription/caption-metadata";
 import { transcriptionService } from "@/services/transcription/service";
 import {
 	invokeActionWithCheck,
@@ -982,6 +985,11 @@ export const generateCaptionsTool: AgentTool = {
 				type: "number",
 				description: "新建字幕轨道插入位置（可选）(Insert index for new track)",
 			},
+			replaceExisting: {
+				type: "boolean",
+				description:
+					"是否先清理目标字幕轨道里的旧字幕（timeline 模式默认 true）(Replace existing captions on target track)",
+			},
 		},
 		required: [],
 	},
@@ -991,6 +999,10 @@ export const generateCaptionsTool: AgentTool = {
 			const allTracks = editor.timeline.getTracks();
 			const mediaAssets = editor.media.getAssets();
 			const source = params.source === "timeline" ? "timeline" : "selection";
+			const replaceExistingCaptions =
+				typeof params.replaceExisting === "boolean"
+					? params.replaceExisting
+					: source === "timeline";
 
 			const modelIdParam =
 				typeof params.modelId === "string" ? params.modelId.trim() : "";
@@ -1240,6 +1252,39 @@ export const generateCaptionsTool: AgentTool = {
 					},
 				},
 			};
+			let replacedCaptionCount = 0;
+			if (replaceExistingCaptions) {
+				const beforeTracks = editor.timeline.getTracks();
+				const afterTracks = beforeTracks.map((track) => {
+					if (track.id !== captionTrackId || track.type !== "text") {
+						return track;
+					}
+					const nextElements = track.elements.filter((element) => {
+						if (element.type !== "text") {
+							return true;
+						}
+						if (!isCaptionTextElement(element)) {
+							return true;
+						}
+						replacedCaptionCount += 1;
+						return false;
+					});
+					if (nextElements.length === track.elements.length) {
+						return track;
+					}
+					return {
+						...track,
+						elements: nextElements,
+					};
+				});
+
+				if (replacedCaptionCount > 0) {
+					editor.timeline.replaceTracks({
+						tracks: afterTracks,
+						selection: null,
+					});
+				}
+			}
 
 			for (let i = 0; i < captionChunks.length; i++) {
 				const caption = captionChunks[i];
@@ -1263,9 +1308,19 @@ export const generateCaptionsTool: AgentTool = {
 
 			return {
 				success: true,
-				message: `已生成 ${captionChunks.length} 条字幕 (Generated ${captionChunks.length} captions)`,
+				message:
+					`已生成 ${captionChunks.length} 条字幕` +
+					(replacedCaptionCount > 0
+						? `，并替换 ${replacedCaptionCount} 条旧字幕`
+						: "") +
+					` (Generated ${captionChunks.length} captions)` +
+					(replacedCaptionCount > 0
+						? ` and replaced ${replacedCaptionCount} existing captions`
+						: ""),
 				data: {
 					captionCount: captionChunks.length,
+					replacedCaptionCount,
+					replaceExisting: replaceExistingCaptions,
 					trackId: captionTrackId,
 					source,
 					language: captionLanguage ?? resolvedLanguage,

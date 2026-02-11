@@ -95,4 +95,35 @@ describe("buildCaptionChunks", () => {
 		const finalEnd = getCaptionEnd(captions[captions.length - 1]);
 		expect(finalEnd).toBeLessThanOrEqual(1.8);
 	});
+
+	it("keeps latin word spacing when tokens include leading punctuation", () => {
+		const segments: TranscriptionSegment[] = [
+			{
+				text: "most (speaking in for convenient way.",
+				start: 0,
+				end: 2.8,
+			},
+		];
+		const words: TranscriptionWord[] = [
+			{ text: "most", start: 0, end: 0.3 },
+			{ text: "(speaking", start: 0.3, end: 0.8 },
+			{ text: "in", start: 0.8, end: 1.0 },
+			{ text: "for", start: 1.0, end: 1.2 },
+			{ text: "convenient", start: 1.2, end: 1.8 },
+			{ text: "way", start: 1.8, end: 2.2 },
+			{ text: ".", start: 2.2, end: 2.3 },
+		];
+
+		const captions = buildCaptionChunks({
+			segments,
+			words,
+			wordsPerChunk: 10,
+			minDuration: 0.2,
+			language: "en",
+		});
+
+		expect(captions.length).toBe(1);
+		expect(captions[0]?.text).toBe("most (speaking in for convenient way.");
+		expect(captions[0]?.text.includes("speakingin")).toBe(false);
+	});
 });

@@ -6,6 +6,11 @@ All notable changes to this project (forked from HyperCut) will be documented in
 
 ### Added
 
+- **One-click 字幕稳定性调整（单轮质检 + 后置字幕）**
+  - `one-click-masterpiece` 的质量循环默认迭代次数从 `2` 调整为 `1`，保留质量评估但不再自动重跑整条链路
+  - 一键入口 `qualityMaxIterations` 同步改为 `1`，避免首轮结果被后续轮次覆盖
+  - 字幕步骤改为后置：`generate_captions / apply_caption_preset / apply_layout_suggestion` 移到裁剪与静音压缩之后，减少字幕被后续删减流程二次损耗
+
 - **字幕与贴纸可读性修复（One-click 关键体验）**
   - 修复文本渲染二次放大：`text-node` 改为按元素字号直出，去除按画布高度再次放大，避免字幕“巨大且发糊”
   - 修复多行字幕重叠：行高与背景包围盒改为使用实际渲染字号，避免同屏文字叠成白块

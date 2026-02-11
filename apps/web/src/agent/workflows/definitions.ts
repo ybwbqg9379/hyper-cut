@@ -624,7 +624,7 @@ export const WORKFLOWS: Workflow[] = [
 		tags: ["one-click", "showcase", "end-to-end"],
 		quality: {
 			enabled: true,
-			maxIterations: 2,
+			maxIterations: 1,
 			targetDurationSeconds: 60,
 			durationToleranceRatio: 0.18,
 			failureMode: "warn",
@@ -682,15 +682,6 @@ export const WORKFLOWS: Workflow[] = [
 				summary: "结合分镜与字幕给出剪辑建议",
 				optional: true,
 				operation: "read",
-			},
-			{
-				id: "generate-captions",
-				toolName: "generate_captions",
-				arguments: {
-					source: "timeline",
-					language: "auto",
-				},
-				summary: "生成或刷新时间线字幕",
 			},
 			{
 				id: "detect-fillers",
@@ -788,6 +779,15 @@ export const WORKFLOWS: Workflow[] = [
 					windowSeconds: 0.08,
 				},
 				summary: "执行静音压缩",
+			},
+			{
+				id: "generate-captions",
+				toolName: "generate_captions",
+				arguments: {
+					source: "timeline",
+					language: "auto",
+				},
+				summary: "在裁剪完成后生成或刷新时间线字幕",
 			},
 			{
 				id: "apply-caption-preset",
