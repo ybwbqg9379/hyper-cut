@@ -9,7 +9,6 @@ import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 import { useEdgeAutoScroll } from "@/hooks/timeline/use-edge-auto-scroll";
 import type { ElementDragState } from "@/types/timeline";
 import { useEditor } from "@/hooks/use-editor";
-import { cn } from "@/utils/ui";
 
 interface TimelineTrackContentProps {
 	track: TimelineTrack;
@@ -63,16 +62,9 @@ export function TimelineTrackContent({
 		contentWidth: duration * TIMELINE_CONSTANTS.PIXELS_PER_SECOND * zoomLevel,
 	});
 
-	const hasSelectedElements = track.elements.some((element) =>
-		isElementSelected({ trackId: track.id, elementId: element.id }),
-	);
-
 	return (
-		// biome-ignore lint/a11y/useSemanticElements: Track lane must remain a div to avoid nested button hydration issues.
-		<div
-			role="button"
-			tabIndex={0}
-			className={cn("size-full", hasSelectedElements && "bg-panel-accent/35")}
+		<button
+			className="size-full"
 			onClick={(event) => {
 				if (shouldIgnoreClick?.()) return;
 				clearElementSelection();
@@ -82,12 +74,7 @@ export function TimelineTrackContent({
 				event.preventDefault();
 				onTrackMouseDown?.(event);
 			}}
-			onKeyDown={(event) => {
-				if (event.key === "Enter" || event.key === " ") {
-					event.preventDefault();
-					clearElementSelection();
-				}
-			}}
+			type="button"
 		>
 			<div className="relative h-full min-w-full">
 				{track.elements.length === 0 ? (
@@ -120,6 +107,6 @@ export function TimelineTrackContent({
 					})
 				)}
 			</div>
-		</div>
+		</button>
 	);
 }

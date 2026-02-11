@@ -22,17 +22,14 @@ export function ThemeToggle({
 	return (
 		<Button
 			size="icon"
-			variant="text"
-			className={cn("h-7", className)}
+			variant="ghost"
+			className={cn("size-8", className)}
 			onClick={(e) => {
 				setTheme(theme === "dark" ? "light" : "dark");
 				onToggle?.(e);
 			}}
 		>
-			<HugeiconsIcon
-				icon={Sun03Icon}
-				className={cn("!size-[1.1rem]", iconClassName)}
-			/>
+			<HugeiconsIcon icon={Sun03Icon} className={cn("!size-[1.1rem]", iconClassName)} />
 			<span className="sr-only">{theme === "dark" ? "Light" : "Dark"}</span>
 		</Button>
 	);

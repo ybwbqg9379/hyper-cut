@@ -1,17 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import useDeepCompareEffect from "use-deep-compare-effect";
 import { useEditor } from "@/hooks/use-editor";
 import { useRafLoop } from "@/hooks/use-raf-loop";
+import { useContainerSize } from "@/hooks/use-container-size";
+import { useFullscreen } from "@/hooks/use-fullscreen";
 import { CanvasRenderer } from "@/services/renderer/canvas-renderer";
 import type { RootNode } from "@/services/renderer/nodes/root-node";
 import { buildScene } from "@/services/renderer/scene-builder";
-import { getLastFrameTime } from "@/lib/time";
+import { formatTimeCode, getLastFrameTime } from "@/lib/time";
+// HyperCut: Agent highlight preview overlay
 import { useAgentUiStore } from "@/stores/agent-ui-store";
-import { Button } from "@/components/ui/button";
 import { Ban, Loader2, Pause, Play } from "lucide-react";
 import { PreviewInteractionOverlay } from "./preview-interaction-overlay";
+import { EditableTimecode } from "@/components/editable-timecode";
+import { invokeAction } from "@/lib/actions";
+import { Button } from "@/components/ui/button";
+import {
+	FullScreenIcon,
+	PauseIcon,
+	PlayIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { cn } from "@/utils/ui";
 
 function usePreviewSize() {
 	const editor = useEditor();
@@ -50,17 +62,90 @@ function RenderTreeController() {
 }
 
 export function PreviewPanel() {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const { isFullscreen, toggleFullscreen } = useFullscreen({ containerRef });
+
 	return (
-		<div className="bg-panel relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-sm">
-			<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden p-2">
+		<div
+			ref={containerRef}
+			className={cn(
+				"panel bg-background relative flex h-full min-h-0 w-full min-w-0 flex-col rounded-sm border",
+				isFullscreen && "bg-background",
+			)}
+		>
+			<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-2 pb-0">
 				<PreviewCanvas />
 				<RenderTreeController />
+				{/* HyperCut: Agent highlight preview overlay */}
 				<AgentPreviewOverlay />
+			</div>
+			<PreviewToolbar
+				isFullscreen={isFullscreen}
+				onToggleFullscreen={toggleFullscreen}
+			/>
+		</div>
+	);
+}
+
+function PreviewToolbar({
+	isFullscreen,
+	onToggleFullscreen,
+}: {
+	isFullscreen: boolean;
+	onToggleFullscreen: () => void;
+}) {
+	const editor = useEditor();
+	const isPlaying = editor.playback.getIsPlaying();
+	const currentTime = editor.playback.getCurrentTime();
+	const totalDuration = editor.timeline.getTotalDuration();
+	const fps = editor.project.getActive().settings.fps;
+
+	return (
+		<div className="grid grid-cols-[1fr_auto_1fr] items-center pb-3 pt-5 px-5">
+			<div className="flex items-center mt-1">
+				<EditableTimecode
+					time={currentTime}
+					duration={totalDuration}
+					format="HH:MM:SS:FF"
+					fps={fps}
+					onTimeChange={({ time }) => editor.playback.seek({ time })}
+					className="text-center"
+				/>
+				<span className="text-muted-foreground px-2 font-mono text-xs">/</span>
+				<span className="text-muted-foreground font-mono text-xs">
+					{formatTimeCode({
+						timeInSeconds: totalDuration,
+						format: "HH:MM:SS:FF",
+						fps,
+					})}
+				</span>
+			</div>
+
+			<Button
+				variant="text"
+				size="icon"
+				type="button"
+				onClick={() => invokeAction("toggle-play")}
+			>
+				<HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} />
+			</Button>
+
+			<div className="justify-self-end">
+				<Button
+					variant="text"
+					size="icon"
+					type="button"
+					onClick={onToggleFullscreen}
+					title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+				>
+					<HugeiconsIcon icon={FullScreenIcon} />
+				</Button>
 			</div>
 		</div>
 	);
 }
 
+// HyperCut: Agent highlight preview overlay component
 function AgentPreviewOverlay() {
 	const editor = useEditor();
 	const highlightPreview = useAgentUiStore((state) => state.highlightPreview);
@@ -160,25 +245,24 @@ function AgentPreviewOverlay() {
 
 function PreviewCanvas() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const canvasHostRef = useRef<HTMLDivElement>(null);
+	const containerRef = useRef<HTMLDivElement>(null);
 	const lastFrameRef = useRef(-1);
 	const lastSceneRef = useRef<RootNode | null>(null);
 	const renderingRef = useRef(false);
-	const { width, height } = usePreviewSize();
+	const { width: nativeWidth, height: nativeHeight } = usePreviewSize();
+	const containerSize = useContainerSize({ containerRef });
 	const editor = useEditor();
 	const activeProject = editor.project.getActive();
-	const [displaySize, setDisplaySize] = useState(() => ({
-		width: Number.isFinite(width) ? Math.max(1, Number(width)) : 1,
-		height: Number.isFinite(height) ? Math.max(1, Number(height)) : 1,
-	}));
 
 	const renderer = useMemo(() => {
 		return new CanvasRenderer({
-			width,
-			height,
+			width: nativeWidth,
+			height: nativeHeight,
 			fps: activeProject.settings.fps,
 		});
-	}, [width, height, activeProject.settings.fps]);
+	}, [nativeWidth, nativeHeight, activeProject.settings.fps]);
+
+	// HyperCut: Agent highlight preview playback state
 	const highlightPreview = useAgentUiStore((state) => state.highlightPreview);
 	const highlightPreviewPlaybackEnabled = useAgentUiStore(
 		(state) => state.highlightPreviewPlaybackEnabled,
@@ -187,9 +271,39 @@ function PreviewCanvas() {
 		(state) => state.setHighlightPreviewPlaybackEnabled,
 	);
 
+	const displaySize = useMemo(() => {
+		if (
+			!nativeWidth ||
+			!nativeHeight ||
+			containerSize.width === 0 ||
+			containerSize.height === 0
+		) {
+			return { width: nativeWidth ?? 0, height: nativeHeight ?? 0 };
+		}
+
+		const paddingBuffer = 4;
+		const availableWidth = containerSize.width - paddingBuffer;
+		const availableHeight = containerSize.height - paddingBuffer;
+
+		const aspectRatio = nativeWidth / nativeHeight;
+		const containerAspect = availableWidth / availableHeight;
+
+		const displayWidth =
+			containerAspect > aspectRatio
+				? availableHeight * aspectRatio
+				: availableWidth;
+		const displayHeight =
+			containerAspect > aspectRatio
+				? availableHeight
+				: availableWidth / aspectRatio;
+
+		return { width: displayWidth, height: displayHeight };
+	}, [nativeWidth, nativeHeight, containerSize.width, containerSize.height]);
+
 	const renderTree = editor.renderer.getRenderTree();
 
 	const render = useCallback(() => {
+		// HyperCut: Agent highlight preview playback — skip to next keep range
 		if (
 			highlightPreviewPlaybackEnabled &&
 			highlightPreview &&
@@ -252,74 +366,35 @@ function PreviewCanvas() {
 		setHighlightPreviewPlaybackEnabled,
 	]);
 
+	// HyperCut: Cleanup highlight preview on unmount
 	useEffect(() => {
 		return () => {
 			setHighlightPreviewPlaybackEnabled({ enabled: false });
 		};
 	}, [setHighlightPreviewPlaybackEnabled]);
 
-	useEffect(() => {
-		const host = canvasHostRef.current;
-		const sourceWidth = Number.isFinite(width) ? Math.max(1, Number(width)) : 1;
-		const sourceHeight = Number.isFinite(height)
-			? Math.max(1, Number(height))
-			: 1;
-		if (!host) {
-			return;
-		}
-
-		const updateSize = () => {
-			const hostWidth = host.clientWidth;
-			const hostHeight = host.clientHeight;
-			if (hostWidth <= 0 || hostHeight <= 0) {
-				return;
-			}
-			const scale = Math.min(hostWidth / sourceWidth, hostHeight / sourceHeight);
-			const nextWidth = Math.max(1, Math.round(sourceWidth * scale));
-			const nextHeight = Math.max(1, Math.round(sourceHeight * scale));
-			setDisplaySize((prev) =>
-				prev.width === nextWidth && prev.height === nextHeight
-					? prev
-					: { width: nextWidth, height: nextHeight },
-			);
-		};
-
-		updateSize();
-		const resizeObserver = new ResizeObserver(updateSize);
-		resizeObserver.observe(host);
-		return () => {
-			resizeObserver.disconnect();
-		};
-	}, [width, height]);
-
 	useRafLoop(render);
 
 	return (
 		<div
-			ref={canvasHostRef}
-			className="relative flex h-full w-full items-center justify-center overflow-hidden"
+			ref={containerRef}
+			className="relative flex h-full w-full items-center justify-center"
 		>
-			<div
-				className="relative shrink-0"
+			<canvas
+				ref={canvasRef}
+				width={nativeWidth}
+				height={nativeHeight}
+				className="block border"
 				style={{
-					width: `${displaySize.width}px`,
-					height: `${displaySize.height}px`,
+					width: displaySize.width,
+					height: displaySize.height,
+					background:
+						activeProject.settings.background.type === "blur"
+							? "transparent"
+							: activeProject?.settings.background.color,
 				}}
-			>
-				<canvas
-					ref={canvasRef}
-					width={width}
-					height={height}
-					className="block h-full w-full border"
-					style={{
-						background:
-							activeProject.settings.background.type === "blur"
-								? "transparent"
-								: activeProject?.settings.background.color,
-					}}
-				/>
-				<PreviewInteractionOverlay canvasRef={canvasRef} />
-			</div>
+			/>
+			<PreviewInteractionOverlay canvasRef={canvasRef} />
 		</div>
 	);
 }

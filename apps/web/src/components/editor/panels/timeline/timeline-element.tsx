@@ -19,7 +19,7 @@ import {
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
-} from "../../ui/context-menu";
+} from "../../../ui/context-menu";
 import type {
 	TimelineElement as TimelineElementType,
 	TimelineTrack,

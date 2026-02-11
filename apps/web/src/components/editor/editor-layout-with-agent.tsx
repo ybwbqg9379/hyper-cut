@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/resizable";
 import { AssetsPanel } from "@/components/editor/panels/assets";
 import { PropertiesPanel } from "@/components/editor/panels/properties";
-import { Timeline } from "@/components/editor/timeline";
+import { Timeline } from "@/components/editor/panels/timeline";
 import { PreviewPanel } from "@/components/editor/panels/preview";
 import { usePanelStore } from "@/stores/panel-store";
 
