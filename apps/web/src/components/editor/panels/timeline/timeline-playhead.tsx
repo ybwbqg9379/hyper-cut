@@ -1,7 +1,11 @@
 "use client";
 
 import { useRef } from "react";
-import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
+import {
+	getCenteredLineLeft,
+	TIMELINE_INDICATOR_LINE_WIDTH_PX,
+	timelineTimeToSnappedPixels,
+} from "@/lib/timeline";
 import { useTimelinePlayhead } from "@/hooks/timeline/use-timeline-playhead";
 import { useEditor } from "@/hooks/use-editor";
 
@@ -43,9 +47,11 @@ export function TimelinePlayhead({
 		400;
 	const totalHeight = Math.max(0, timelineContainerHeight - 4);
 
-	const timelinePosition =
-		playheadPosition * TIMELINE_CONSTANTS.PIXELS_PER_SECOND * zoomLevel;
-	const leftPosition = timelinePosition;
+	const centerPosition = timelineTimeToSnappedPixels({
+		time: playheadPosition,
+		zoomLevel,
+	});
+	const leftPosition = getCenteredLineLeft({ centerPixel: centerPosition });
 
 	const handlePlayheadKeyDown = (
 		event: React.KeyboardEvent<HTMLDivElement>,
@@ -72,20 +78,22 @@ export function TimelinePlayhead({
 			aria-valuemax={duration}
 			aria-valuenow={playheadPosition}
 			tabIndex={0}
-			className="pointer-events-auto absolute z-60"
+			className="pointer-events-none absolute z-5"
 			style={{
 				left: `${leftPosition}px`,
 				top: 0,
 				height: `${totalHeight}px`,
-				width: "2px",
+				width: `${TIMELINE_INDICATOR_LINE_WIDTH_PX}px`,
 			}}
-			onMouseDown={handlePlayheadMouseDown}
 			onKeyDown={handlePlayheadKeyDown}
 		>
-			<div className="bg-foreground absolute left-0 h-full w-0.5 cursor-col-resize" />
+			<div className="bg-foreground pointer-events-none absolute left-0 h-full w-0.5" />
 
-			<div
-				className={`absolute top-1 left-1/2 size-3 -translate-x-1/2 transform rounded-full border-2 shadow-xs ${isSnappingToPlayhead ? "bg-foreground border-foreground" : "bg-foreground border-foreground/50"}`}
+			<button
+				type="button"
+				aria-label="Drag playhead"
+				className={`pointer-events-auto absolute top-1 left-1/2 size-3 -translate-x-1/2 transform cursor-col-resize rounded-full border-2 shadow-xs ${isSnappingToPlayhead ? "bg-foreground border-foreground" : "bg-foreground border-foreground/50"}`}
+				onMouseDown={handlePlayheadMouseDown}
 			/>
 		</div>
 	);

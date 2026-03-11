@@ -4,7 +4,7 @@ import { useElementSelection } from "@/hooks/timeline/element/use-element-select
 import { TimelineElement } from "./timeline-element";
 import type { TimelineTrack } from "@/types/timeline";
 import type { TimelineElement as TimelineElementType } from "@/types/timeline";
-import type { SnapPoint } from "@/hooks/timeline/use-timeline-snapping";
+import type { SnapPoint } from "@/lib/timeline/snap-utils";
 import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 import { useEdgeAutoScroll } from "@/hooks/timeline/use-edge-auto-scroll";
 import type { ElementDragState } from "@/types/timeline";
@@ -32,6 +32,7 @@ interface TimelineTrackContentProps {
 	onTrackMouseDown?: (event: React.MouseEvent) => void;
 	onTrackClick?: (event: React.MouseEvent) => void;
 	shouldIgnoreClick?: () => boolean;
+	targetElementId?: string | null;
 }
 
 export function TimelineTrackContent({
@@ -48,9 +49,10 @@ export function TimelineTrackContent({
 	onTrackMouseDown,
 	onTrackClick,
 	shouldIgnoreClick,
+	targetElementId = null,
 }: TimelineTrackContentProps) {
 	const editor = useEditor();
-	const { isElementSelected, clearElementSelection } = useElementSelection();
+	const { isElementSelected } = useElementSelection();
 
 	const duration = editor.timeline.getTotalDuration();
 
@@ -70,7 +72,6 @@ export function TimelineTrackContent({
 			className="size-full"
 			onClick={(event) => {
 				if (shouldIgnoreClick?.()) return;
-				clearElementSelection();
 				onTrackClick?.(event);
 			}}
 			onMouseDown={(event) => {
@@ -110,6 +111,7 @@ export function TimelineTrackContent({
 									onElementClick({ event, element, track })
 								}
 								dragState={dragState}
+								isDropTarget={element.id === targetElementId}
 							/>
 						);
 					})

@@ -7,7 +7,7 @@ import type {
 	TProjectSettings,
 	TTimelineViewState,
 } from "@/types/project";
-import type { ExportOptions, ExportResult } from "@/types/export";
+import type { ExportOptions, ExportResult, ExportState } from "@/types/export";
 import { storageService } from "@/services/storage/service";
 import { toast } from "sonner";
 import { generateUUID } from "@/utils/id";
@@ -27,6 +27,8 @@ import {
 	type MigrationProgress,
 } from "@/services/storage/migrations";
 import { DEFAULT_TIMELINE_VIEW_STATE } from "@/constants/timeline-constants";
+import { loadFonts } from "@/lib/fonts/google-fonts";
+import { collectFontFamilies } from "@/lib/timeline/element-utils";
 
 export interface MigrationState {
 	isMigrating: boolean;
@@ -49,6 +51,12 @@ export class ProjectManager {
 		toVersion: null,
 		projectName: null,
 	};
+	private exportState: ExportState = {
+		isExporting: false,
+		progress: 0,
+		result: null,
+	};
+	private exportCancelRequested = false;
 
 	constructor(private editor: EditorCore) {}
 
@@ -146,6 +154,9 @@ export class ProjectManager {
 
 			await this.editor.media.loadProjectMedia({ projectId: id });
 
+			const allTracks = (project.scenes ?? []).flatMap((scene) => scene.tracks);
+			await loadFonts({ families: collectFontFamilies({ tracks: allTracks }) });
+
 			if (!project.metadata.thumbnail) {
 				const didUpdateThumbnail = await this.updateThumbnailFromTimeline();
 				if (didUpdateThumbnail) {
@@ -186,7 +197,40 @@ export class ProjectManager {
 	}
 
 	async export({ options }: { options: ExportOptions }): Promise<ExportResult> {
-		return this.editor.renderer.exportProject({ options });
+		this.exportCancelRequested = false;
+		this.exportState = { isExporting: true, progress: 0, result: null };
+		this.notify();
+
+		const result = await this.editor.renderer.exportProject({
+			options,
+			onProgress: ({ progress }) => {
+				this.exportState = { ...this.exportState, progress };
+				this.notify();
+			},
+			onCancel: () => this.exportCancelRequested,
+		});
+
+		this.exportState = {
+			isExporting: false,
+			progress: this.exportState.progress,
+			result,
+		};
+		this.notify();
+
+		return result;
+	}
+
+	cancelExport(): void {
+		this.exportCancelRequested = true;
+	}
+
+	clearExportState(): void {
+		this.exportState = { isExporting: false, progress: 0, result: null };
+		this.notify();
+	}
+
+	getExportState(): ExportState {
+		return this.exportState;
 	}
 
 	async loadAllProjects(): Promise<void> {

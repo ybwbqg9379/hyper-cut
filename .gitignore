@@ -16,6 +16,9 @@ node_modules
 # cursor
 bun.lockb
 
+# content-collections
+.content-collections
+
 # Twiggy
 .cursor/rules/file-structure.mdc
 *.tsbuildinfo

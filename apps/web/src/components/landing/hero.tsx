@@ -14,7 +14,7 @@ export function Hero() {
 				src="/landing-page-dark.png"
 				height={1903.5}
 				width={1269}
-				alt="landing-page.bg"
+				alt="OpenCut video editor landing page background"
 			/>
 			<div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center">
 				<div className="inline-block text-4xl font-bold tracking-tighter md:text-[4rem]">
@@ -29,12 +29,7 @@ export function Hero() {
 
 				<div className="mt-8 flex justify-center gap-8">
 					<Link href="/projects">
-						<Button
-							variant="foreground"
-							type="submit"
-							size="lg"
-							className="h-11 text-base"
-						>
+						<Button type="submit" size="lg" className="h-11 text-base">
 							Try early beta
 							<ArrowRight className="ml-0.5" />
 						</Button>

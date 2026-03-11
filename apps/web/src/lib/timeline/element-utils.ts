@@ -1,21 +1,31 @@
 import { DEFAULT_TEXT_ELEMENT } from "@/constants/text-constants";
-import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
+import {
+	DEFAULT_BLEND_MODE,
+	DEFAULT_OPACITY,
+	DEFAULT_TRANSFORM,
+	TIMELINE_CONSTANTS,
+} from "@/constants/timeline-constants";
 import type {
+	CreateEffectElement,
 	CreateTimelineElement,
 	CreateVideoElement,
 	CreateImageElement,
 	CreateStickerElement,
 	CreateUploadAudioElement,
 	CreateLibraryAudioElement,
+	TextBackground,
 	TextElement,
 	TimelineElement,
 	TimelineTrack,
 	AudioElement,
 	VideoElement,
 	ImageElement,
-	StickerElement,
+	VisualElement,
 	UploadAudioElement,
 } from "@/types/timeline";
+import type { MediaType } from "@/types/assets";
+import { buildDefaultEffectInstance } from "@/lib/effects";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 export function canElementHaveAudio(
 	element: TimelineElement,
@@ -23,10 +33,21 @@ export function canElementHaveAudio(
 	return element.type === "audio" || element.type === "video";
 }
 
+export function isVisualElement(
+	element: TimelineElement,
+): element is VisualElement {
+	return (
+		element.type === "video" ||
+		element.type === "image" ||
+		element.type === "text" ||
+		element.type === "sticker"
+	);
+}
+
 export function canElementBeHidden(
 	element: TimelineElement,
-): element is VideoElement | ImageElement | TextElement | StickerElement {
-	return element.type !== "audio";
+): element is VisualElement {
+	return isVisualElement(element);
 }
 
 export function hasMediaId(
@@ -107,11 +128,28 @@ export function wouldElementOverlap({
 	endTime: number;
 	excludeElementId?: string;
 }): boolean {
-	return elements.some((el) => {
-		if (excludeElementId && el.id === excludeElementId) return false;
-		const elEnd = el.startTime + el.duration;
-		return startTime < elEnd && endTime > el.startTime;
+	return elements.some((element) => {
+		if (excludeElementId && element.id === excludeElementId) return false;
+		const elementEnd = element.startTime + element.duration;
+		return startTime < elementEnd && endTime > element.startTime;
 	});
+}
+
+function buildTextBackground(
+	raw: Partial<TextBackground> | undefined,
+): TextBackground {
+	const color = raw?.color ?? DEFAULT_TEXT_ELEMENT.background.color;
+	const enabled =
+		typeof raw?.enabled === "boolean" ? raw.enabled : color !== "transparent";
+	return {
+		enabled,
+		color,
+		cornerRadius: raw?.cornerRadius,
+		paddingX: raw?.paddingX,
+		paddingY: raw?.paddingY,
+		offsetX: raw?.offsetX,
+		offsetY: raw?.offsetY,
+	};
 }
 
 export function buildTextElement({
@@ -137,35 +175,63 @@ export function buildTextElement({
 				: DEFAULT_TEXT_ELEMENT.fontSize,
 		fontFamily: t.fontFamily ?? DEFAULT_TEXT_ELEMENT.fontFamily,
 		color: t.color ?? DEFAULT_TEXT_ELEMENT.color,
-		backgroundColor: t.backgroundColor ?? DEFAULT_TEXT_ELEMENT.backgroundColor,
+		background: buildTextBackground(t.background),
 		textAlign: t.textAlign ?? DEFAULT_TEXT_ELEMENT.textAlign,
 		fontWeight: t.fontWeight ?? DEFAULT_TEXT_ELEMENT.fontWeight,
 		fontStyle: t.fontStyle ?? DEFAULT_TEXT_ELEMENT.fontStyle,
 		textDecoration: t.textDecoration ?? DEFAULT_TEXT_ELEMENT.textDecoration,
-		metadata: t.metadata,
+		letterSpacing: t.letterSpacing ?? DEFAULT_TEXT_ELEMENT.letterSpacing,
+		lineHeight: t.lineHeight ?? DEFAULT_TEXT_ELEMENT.lineHeight,
 		transform: t.transform ?? DEFAULT_TEXT_ELEMENT.transform,
 		opacity: t.opacity ?? DEFAULT_TEXT_ELEMENT.opacity,
+		blendMode: t.blendMode ?? DEFAULT_BLEND_MODE,
+	};
+}
+
+export function buildEffectElement({
+	effectType,
+	startTime,
+	duration,
+}: {
+	effectType: string;
+	startTime: number;
+	duration?: number;
+}): CreateEffectElement {
+	const instance = buildDefaultEffectInstance({ effectType });
+	return {
+		type: "effect",
+		name: capitalizeFirstLetter({ string: instance.type }),
+		effectType,
+		params: instance.params,
+		duration: duration ?? TIMELINE_CONSTANTS.DEFAULT_ELEMENT_DURATION,
+		startTime,
+		trimStart: 0,
+		trimEnd: 0,
 	};
 }
 
 export function buildStickerElement({
-	iconName,
+	stickerId,
+	name,
 	startTime,
 }: {
-	iconName: string;
+	stickerId: string;
+	name?: string;
 	startTime: number;
 }): CreateStickerElement {
+	const stickerNameFromId =
+		stickerId.split(":").slice(1).pop()?.replaceAll("-", " ") ?? stickerId;
 	return {
 		type: "sticker",
-		name: iconName.split(":")[1] || iconName,
-		iconName,
+		name: name ?? stickerNameFromId,
+		stickerId,
 		duration: TIMELINE_CONSTANTS.DEFAULT_ELEMENT_DURATION,
 		startTime,
 		trimStart: 0,
 		trimEnd: 0,
-		// Sticker source is rendered in contain mode, so use a smaller default scale.
-		transform: { scale: 0.2, position: { x: 0, y: 0 }, rotate: 0 },
-		opacity: 1,
+		transform: { ...DEFAULT_TRANSFORM },
+		opacity: DEFAULT_OPACITY,
+		blendMode: DEFAULT_BLEND_MODE,
 	};
 }
 
@@ -188,10 +254,12 @@ export function buildVideoElement({
 		startTime,
 		trimStart: 0,
 		trimEnd: 0,
+		sourceDuration: duration,
 		muted: false,
 		hidden: false,
-		transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
-		opacity: 1,
+		transform: { ...DEFAULT_TRANSFORM },
+		opacity: DEFAULT_OPACITY,
+		blendMode: DEFAULT_BLEND_MODE,
 	};
 }
 
@@ -215,8 +283,9 @@ export function buildImageElement({
 		trimStart: 0,
 		trimEnd: 0,
 		hidden: false,
-		transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
-		opacity: 1,
+		transform: { ...DEFAULT_TRANSFORM },
+		opacity: DEFAULT_OPACITY,
+		blendMode: DEFAULT_BLEND_MODE,
 	};
 }
 
@@ -242,6 +311,7 @@ export function buildUploadAudioElement({
 		startTime,
 		trimStart: 0,
 		trimEnd: 0,
+		sourceDuration: duration,
 		volume: 1,
 		muted: false,
 	};
@@ -249,6 +319,37 @@ export function buildUploadAudioElement({
 		element.buffer = buffer;
 	}
 	return element;
+}
+
+export function buildElementFromMedia({
+	mediaId,
+	mediaType,
+	name,
+	duration,
+	startTime,
+	buffer,
+}: {
+	mediaId: string;
+	mediaType: MediaType;
+	name: string;
+	duration: number;
+	startTime: number;
+	buffer?: AudioBuffer;
+}): CreateTimelineElement {
+	switch (mediaType) {
+		case "audio":
+			return buildUploadAudioElement({
+				mediaId,
+				name,
+				duration,
+				startTime,
+				buffer,
+			});
+		case "video":
+			return buildVideoElement({ mediaId, name, duration, startTime });
+		case "image":
+			return buildImageElement({ mediaId, name, duration, startTime });
+	}
 }
 
 export function buildLibraryAudioElement({
@@ -273,6 +374,7 @@ export function buildLibraryAudioElement({
 		startTime,
 		trimStart: 0,
 		trimEnd: 0,
+		sourceDuration: duration,
 		volume: 1,
 		muted: false,
 	};
@@ -303,4 +405,20 @@ export function getElementsAtTime({
 	}
 
 	return result;
+}
+
+export function collectFontFamilies({
+	tracks,
+}: {
+	tracks: TimelineTrack[];
+}): string[] {
+	const families = new Set<string>();
+	for (const track of tracks) {
+		for (const element of track.elements) {
+			if (element.type === "text" && element.fontFamily) {
+				families.add(element.fontFamily);
+			}
+		}
+	}
+	return [...families];
 }

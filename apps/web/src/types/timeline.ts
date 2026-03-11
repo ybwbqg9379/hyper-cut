@@ -1,14 +1,25 @@
+import type { ElementAnimations } from "./animation";
+import type { Effect, EffectParamValues } from "./effects";
+import type { BlendMode, Transform } from "./rendering";
+
+export interface Bookmark {
+	time: number;
+	note?: string;
+	color?: string;
+	duration?: number;
+}
+
 export interface TScene {
 	id: string;
 	name: string;
 	isMain: boolean;
 	tracks: TimelineTrack[];
-	bookmarks: number[];
+	bookmarks: Bookmark[];
 	createdAt: Date;
 	updatedAt: Date;
 }
 
-export type TrackType = "video" | "text" | "audio" | "sticker";
+export type TrackType = "video" | "text" | "audio" | "sticker" | "effect";
 
 interface BaseTrack {
 	id: string;
@@ -41,16 +52,20 @@ export interface StickerTrack extends BaseTrack {
 	hidden: boolean;
 }
 
-export type TimelineTrack = VideoTrack | TextTrack | AudioTrack | StickerTrack;
-
-export interface Transform {
-	scale: number;
-	position: {
-		x: number;
-		y: number;
-	};
-	rotate: number;
+export interface EffectTrack extends BaseTrack {
+	type: "effect";
+	elements: EffectElement[];
+	hidden: boolean;
 }
+
+export type TimelineTrack =
+	| VideoTrack
+	| TextTrack
+	| AudioTrack
+	| StickerTrack
+	| EffectTrack;
+
+export type { Transform } from "./rendering";
 
 interface BaseAudioElement extends BaseTimelineElement {
 	type: "audio";
@@ -78,20 +93,8 @@ interface BaseTimelineElement {
 	startTime: number;
 	trimStart: number;
 	trimEnd: number;
-}
-
-export interface CaptionMetadata {
-	version: 1;
-	source: "whisper";
-	origin: "agent-tool" | "assets-panel" | "legacy-upgrade";
-	segmentIndex: number;
-	language?: string;
-	modelId?: string;
-}
-
-export interface TextElementMetadata {
-	kind: "caption";
-	caption: CaptionMetadata;
+	sourceDuration?: number;
+	animations?: ElementAnimations;
 }
 
 export interface VideoElement extends BaseTimelineElement {
@@ -101,6 +104,8 @@ export interface VideoElement extends BaseTimelineElement {
 	hidden?: boolean;
 	transform: Transform;
 	opacity: number;
+	blendMode?: BlendMode;
+	effects?: Effect[];
 }
 
 export interface ImageElement extends BaseTimelineElement {
@@ -109,6 +114,18 @@ export interface ImageElement extends BaseTimelineElement {
 	hidden?: boolean;
 	transform: Transform;
 	opacity: number;
+	blendMode?: BlendMode;
+	effects?: Effect[];
+}
+
+export interface TextBackground {
+	enabled: boolean;
+	color: string;
+	cornerRadius?: number;
+	paddingX?: number;
+	paddingY?: number;
+	offsetX?: number;
+	offsetY?: number;
 }
 
 export interface TextElement extends BaseTimelineElement {
@@ -117,32 +134,54 @@ export interface TextElement extends BaseTimelineElement {
 	fontSize: number;
 	fontFamily: string;
 	color: string;
-	backgroundColor: string;
+	background: TextBackground;
 	textAlign: "left" | "center" | "right";
 	fontWeight: "normal" | "bold";
 	fontStyle: "normal" | "italic";
 	textDecoration: "none" | "underline" | "line-through";
-	metadata?: TextElementMetadata;
+	letterSpacing?: number;
+	lineHeight?: number;
 	hidden?: boolean;
 	transform: Transform;
 	opacity: number;
+	blendMode?: BlendMode;
+	effects?: Effect[];
 }
 
 export interface StickerElement extends BaseTimelineElement {
 	type: "sticker";
-	iconName: string;
+	stickerId: string;
 	hidden?: boolean;
 	transform: Transform;
 	opacity: number;
-	color?: string;
+	blendMode?: BlendMode;
+	effects?: Effect[];
 }
+
+export interface EffectElement extends BaseTimelineElement {
+	type: "effect";
+	effectType: string;
+	params: EffectParamValues;
+}
+
+export type VisualElement =
+	| VideoElement
+	| ImageElement
+	| TextElement
+	| StickerElement;
+
+export type ElementUpdatePatch =
+	| { transform: Transform }
+	| { opacity: number }
+	| { volume: number };
 
 export type TimelineElement =
 	| AudioElement
 	| VideoElement
 	| ImageElement
 	| TextElement
-	| StickerElement;
+	| StickerElement
+	| EffectElement;
 
 export type ElementType = TimelineElement["type"];
 
@@ -155,14 +194,14 @@ export type CreateVideoElement = Omit<VideoElement, "id">;
 export type CreateImageElement = Omit<ImageElement, "id">;
 export type CreateTextElement = Omit<TextElement, "id">;
 export type CreateStickerElement = Omit<StickerElement, "id">;
+export type CreateEffectElement = Omit<EffectElement, "id">;
 export type CreateTimelineElement =
 	| CreateAudioElement
 	| CreateVideoElement
 	| CreateImageElement
 	| CreateTextElement
-	| CreateStickerElement;
-
-// ---- Drag State ----
+	| CreateStickerElement
+	| CreateEffectElement;
 
 export interface ElementDragState {
 	isDragging: boolean;
@@ -181,6 +220,7 @@ export interface DropTarget {
 	isNewTrack: boolean;
 	insertPosition: "above" | "below" | null;
 	xPosition: number;
+	targetElement: { elementId: string; trackId: string } | null;
 }
 
 export interface ComputeDropTargetParams {
@@ -196,6 +236,7 @@ export interface ComputeDropTargetParams {
 	verticalDragDirection?: "up" | "down" | null;
 	startTimeOverride?: number;
 	excludeElementId?: string;
+	targetElementTypes?: string[];
 }
 
 export interface ClipboardItem {

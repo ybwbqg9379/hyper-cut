@@ -1,4 +1,4 @@
-import { OcDataBuddyIcon, OcMarbleIcon } from "@hypercut/ui/icons";
+import { OcDataBuddyIcon, OcMarbleIcon } from "@opencut/ui/icons";
 
 export const SITE_URL = "https://hypercut.app";
 
@@ -48,6 +48,7 @@ export type Sponsor = {
 	url: string;
 	logo: string;
 	description: string;
+	invertOnDark?: boolean;
 };
 
 export const SPONSORS: Sponsor[] = [
@@ -56,11 +57,13 @@ export const SPONSORS: Sponsor[] = [
 		url: "https://fal.ai?utm_source=hypercut",
 		logo: "/logos/others/fal.svg",
 		description: "Generative image, video, and audio models all in one place.",
+		invertOnDark: true,
 	},
 	{
 		name: "Vercel",
 		url: "https://vercel.com?utm_source=hypercut",
 		logo: "/logos/others/vercel.svg",
 		description: "Platform where we deploy and host HyperCut.",
+		invertOnDark: true,
 	},
 ];

@@ -2,6 +2,11 @@ import { getSnappedSeekTime } from "@/lib/time";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useEdgeAutoScroll } from "@/hooks/timeline/use-edge-auto-scroll";
 import { useEditor } from "../use-editor";
+import { useShiftKey } from "@/hooks/use-shift-key";
+import {
+	findSnapPoints,
+	snapToNearestPoint,
+} from "@/lib/timeline/snap-utils";
 import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 
 interface UseTimelinePlayheadProps {
@@ -25,6 +30,7 @@ export function useTimelinePlayhead({
 	const duration = editor.timeline.getTotalDuration();
 	const isPlaying = editor.playback.getIsPlaying();
 	const isScrubbing = editor.playback.getIsScrubbing();
+	const isShiftHeldRef = useShiftKey();
 
 	const seek = useCallback(
 		({ time }: { time: number }) => editor.playback.seek({ time }),
@@ -41,7 +47,13 @@ export function useTimelinePlayhead({
 		isScrubbing && scrubTime !== null ? scrubTime : currentTime;
 
 	const handleScrub = useCallback(
-		({ event }: { event: MouseEvent | React.MouseEvent }) => {
+		({
+			event,
+			snappingEnabled = true,
+		}: {
+			event: MouseEvent | React.MouseEvent;
+			snappingEnabled?: boolean;
+		}) => {
 			const ruler = rulerRef.current;
 			if (!ruler) return;
 			const rulerRect = ruler.getBoundingClientRect();
@@ -62,19 +74,49 @@ export function useTimelinePlayhead({
 					clampedMouseX / (TIMELINE_CONSTANTS.PIXELS_PER_SECOND * zoomLevel),
 				),
 			);
+
 			const framesPerSecond = activeProject.settings.fps;
-			const time = getSnappedSeekTime({
+			const frameTime = getSnappedSeekTime({
 				rawTime,
 				duration,
 				fps: framesPerSecond,
 			});
+
+			const shouldSnap = snappingEnabled && !isShiftHeldRef.current;
+			const time = (() => {
+				if (!shouldSnap) return frameTime;
+				const tracks = editor.timeline.getTracks();
+				const bookmarks =
+					editor.scenes.getActiveScene()?.bookmarks ?? [];
+				const snapPoints = findSnapPoints({
+					tracks,
+					playheadTime: frameTime,
+					bookmarks,
+					enablePlayheadSnapping: false,
+				});
+				const snapResult = snapToNearestPoint({
+					targetTime: frameTime,
+					snapPoints,
+					zoomLevel,
+				});
+				return snapResult.snapPoint ? snapResult.snappedTime : frameTime;
+			})();
 
 			setScrubTime(time);
 			seek({ time });
 
 			lastMouseXRef.current = event.clientX;
 		},
-		[duration, zoomLevel, seek, rulerRef, activeProject.settings.fps],
+		[
+			duration,
+			zoomLevel,
+			seek,
+			rulerRef,
+			activeProject.settings.fps,
+			isShiftHeldRef,
+			editor.scenes,
+			editor.timeline,
+		],
 	);
 
 	const handlePlayheadMouseDown = useCallback(
@@ -97,10 +139,10 @@ export function useTimelinePlayhead({
 			setIsDraggingRuler(true);
 			setHasDraggedRuler(false);
 
-			editor.playback.setScrubbing({ isScrubbing: true });
-			handleScrub({ event });
-		},
-		[handleScrub, playheadRef, editor.playback],
+		editor.playback.setScrubbing({ isScrubbing: true });
+		handleScrub({ event, snappingEnabled: false });
+	},
+	[handleScrub, playheadRef, editor.playback],
 	);
 
 	const handlePlayheadMouseDownEvent = useCallback(
@@ -148,7 +190,7 @@ export function useTimelinePlayhead({
 			if (isDraggingRuler) {
 				setIsDraggingRuler(false);
 				if (!hasDraggedRuler) {
-					handleScrub({ event });
+					handleScrub({ event, snappingEnabled: false });
 				}
 				setHasDraggedRuler(false);
 			}

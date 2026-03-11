@@ -110,10 +110,19 @@ export const ACTIONS = {
 		category: "editing",
 		defaultShortcuts: ["n"],
 	},
+	"toggle-ripple-editing": {
+		description: "Toggle ripple editing",
+		category: "editing",
+	},
 	"select-all": {
 		description: "Select all elements",
 		category: "selection",
 		defaultShortcuts: ["ctrl+a"],
+	},
+	"deselect-all": {
+		description: "Deselect all elements",
+		category: "selection",
+		defaultShortcuts: ["escape"],
 	},
 	"duplicate-selected": {
 		description: "Duplicate selected element",
@@ -146,7 +155,7 @@ export const ACTIONS = {
 
 export type TAction = keyof typeof ACTIONS;
 
-export function getActionDefinition(action: TAction): TActionDefinition {
+export function getActionDefinition({ action }: { action: TAction }): TActionDefinition {
 	return ACTIONS[action];
 }
 
