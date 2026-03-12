@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useEditor } from "@/hooks/use-editor";
 import { fetchVideoAsFile } from "@/lib/import/video-import";
 import { processMediaAssets } from "@/lib/media/processing";
@@ -31,6 +32,7 @@ function NewEditorPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const editor = useEditor();
+	const { setTheme } = useTheme();
 	const [status, setStatus] = useState("Creating project...");
 	const [error, setError] = useState<string | null>(null);
 	const hasStarted = useRef(false);
@@ -38,6 +40,12 @@ function NewEditorPageContent() {
 	useEffect(() => {
 		if (hasStarted.current) return;
 		hasStarted.current = true;
+
+		// Apply theme from HyperCreator if provided via query param
+		const themeParam = searchParams.get("theme");
+		if (themeParam === "light" || themeParam === "dark") {
+			setTheme(themeParam);
+		}
 
 		const videoUrls = searchParams.getAll("video");
 		const projectName = searchParams.get("name") || "Imported Project";
@@ -111,7 +119,7 @@ function NewEditorPageContent() {
 		}
 
 		createAndRedirect();
-	}, [editor, router, searchParams]);
+	}, [editor, router, searchParams, setTheme]);
 
 	if (error) {
 		return (
