@@ -11,7 +11,8 @@ import {
 	PlayIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { OcSocialIcon } from "@hypercut/ui/icons";
+// Social platform icon disabled
+// import { OcSocialIcon } from "@hypercut/ui/icons";
 import { Separator } from "@/components/ui/separator";
 
 export function PreviewToolbar({
@@ -57,6 +58,7 @@ export function PreviewToolbar({
 			</Button>
 
 			<div className="justify-self-end flex items-center gap-2.5">
+				{/* Social platform overlay button disabled
 				<Button
 					variant="secondary"
 					size="sm"
@@ -67,6 +69,7 @@ export function PreviewToolbar({
 					<OcSocialIcon size={20} />
 				</Button>
 				<Separator orientation="vertical" className="h-4" />
+				*/}
 				<Button
 					variant="text"
 					onClick={onToggleFullscreen}
