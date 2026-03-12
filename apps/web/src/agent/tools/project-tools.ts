@@ -131,17 +131,12 @@ export const exportVideoTool: AgentTool = {
 				};
 			}
 
-			let lastProgress = 0;
 			const result = await editor.project.export({
 				options: {
 					format,
 					quality,
 					fps: activeProject.settings.fps,
 					includeAudio,
-					onProgress: ({ progress }) => {
-						lastProgress = progress;
-					},
-					onCancel: () => false,
 				},
 			});
 
@@ -201,7 +196,6 @@ export const exportVideoTool: AgentTool = {
 					fps: activeProject.settings.fps,
 					fileName,
 					byteLength: result.buffer.byteLength,
-					progress: lastProgress,
 					downloaded,
 				},
 			};

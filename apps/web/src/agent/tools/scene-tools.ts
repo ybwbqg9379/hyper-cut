@@ -456,7 +456,7 @@ export const getBookmarksTool: AgentTool = {
 		try {
 			const editor = EditorCore.getInstance();
 			const activeScene = editor.scenes.getActiveScene();
-			const bookmarks = [...activeScene.bookmarks].sort((a, b) => a - b);
+			const bookmarks = [...activeScene.bookmarks].sort((a, b) => a.time - b.time);
 
 			if (bookmarks.length === 0) {
 				return {
@@ -470,11 +470,12 @@ export const getBookmarksTool: AgentTool = {
 				success: true,
 				message: `当前场景有 ${bookmarks.length} 个书签 (${bookmarks.length} bookmark(s))`,
 				data: {
-					bookmarks: bookmarks.map((time) => ({
-						time,
-						formatted: `${time.toFixed(2)}s`,
-					})),
-					count: bookmarks.length,
+					bookmarks: bookmarks.map((bookmark) => ({
+					time: bookmark.time,
+					formatted: `${bookmark.time.toFixed(2)}s`,
+					note: bookmark.note,
+				})),
+				count: bookmarks.length,
 				},
 			};
 		} catch (error) {

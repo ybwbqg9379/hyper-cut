@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 const sectionExpandedCache = new Map<string, boolean>();
-const mountedSectionKeys = new Set<string>();
+const mountedSectionKeys = new Map<string, number>();
 
 interface SectionContext {
 	isOpen: boolean;
@@ -44,11 +44,19 @@ export function Section({
 
 	useEffect(() => {
 		if (!sectionKey) return;
-		if (process.env.NODE_ENV !== "production" && mountedSectionKeys.has(sectionKey)) {
+		const count = mountedSectionKeys.get(sectionKey) ?? 0;
+		if (process.env.NODE_ENV !== "production" && count > 0) {
 			console.error(`[Section] duplicate sectionKey mounted simultaneously: "${sectionKey}"`);
 		}
-		mountedSectionKeys.add(sectionKey);
-		return () => { mountedSectionKeys.delete(sectionKey); };
+		mountedSectionKeys.set(sectionKey, count + 1);
+		return () => {
+			const current = mountedSectionKeys.get(sectionKey) ?? 1;
+			if (current <= 1) {
+				mountedSectionKeys.delete(sectionKey);
+			} else {
+				mountedSectionKeys.set(sectionKey, current - 1);
+			}
+		};
 	}, [sectionKey]);
 
 	const toggle = () => {

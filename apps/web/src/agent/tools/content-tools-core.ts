@@ -63,7 +63,7 @@ const CAPTION_PRESETS: Record<
 			| "fontSize"
 			| "fontFamily"
 			| "color"
-			| "backgroundColor"
+			| "background"
 			| "fontWeight"
 			| "fontStyle"
 			| "textAlign"
@@ -77,7 +77,7 @@ const CAPTION_PRESETS: Record<
 			fontSize: 68,
 			fontFamily: "Arial",
 			color: "#ffffff",
-			backgroundColor: "rgba(0,0,0,0.45)",
+			background: { enabled: true, color: "rgba(0,0,0,0.45)" },
 			fontWeight: "bold",
 			fontStyle: "normal",
 			textAlign: "center",
@@ -90,7 +90,7 @@ const CAPTION_PRESETS: Record<
 			fontSize: 54,
 			fontFamily: "Arial",
 			color: "#ffffff",
-			backgroundColor: "transparent",
+			background: { enabled: false, color: "transparent" },
 			fontWeight: "normal",
 			fontStyle: "normal",
 			textAlign: "center",
@@ -103,7 +103,7 @@ const CAPTION_PRESETS: Record<
 			fontSize: 58,
 			fontFamily: "Arial",
 			color: "#ffffff",
-			backgroundColor: "rgba(0,0,0,0.35)",
+			background: { enabled: true, color: "rgba(0,0,0,0.35)" },
 			fontWeight: "bold",
 			fontStyle: "normal",
 			textAlign: "left",

@@ -8,7 +8,6 @@ import { invokeAction, hasActionHandlers } from "@/lib/actions";
 import type { TextElement } from "@/types/timeline";
 import type { TranscriptionWord } from "@/types/transcription";
 import {
-	createCaptionMetadata,
 	isCaptionTextElement,
 } from "@/lib/transcription/caption-metadata";
 import { transcriptionService } from "@/services/transcription/service";
@@ -26,7 +25,6 @@ interface CaptionSegment {
 	endTime: number;
 	content: string;
 	name: string;
-	metadata?: TextElement["metadata"];
 	sortIndex: number;
 }
 
@@ -232,7 +230,6 @@ export function TranscriptPanel({ locale = "zh" }: { locale?: AgentLocale }) {
 					endTime: element.startTime + element.duration,
 					content: element.content,
 					name: element.name,
-					metadata: element.metadata,
 					sortIndex: 0,
 				});
 			}
@@ -351,8 +348,7 @@ export function TranscriptPanel({ locale = "zh" }: { locale?: AgentLocale }) {
 		}
 
 		const hasChanges = draft !== segment.content;
-		const hasMetadata = segment.metadata?.kind === "caption";
-		if (!hasChanges && hasMetadata) {
+		if (!hasChanges) {
 			setSaveErrors((prev) => ({ ...prev, [key]: "" }));
 			return;
 		}
@@ -364,13 +360,6 @@ export function TranscriptPanel({ locale = "zh" }: { locale?: AgentLocale }) {
 					elementId: segment.elementId,
 					updates: {
 						content: draft,
-						metadata:
-							segment.metadata?.kind === "caption"
-								? segment.metadata
-								: createCaptionMetadata({
-										origin: "legacy-upgrade",
-										segmentIndex: segment.sortIndex,
-									}),
 					},
 				},
 			],
@@ -574,10 +563,9 @@ export function TranscriptPanel({ locale = "zh" }: { locale?: AgentLocale }) {
 									const isSelected = selectedSet.has(key);
 									const draft = drafts[key] ?? segment.content;
 									const hasChanges = draft !== segment.content;
-									const hasMetadata = segment.metadata?.kind === "caption";
 									const error = saveErrors[key];
 									const canSave =
-										(hasChanges || !hasMetadata) &&
+										hasChanges &&
 										draft.trim().length > 0 &&
 										draft.length <= MAX_SEGMENT_TEXT_LENGTH;
 									return (
@@ -601,7 +589,6 @@ export function TranscriptPanel({ locale = "zh" }: { locale?: AgentLocale }) {
 												</div>
 												<div className="mt-1 text-[11px] text-muted-foreground">
 													{segment.name}
-													{!hasMetadata ? text.legacyCaptionHint : ""}
 												</div>
 											</button>
 

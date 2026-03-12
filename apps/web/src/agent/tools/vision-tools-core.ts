@@ -208,7 +208,7 @@ function resolveTargetElementForLayout({
 		const textCandidates = [
 			item.element.name,
 			item.element.type === "text" ? item.element.content : "",
-			item.element.type === "sticker" ? item.element.iconName : "",
+			item.element.type === "sticker" ? item.element.stickerId : "",
 		];
 		return textCandidates.some((value) => value && containsLogoKeyword(value));
 	});

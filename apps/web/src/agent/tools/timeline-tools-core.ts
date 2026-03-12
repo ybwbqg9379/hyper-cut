@@ -1244,7 +1244,7 @@ export const generateCaptionsTool: AgentTool = {
 				...DEFAULT_TEXT_ELEMENT,
 				fontSize: captionFontSize,
 				fontWeight: "bold",
-				backgroundColor: "rgba(0, 0, 0, 0.45)",
+				background: { enabled: true, color: "rgba(0, 0, 0, 0.45)" },
 				transform: {
 					...DEFAULT_TEXT_ELEMENT.transform,
 					position: {
@@ -1297,12 +1297,6 @@ export const generateCaptionsTool: AgentTool = {
 						content: caption.text,
 						duration: caption.duration,
 						startTime: caption.startTime,
-						metadata: createCaptionMetadata({
-							origin: "agent-tool",
-							segmentIndex: i,
-							language: captionLanguage,
-							modelId,
-						}),
 					},
 				});
 			}
@@ -1521,11 +1515,15 @@ export const updateTextStyleTool: AgentTool = {
 					return {
 						success: false,
 						message:
-							"backgroundColor 必须是非空字符串 (backgroundColor must be a non-empty string)",
+							"backgroundColor must be a non-empty string",
 						data: { errorCode: "INVALID_BACKGROUND_COLOR" },
 					};
 				}
-				updates.backgroundColor = params.backgroundColor.trim();
+				const bgColor = params.backgroundColor.trim();
+				updates.background = {
+					enabled: bgColor !== "transparent",
+					color: bgColor,
+				};
 			}
 
 			if (params.textAlign !== undefined) {
@@ -3146,8 +3144,8 @@ export const insertTextTool: AgentTool = {
 					? params.fontFamily.trim()
 					: undefined,
 				color: isNonEmptyString(params.color) ? params.color.trim() : undefined,
-				backgroundColor: isNonEmptyString(params.backgroundColor)
-					? params.backgroundColor.trim()
+				background: isNonEmptyString(params.backgroundColor)
+					? { enabled: params.backgroundColor.trim() !== "transparent", color: params.backgroundColor.trim() }
 					: undefined,
 				textAlign: params.textAlign as TextElement["textAlign"] | undefined,
 				fontWeight: params.fontWeight as TextElement["fontWeight"] | undefined,

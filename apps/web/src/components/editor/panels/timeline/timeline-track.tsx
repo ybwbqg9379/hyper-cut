@@ -52,7 +52,7 @@ export function TimelineTrackContent({
 	targetElementId = null,
 }: TimelineTrackContentProps) {
 	const editor = useEditor();
-	const { isElementSelected } = useElementSelection();
+	const { isElementSelected, clearElementSelection } = useElementSelection();
 
 	const duration = editor.timeline.getTotalDuration();
 

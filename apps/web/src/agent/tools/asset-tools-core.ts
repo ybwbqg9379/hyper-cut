@@ -469,14 +469,11 @@ export const addStickerTool: AgentTool = {
 			}
 
 			const element = buildStickerElement({
-				iconName,
+				stickerId: iconName,
 				startTime,
 			});
 
 			const color = isNonEmptyString(params.color) ? params.color.trim() : "";
-			if (color) {
-				element.color = color;
-			}
 
 			editor.timeline.insertElement({
 				placement: { mode: "explicit", trackId },
