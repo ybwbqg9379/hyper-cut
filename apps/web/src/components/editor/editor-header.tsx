@@ -19,17 +19,17 @@ import { ThemeToggle } from "../theme-toggle";
 import { DEFAULT_LOGO_URL, SOCIAL_LINKS } from "@/constants/site-constants";
 import { toast } from "sonner";
 import { useEditor } from "@/hooks/use-editor";
-import { CommandIcon, Logout05Icon } from "@hugeicons/core-free-icons";
+import { CommandIcon, Logout05Icon, Menu02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShortcutsDialog } from "./dialogs/shortcuts-dialog";
 import Image from "next/image";
 import { cn } from "@/utils/ui";
 
-export function EditorHeader() {
+export function EditorHeader({ isEmbed = false }: { isEmbed?: boolean }) {
 	return (
 		<header className="bg-background flex h-[3.4rem] items-center justify-between px-3 pt-0.5">
 			<div className="flex items-center gap-1">
-				<ProjectDropdown />
+				<ProjectDropdown isEmbed={isEmbed} />
 				<EditableProjectName />
 			</div>
 			<nav className="flex items-center gap-2">
@@ -40,7 +40,7 @@ export function EditorHeader() {
 	);
 }
 
-function ProjectDropdown() {
+function ProjectDropdown({ isEmbed = false }: { isEmbed?: boolean }) {
 	const [openDialog, setOpenDialog] = useState<
 		"delete" | "rename" | "shortcuts" | null
 	>(null);
@@ -109,13 +109,7 @@ function ProjectDropdown() {
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button variant="ghost" size="icon" className="p-1 rounded-sm size-8">
-						<Image
-							src={DEFAULT_LOGO_URL}
-							alt="Project thumbnail"
-							width={32}
-							height={32}
-							className="invert dark:invert-0 size-5"
-						/>
+						<HugeiconsIcon icon={Menu02Icon} className="!size-5" />
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="start" className="z-100 w-44">
@@ -134,17 +128,6 @@ function ProjectDropdown() {
 						Shortcuts
 					</DropdownMenuItem>
 
-					<DropdownMenuSeparator />
-
-					<DropdownMenuItem asChild icon={<FaDiscord className="!size-4" />}>
-						<Link
-							href={SOCIAL_LINKS.discord}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							Discord
-						</Link>
-					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
 			<RenameProjectDialog

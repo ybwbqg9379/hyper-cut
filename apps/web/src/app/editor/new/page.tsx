@@ -109,8 +109,12 @@ function NewEditorPageContent() {
 					}
 				}
 
-				// Step 3: Navigate to the editor
-				router.replace(`/editor/${projectId}`);
+				// Step 3: Navigate to the editor (preserve embed mode and theme if active)
+				const params = new URLSearchParams();
+				if (searchParams.get('embed') === 'true') params.set('embed', 'true');
+				if (themeParam) params.set('theme', themeParam);
+				const suffix = params.toString() ? `?${params.toString()}` : '';
+				router.replace(`/editor/${projectId}${suffix}`);
 			} catch (err) {
 				setError(
 					err instanceof Error ? err.message : "Failed to create project",

@@ -7,6 +7,7 @@ import { baseMetaData } from "./metadata";
 import { BotIdClient } from "botid/client";
 import { webEnv } from "@hypercut/env/web";
 import { Inter } from "next/font/google";
+import { LocaleProvider } from "@/i18n";
 
 const siteFont = Inter({ subsets: ["latin"] });
 
@@ -44,6 +45,7 @@ export default function RootLayout({
 					defaultTheme="dark"
 					disableTransitionOnChange={true}
 				>
+					<LocaleProvider>
 					<TooltipProvider>
 						<Toaster />
 						<Script
@@ -60,6 +62,7 @@ export default function RootLayout({
 						/>
 						{children}
 					</TooltipProvider>
+					</LocaleProvider>
 				</ThemeProvider>
 			</body>
 		</html>

@@ -1,6 +1,8 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { Suspense, useEffect, useRef } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useTheme } from "next-themes";
 import {
 	ResizablePanelGroup,
 	ResizablePanel,
@@ -19,20 +21,44 @@ import { usePasteMedia } from "@/hooks/use-paste-media";
 import { MobileGate } from "@/components/editor/mobile-gate";
 
 export default function Editor() {
+	return (
+		<Suspense fallback={null}>
+			<EditorContent />
+		</Suspense>
+	);
+}
+
+function EditorContent() {
 	const params = useParams();
+	const searchParams = useSearchParams();
+	const { setTheme } = useTheme();
 	const projectId = params.project_id as string;
+	const isEmbed = searchParams.get("embed") === "true";
+
+	// Apply theme from HyperCreator if provided via query param (one-time on mount).
+	// Uses a ref guard to prevent re-running when setTheme reference changes,
+	// which would override the user's manual theme toggle.
+	const themeParam = searchParams.get("theme");
+	const themeAppliedRef = useRef(false);
+	useEffect(() => {
+		if (themeAppliedRef.current) return;
+		if (themeParam === "light" || themeParam === "dark") {
+			themeAppliedRef.current = true;
+			setTheme(themeParam);
+		}
+	}, [themeParam, setTheme]);
 
 	return (
 		<MobileGate>
 			<EditorProvider projectId={projectId}>
 				<div className="bg-background flex h-screen w-screen flex-col overflow-hidden">
-					<EditorHeader />
+					<EditorHeader isEmbed={isEmbed} />
 					<div className="min-h-0 min-w-0 flex-1">
 						<EditorLayout />
 					</div>
 					{/* Onboarding disabled */}
 					{/* <Onboarding /> */}
-					<MigrationDialog />
+					{!isEmbed && <MigrationDialog />}
 				</div>
 			</EditorProvider>
 		</MobileGate>
