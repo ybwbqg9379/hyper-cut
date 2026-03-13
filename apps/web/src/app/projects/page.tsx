@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { KeyboardEvent, MouseEvent } from "react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MigrationDialog } from "@/components/editor/dialogs/migration-dialog";
 import { Button } from "@/components/ui/button";
@@ -84,8 +84,18 @@ const VIEW_MODE_OPTIONS = [
 ];
 
 export default function ProjectsPage() {
+	return (
+		<Suspense fallback={<ProjectsSkeleton />}>
+			<ProjectsPageContent />
+		</Suspense>
+	);
+}
+
+function ProjectsPageContent() {
 	const { searchQuery, sortKey, sortOrder, viewMode } = useProjectsStore();
 	const editor = useEditor();
+	const searchParams = useSearchParams();
+	const isEmbed = searchParams.get("embed") === "true";
 
 	useEffect(() => {
 		if (!editor.project.getIsInitialized()) {
@@ -104,14 +114,14 @@ export default function ProjectsPage() {
 
 	return (
 		<div className="bg-background min-h-screen">
-			<MigrationDialog />
-			<ProjectsHeader />
+			{!isEmbed && <MigrationDialog />}
+			<ProjectsHeader isEmbed={isEmbed} />
 			<ProjectsToolbar projectIds={projectsToDisplay.map((p) => p.id)} />
 			<main className="mx-auto px-4 pt-2 pb-6 flex flex-col gap-4">
 				{isLoading || !isInitialized ? (
 					<ProjectsSkeleton />
 				) : projectsToDisplay.length === 0 ? (
-					<EmptyState />
+					<EmptyState isEmbed={isEmbed} />
 				) : (
 					<div
 						className={
@@ -125,6 +135,7 @@ export default function ProjectsPage() {
 								key={project.id}
 								project={project}
 								allProjectIds={projectsToDisplay.map((p) => p.id)}
+								isEmbed={isEmbed}
 							/>
 						))}
 					</div>
@@ -134,7 +145,7 @@ export default function ProjectsPage() {
 	);
 }
 
-function ProjectsHeader() {
+function ProjectsHeader({ isEmbed }: { isEmbed: boolean }) {
 	const { viewMode, isHydrated, setViewMode } = useProjectsStore();
 
 	return (
@@ -143,14 +154,18 @@ function ProjectsHeader() {
 				<div className="flex items-center gap-5">
 					<Breadcrumb>
 						<BreadcrumbList>
-							<BreadcrumbItem>
-								<BreadcrumbLink asChild>
-									<Link href="/" className="text-sm sm:text-base">
-										Home
-									</Link>
-								</BreadcrumbLink>
-							</BreadcrumbItem>
-							<BreadcrumbSeparator />
+							{!isEmbed && (
+								<>
+									<BreadcrumbItem>
+										<BreadcrumbLink asChild>
+											<Link href="/" className="text-sm sm:text-base">
+												Home
+											</Link>
+										</BreadcrumbLink>
+									</BreadcrumbItem>
+									<BreadcrumbSeparator />
+								</>
+							)}
 							<BreadcrumbItem>
 								<BreadcrumbPage className="text-sm sm:text-base font-medium">
 									All projects
@@ -181,7 +196,7 @@ function ProjectsHeader() {
 
 				<div className="flex items-center gap-3 md:gap-4">
 					<SearchBar className="hidden md:block" />
-					<NewProjectButton />
+					<NewProjectButton isEmbed={isEmbed} />
 				</div>
 			</div>
 			<SearchBar className="block md:hidden mb-4" />
@@ -501,7 +516,7 @@ function SortDropdown({ children }: { children: React.ReactNode }) {
 	);
 }
 
-function NewProjectButton() {
+function NewProjectButton({ isEmbed }: { isEmbed: boolean }) {
 	const editor = useEditor();
 	const router = useRouter();
 
@@ -509,7 +524,8 @@ function NewProjectButton() {
 		const projectId = await editor.project.createNewProject({
 			name: "New project",
 		});
-		router.push(`/editor/${projectId}`);
+		const suffix = isEmbed ? "?embed=true" : "";
+		router.push(`/editor/${projectId}${suffix}`);
 	};
 
 	return (
@@ -527,9 +543,11 @@ function NewProjectButton() {
 function ProjectItem({
 	project,
 	allProjectIds,
+	isEmbed,
 }: {
 	project: TProjectMetadata;
 	allProjectIds: string[];
+	isEmbed: boolean;
 }) {
 	const {
 		selectedProjectIds,
@@ -546,6 +564,7 @@ function ProjectItem({
 	const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
 	const editor = useEditor();
 	const durationLabel = formatProjectDuration({ duration: project.duration });
+	const editorHref = `/editor/${project.id}${isEmbed ? "?embed=true" : ""}`;
 	const isMultiSelect = selectedProjectCount > 1;
 	const isGridView = viewMode === "grid";
 
@@ -661,7 +680,7 @@ function ProjectItem({
 				className="size-5 shrink-0"
 			/>
 
-			<Link href={`/editor/${project.id}`} className="flex-1 min-w-0">
+			<Link href={editorHref} className="flex-1 min-w-0">
 				{listRowContent}
 			</Link>
 
@@ -686,7 +705,7 @@ function ProjectItem({
 					<div className="group relative">
 						{isGridView ? (
 							<>
-								<Link href={`/editor/${project.id}`} className="block">
+								<Link href={editorHref} className="block">
 									{gridContent}
 								</Link>
 
@@ -944,7 +963,7 @@ function ProjectsSkeleton() {
 	);
 }
 
-function EmptyState() {
+function EmptyState({ isEmbed }: { isEmbed: boolean }) {
 	const { searchQuery, setSearchQuery } = useProjectsStore();
 	const router = useRouter();
 	const editor = useEditor();
@@ -955,7 +974,8 @@ function EmptyState() {
 			const projectId = await editor.project.createNewProject({
 				name: "New project",
 			});
-			router.push(`/editor/${projectId}`);
+			const suffix = isEmbed ? "?embed=true" : "";
+			router.push(`/editor/${projectId}${suffix}`);
 		} catch (error) {
 			toast.error("Failed to create project", {
 				description:
