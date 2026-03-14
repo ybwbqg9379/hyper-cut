@@ -28,6 +28,7 @@ import {
 import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 import { useEditor } from "@/hooks/use-editor";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import { useParentMediaBridge } from "@/hooks/use-parent-media-bridge";
 import { useRevealItem } from "@/hooks/use-reveal-item";
 import { processMediaAssets } from "@/lib/media/processing";
 import { buildElementFromMedia } from "@/lib/timeline/element-utils";
@@ -41,6 +42,7 @@ import type { MediaAsset } from "@/types/assets";
 import { cn } from "@/utils/ui";
 import {
 	CloudUploadIcon,
+	Folder02Icon,
 	GridViewIcon,
 	LeftToRightListDashIcon,
 	SortingOneNineIcon,
@@ -71,6 +73,8 @@ export function MediaView() {
 
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [progress, setProgress] = useState(0);
+	const { requestMedia, isRequesting, isBridgeAvailable } =
+		useParentMediaBridge();
 
 	const processFiles = async ({ files }: { files: FileList }) => {
 		if (!files || files.length === 0) return;
@@ -108,6 +112,101 @@ export function MediaView() {
 			multiple: true,
 			onFilesSelected: (files) => processFiles({ files }),
 		});
+
+	// Import media from parent HyperCreator asset library via postMessage.
+	// Each batch is downloaded, processed, and added to the project immediately,
+	// so blob/File memory is released before starting the next batch.
+	const handleLibraryImport = async () => {
+		if (!activeProject) {
+			toast.error("No active project");
+			return;
+		}
+
+		const result = await requestMedia({ accept: "image/*,video/*" });
+		if (!result.ok) {
+			if (result.reason === "timeout") {
+				toast.error("Library request timed out. Please try again.");
+			} else if (
+				result.reason === "no-bridge" ||
+				result.reason === "no-parent"
+			) {
+				toast.error("Asset library is not available.");
+			}
+			// "cancelled" is an intentional user action, no toast needed
+			return;
+		}
+
+		setIsProcessing(true);
+		setProgress(0);
+		try {
+			const MAX_CONCURRENT = 2;
+			let successCount = 0;
+			let failureCount = 0;
+			const total = result.assets.length;
+
+			for (let i = 0; i < total; i += MAX_CONCURRENT) {
+				const batch = result.assets.slice(i, i + MAX_CONCURRENT);
+
+				// 1. Download this batch
+				const batchResults = await Promise.allSettled(
+					batch.map(async (item) => {
+						const response = await fetch(item.url);
+						if (!response.ok) {
+							throw new Error(`Failed to fetch: ${response.status}`);
+						}
+						const blob = await response.blob();
+						const mimeType =
+							blob.type || item.mimeType || "application/octet-stream";
+						return new File([blob], item.name, { type: mimeType });
+					}),
+				);
+
+				const batchFiles = batchResults
+					.filter(
+						(r): r is PromiseFulfilledResult<File> => r.status === "fulfilled",
+					)
+					.map((r) => r.value);
+
+				failureCount += batchResults.filter(
+					(r) => r.status === "rejected",
+				).length;
+
+				// 2. Process and add to project immediately (releases blob memory)
+				if (batchFiles.length > 0) {
+					const processedAssets = await processMediaAssets({
+						files: batchFiles,
+					});
+
+					for (const asset of processedAssets) {
+						await editor.media.addMediaAsset({
+							projectId: activeProject.metadata.id,
+							asset,
+						});
+					}
+					successCount += processedAssets.length;
+				}
+
+				// batchFiles and blobs go out of scope here and can be GC'd
+
+				// Update overall progress
+				setProgress(Math.round(((i + batch.length) / total) * 100));
+			}
+
+			if (successCount === 0) {
+				toast.error("Failed to download assets");
+			} else if (failureCount > 0) {
+				toast.warning(
+					`Imported ${successCount} assets, ${failureCount} failed to download.`,
+				);
+			}
+		} catch (error) {
+			console.error("Library import failed:", error);
+			toast.error("Failed to import from library");
+		} finally {
+			setIsProcessing(false);
+			setProgress(0);
+		}
+	};
 
 	const handleRemove = async ({
 		event,
@@ -188,6 +287,10 @@ export function MediaView() {
 						sortOrder={mediaSortOrder}
 						onSort={handleSort}
 						onImport={openFilePicker}
+						onLibraryImport={
+							isBridgeAvailable ? handleLibraryImport : undefined
+						}
+						isImportingFromLibrary={isRequesting}
 					/>
 				}
 				className={cn(isDragOver && "bg-accent/30")}
@@ -474,6 +577,8 @@ function MediaActions({
 	sortOrder,
 	onSort,
 	onImport,
+	onLibraryImport,
+	isImportingFromLibrary = false,
 }: {
 	mediaViewMode: MediaViewMode;
 	setMediaViewMode: (mode: MediaViewMode) => void;
@@ -482,6 +587,8 @@ function MediaActions({
 	sortOrder: MediaSortOrder;
 	onSort: ({ key }: { key: MediaSortKey }) => void;
 	onImport: () => void;
+	onLibraryImport?: () => void;
+	isImportingFromLibrary?: boolean;
 }) {
 	return (
 		<div className="flex gap-1.5">
@@ -575,6 +682,18 @@ function MediaActions({
 				<HugeiconsIcon icon={CloudUploadIcon} />
 				Import
 			</Button>
+			{onLibraryImport && (
+				<Button
+					variant="outline"
+					onClick={onLibraryImport}
+					disabled={isProcessing || isImportingFromLibrary}
+					size="sm"
+					className="items-center justify-center gap-1.5"
+				>
+					<HugeiconsIcon icon={Folder02Icon} />
+					Library
+				</Button>
+			)}
 		</div>
 	);
 }
