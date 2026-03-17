@@ -188,3 +188,4 @@ These files have been modified by us **and** may be modified by upstream. Auto-m
 | ---- | ------------- | ------- | ----- |
 | 2026-02-07 | `464a6e8` | 6 | Storage migration per-project refactor, v1→v2 fixes, checkbox style. 2 overlap files auto-merged cleanly. |
 | 2026-02-09 | `fe10cee` | 19 | Transform support, generic updateElements, BatchCommand, visual-node extraction, dynamic font sizing. 6 conflicts resolved (4 content + 2 delete). Migrated agent from updateTextElement to updateElements array API. |
+| 2026-03-11 | `26d523e` | 87 | Informal merge (direct `git merge upstream/main`, not via sync workflow). Major features: keyframe animation system, WebGL effects (Blur), ripple editing, editor overhaul (assets/properties/timeline/fonts), clip effects, save frame as image, playhead snapping, branding page, Opus codec fallback. Tailwind deps upgraded. |
