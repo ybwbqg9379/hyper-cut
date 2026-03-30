@@ -1,5 +1,5 @@
 {
-  "name": "opencut",
+  "name": "hypercut",
   "packageManager": "bun@1.2.18",
   "workspaces": [
     "apps/*",
@@ -9,22 +9,25 @@
     "dev:web": "turbo run dev --filter=@hypercut/web",
     "build:web": "turbo run build --filter=@hypercut/web",
     "dev:tools": "turbo run dev --filter=@opencut/tools",
+    "preview:web": "turbo run preview --filter=@opencut/web",
+    "deploy:web": "turbo run deploy --filter=@opencut/web",
     "build:tools": "turbo run build --filter=@opencut/tools",
     "start:tools": "turbo run start --filter=@opencut/tools",
     "lint:web": "biome lint apps/web/src --max-diagnostics=1000",
-    "lint:web:fix": "biome lint apps/web/src --write --max-diagnostics=1000",
+    "lint:web:fix": "biome lint apps/web/src --write --unsafe --max-diagnostics=1000",
     "format:web": "biome format apps/web/src/services/renderer --write --max-diagnostics=1000",
     "test": "bun test",
     "generate:fonts": "npx tsx apps/web/scripts/generate-font-sprites.ts"
   },
   "dependencies": {
+    "@biomejs/biome": "^2.4.8",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "better-auth": "^1.4.15",
     "next": "^16.1.3"
   },
   "devDependencies": {
-    "turbo": "^2.7.5",
+    "turbo": "^2.8.20",
     "typescript": "5.8.3"
   },
   "trustedDependencies": [

@@ -4,8 +4,12 @@ import {
 	hasKeyframesForPath,
 	upsertElementKeyframe,
 } from "@/lib/animation";
-import type { AnimationPropertyPath, ElementAnimations } from "@/types/animation";
-import type { TimelineElement } from "@/types/timeline";
+import type {
+	AnimationPropertyPath,
+	ElementAnimations,
+} from "@/lib/animation/types";
+import type { TimelineElement } from "@/lib/timeline";
+import { snapToStep } from "@/utils/math";
 import { usePropertyDraft } from "./use-property-draft";
 
 export function useKeyframedNumberProperty({
@@ -18,6 +22,7 @@ export function useKeyframedNumberProperty({
 	displayValue,
 	parse,
 	valueAtPlayhead,
+	step,
 	buildBaseUpdates,
 }: {
 	trackId: string;
@@ -29,11 +34,17 @@ export function useKeyframedNumberProperty({
 	displayValue: string;
 	parse: (input: string) => number | null;
 	valueAtPlayhead: number;
+	step?: number;
 	buildBaseUpdates: ({ value }: { value: number }) => Partial<TimelineElement>;
 }) {
 	const editor = useEditor();
+	const snapValue = (value: number) =>
+		step != null ? snapToStep({ value, step }) : value;
 
-	const hasAnimatedKeyframes = hasKeyframesForPath({ animations, propertyPath });
+	const hasAnimatedKeyframes = hasKeyframesForPath({
+		animations,
+		propertyPath,
+	});
 	const keyframeAtTime = isPlayheadWithinElementRange
 		? getKeyframeAtTime({ animations, propertyPath, time: localTime })
 		: null;
@@ -43,6 +54,7 @@ export function useKeyframedNumberProperty({
 		hasAnimatedKeyframes && isPlayheadWithinElementRange;
 
 	const previewValue = ({ value }: { value: number }) => {
+		const nextValue = snapValue(value);
 		if (shouldUseAnimatedChannel) {
 			editor.timeline.previewElements({
 				updates: [
@@ -54,7 +66,7 @@ export function useKeyframedNumberProperty({
 								animations,
 								propertyPath,
 								time: localTime,
-								value,
+								value: nextValue,
 							}),
 						},
 					},
@@ -68,7 +80,7 @@ export function useKeyframedNumberProperty({
 				{
 					trackId,
 					elementId,
-					updates: buildBaseUpdates({ value }),
+					updates: buildBaseUpdates({ value: nextValue }),
 				},
 			],
 		});
@@ -76,7 +88,10 @@ export function useKeyframedNumberProperty({
 
 	const propertyDraft = usePropertyDraft({
 		displayValue,
-		parse,
+		parse: (input) => {
+			const parsedValue = parse(input);
+			return parsedValue === null ? null : snapValue(parsedValue);
+		},
 		onPreview: (value) => previewValue({ value }),
 		onCommit: () => editor.timeline.commitPreview(),
 	});
@@ -107,13 +122,14 @@ export function useKeyframedNumberProperty({
 					elementId,
 					propertyPath,
 					time: localTime,
-					value: valueAtPlayhead,
+					value: snapValue(valueAtPlayhead),
 				},
 			],
 		});
 	};
 
 	const commitValue = ({ value }: { value: number }) => {
+		const nextValue = snapValue(value);
 		if (shouldUseAnimatedChannel) {
 			editor.timeline.upsertKeyframes({
 				keyframes: [
@@ -122,7 +138,7 @@ export function useKeyframedNumberProperty({
 						elementId,
 						propertyPath,
 						time: localTime,
-						value,
+						value: nextValue,
 					},
 				],
 			});
@@ -134,7 +150,7 @@ export function useKeyframedNumberProperty({
 				{
 					trackId,
 					elementId,
-					updates: buildBaseUpdates({ value }),
+					updates: buildBaseUpdates({ value: nextValue }),
 				},
 			],
 		});

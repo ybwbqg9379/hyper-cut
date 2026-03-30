@@ -1,7 +1,7 @@
 import { Command } from "@/lib/commands/base-command";
 import { EditorCore } from "@/core";
 import { isVisualElement, updateElementInTracks } from "@/lib/timeline";
-import type { TimelineTrack, VisualElement } from "@/types/timeline";
+import type { TimelineTrack, VisualElement } from "@/lib/timeline";
 import { buildDefaultEffectInstance } from "@/lib/effects";
 
 function addEffectToElement({
@@ -47,11 +47,11 @@ export class AddClipEffectCommand extends Command {
 			trackId: this.trackId,
 			elementId: this.elementId,
 			elementPredicate: isVisualElement,
-		update: (element) => {
-			const updated = addEffectToElement({
-				element: element as VisualElement,
-				effectType: this.effectType,
-			});
+			update: (element) => {
+				const updated = addEffectToElement({
+					element: element as VisualElement,
+					effectType: this.effectType,
+				});
 				const effects = updated.effects ?? [];
 				this.effectId = effects[effects.length - 1]?.id ?? null;
 				return updated;

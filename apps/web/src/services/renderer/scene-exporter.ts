@@ -13,7 +13,7 @@ import {
 	QUALITY_VERY_HIGH,
 } from "mediabunny";
 import type { RootNode } from "./nodes/root-node";
-import type { ExportFormat, ExportQuality } from "@/types/export";
+import type { ExportFormat, ExportQuality } from "@/lib/export";
 import { CanvasRenderer } from "./canvas-renderer";
 
 type ExportParams = {
@@ -100,8 +100,7 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 
 		let audioSource: AudioBufferSource | null = null;
 		if (this.shouldIncludeAudio && this.audioBuffer) {
-			let audioCodec: "aac" | "opus" =
-				this.format === "webm" ? "opus" : "aac";
+			let audioCodec: "aac" | "opus" = this.format === "webm" ? "opus" : "aac";
 
 			if (audioCodec === "aac" && typeof AudioEncoder !== "undefined") {
 				const { supported } = await AudioEncoder.isConfigSupported({

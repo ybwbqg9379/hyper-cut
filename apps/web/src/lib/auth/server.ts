@@ -2,11 +2,11 @@ import { betterAuth, type RateLimit } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { Redis } from "@upstash/redis";
 import { db } from "@/lib/db";
-import { webEnv } from "@hypercut/env/web";
+import { webEnv } from "@/lib/env/web";
 
 const redis = new Redis({
-	url: webEnv.UPSTASH_REDIS_REST_URL,
-	token: webEnv.UPSTASH_REDIS_REST_TOKEN,
+	url: process.env.UPSTASH_REDIS_REST_URL ?? "",
+	token: process.env.UPSTASH_REDIS_REST_TOKEN ?? "",
 });
 
 export const auth = betterAuth({
@@ -14,7 +14,7 @@ export const auth = betterAuth({
 		provider: "pg",
 		usePlural: true,
 	}),
-	secret: webEnv.BETTER_AUTH_SECRET,
+	secret: process.env.BETTER_AUTH_SECRET ?? "",
 	user: {
 		deleteUser: {
 			enabled: true,

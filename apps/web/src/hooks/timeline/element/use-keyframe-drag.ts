@@ -15,9 +15,10 @@ import {
 } from "@/constants/timeline-constants";
 import { RetimeKeyframeCommand } from "@/lib/commands/timeline/element/keyframes/retime-keyframe";
 import { BatchCommand } from "@/lib/commands";
-import type { SelectedKeyframeRef } from "@/types/animation";
-import type { TimelineElement } from "@/types/timeline";
+import type { SelectedKeyframeRef } from "@/lib/animation/types";
+import type { TimelineElement } from "@/lib/timeline";
 import type { Command } from "@/lib/commands/base-command";
+import { registerCanceller } from "@/lib/cancel-interaction";
 export interface KeyframeDragState {
 	isDragging: boolean;
 	draggingKeyframeIds: Set<string>;
@@ -69,6 +70,13 @@ export function useKeyframeDrag({
 		setDragState(initialDragState);
 	}, []);
 
+	const cancelDrag = useCallback(() => {
+		pendingDragRef.current = null;
+		mouseDownXRef.current = null;
+		setIsPendingDrag(false);
+		endDrag();
+	}, [endDrag]);
+
 	const commitDrag = useCallback(
 		({
 			keyframeRefs,
@@ -106,6 +114,12 @@ export function useKeyframeDrag({
 		},
 		[editor.command, element],
 	);
+
+	useEffect(() => {
+		if (!dragState.isDragging && !isPendingDrag) return;
+
+		return registerCanceller({ fn: cancelDrag });
+	}, [dragState.isDragging, isPendingDrag, cancelDrag]);
 
 	useEffect(() => {
 		if (!dragState.isDragging && !isPendingDrag) return;
@@ -196,27 +210,27 @@ export function useKeyframeDrag({
 			event.preventDefault();
 			event.stopPropagation();
 
-		mouseDownXRef.current = event.clientX;
+			mouseDownXRef.current = event.clientX;
 
-		const anySelected = keyframes.some((keyframe) =>
-			isKeyframeSelected({ keyframe }),
-		);
+			const anySelected = keyframes.some((keyframe) =>
+				isKeyframeSelected({ keyframe }),
+			);
 
-		const isModifierKey = event.shiftKey || event.metaKey || event.ctrlKey;
-		if (!anySelected && !isModifierKey) {
-			setKeyframeSelection({ keyframes });
-		}
+			const isModifierKey = event.shiftKey || event.metaKey || event.ctrlKey;
+			if (!anySelected && !isModifierKey) {
+				setKeyframeSelection({ keyframes });
+			}
 
-		const keyframeRefsToTrack = anySelected ? selectedKeyframes : keyframes;
+			const keyframeRefsToTrack = anySelected ? selectedKeyframes : keyframes;
 
-		pendingDragRef.current = {
-			keyframeRefs: keyframeRefsToTrack,
-			startMouseX: event.clientX,
-		};
-		setIsPendingDrag(true);
-	},
-	[isKeyframeSelected, selectedKeyframes, setKeyframeSelection],
-);
+			pendingDragRef.current = {
+				keyframeRefs: keyframeRefsToTrack,
+				startMouseX: event.clientX,
+			};
+			setIsPendingDrag(true);
+		},
+		[isKeyframeSelected, selectedKeyframes, setKeyframeSelection],
+	);
 
 	const handleKeyframeClick = useCallback(
 		({
@@ -261,7 +275,13 @@ export function useKeyframeDrag({
 				isMultiKey: event.metaKey || event.ctrlKey,
 			});
 		},
-		[toggleKeyframeSelection, selectKeyframeRange, editor, displayedStartTime, fps],
+		[
+			toggleKeyframeSelection,
+			selectKeyframeRange,
+			editor,
+			displayedStartTime,
+			fps,
+		],
 	);
 
 	const getVisualOffsetPx = useCallback(

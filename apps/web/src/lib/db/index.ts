@@ -1,13 +1,12 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
-import { webEnv } from "@hypercut/env/web";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
 function getDb() {
 	if (!_db) {
-		const client = postgres(webEnv.DATABASE_URL);
+		const client = postgres(process.env.DATABASE_URL ?? "");
 		_db = drizzle(client, { schema });
 	}
 

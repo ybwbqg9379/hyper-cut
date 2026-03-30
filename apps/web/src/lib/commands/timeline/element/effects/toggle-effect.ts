@@ -1,7 +1,7 @@
 import { Command } from "@/lib/commands/base-command";
 import { EditorCore } from "@/core";
 import { isVisualElement, updateElementInTracks } from "@/lib/timeline";
-import type { TimelineTrack, VisualElement } from "@/types/timeline";
+import type { TimelineTrack, VisualElement } from "@/lib/timeline";
 
 export function toggleEffectOnElement({
 	element,
@@ -47,11 +47,11 @@ export class ToggleClipEffectCommand extends Command {
 			trackId: this.trackId,
 			elementId: this.elementId,
 			elementPredicate: isVisualElement,
-		update: (element) => {
-			return toggleEffectOnElement({
-				element: element as VisualElement,
-				effectId: this.effectId,
-			});
+			update: (element) => {
+				return toggleEffectOnElement({
+					element: element as VisualElement,
+					effectId: this.effectId,
+				});
 			},
 		});
 

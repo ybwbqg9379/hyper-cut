@@ -15,7 +15,7 @@ import {
 	snapToNearestPoint,
 	type SnapPoint,
 } from "@/lib/timeline/snap-utils";
-import type { Bookmark } from "@/types/timeline";
+import type { Bookmark } from "@/lib/timeline";
 
 export interface BookmarkDragState {
 	isDragging: boolean;
@@ -113,7 +113,14 @@ export function useBookmarkDrag({
 				snapPoint: result.snapPoint,
 			};
 		},
-		[snappingEnabled, tracks, playheadTime, bookmarks, zoomLevel, isShiftHeldRef],
+		[
+			snappingEnabled,
+			tracks,
+			playheadTime,
+			bookmarks,
+			zoomLevel,
+			isShiftHeldRef,
+		],
 	);
 
 	useEffect(() => {

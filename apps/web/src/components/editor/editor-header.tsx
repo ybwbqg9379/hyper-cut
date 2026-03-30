@@ -2,20 +2,27 @@
 
 import { Button } from "../ui/button";
 import { useCallback, useRef, useState } from "react";
-
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import Link from "next/link";
 import { RenameProjectDialog } from "./dialogs/rename-project-dialog";
 import { DeleteProjectDialog } from "./dialogs/delete-project-dialog";
 import { useRouter, useSearchParams } from "next/navigation";
-
+import { FaDiscord } from "react-icons/fa6";
 import { ExportButton } from "./export-button";
 import { ThemeToggle } from "../theme-toggle";
-
+import { DEFAULT_LOGO_URL, SOCIAL_LINKS } from "@/constants/site-constants";
 import { toast } from "sonner";
 import { useEditor } from "@/hooks/use-editor";
-import { CommandIcon, Edit03Icon, Logout05Icon } from "@hugeicons/core-free-icons";
+import { CommandIcon, Logout05Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShortcutsDialog } from "./dialogs/shortcuts-dialog";
-
+import Image from "next/image";
 import { cn } from "@/utils/ui";
 
 export function EditorHeader({ isEmbed = false }: { isEmbed?: boolean }) {
@@ -41,7 +48,7 @@ function ProjectDropdown({ isEmbed = false }: { isEmbed?: boolean }) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const editor = useEditor();
-	const activeProject = editor.project.getActive();
+	const activeProject = useEditor((e) => e.project.getActive());
 
 	// Build the /projects URL preserving embed and theme params
 	const buildProjectsUrl = useCallback(() => {
@@ -110,27 +117,53 @@ function ProjectDropdown({ isEmbed = false }: { isEmbed?: boolean }) {
 
 	return (
 		<>
-			<Button
-				variant="ghost"
-				size="sm"
-				className="gap-1.5 rounded-sm"
-				onClick={handleExit}
-				disabled={isExiting}
-				aria-label="All Projects"
-			>
-				<HugeiconsIcon icon={Logout05Icon} className="!size-4" />
-				<span className="text-sm">All Projects</span>
-			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				className="gap-1.5 rounded-sm"
-				onClick={() => setOpenDialog("shortcuts")}
-				aria-label="Shortcuts"
-			>
-				<HugeiconsIcon icon={CommandIcon} className="!size-4" />
-				<span className="text-sm">Shortcuts</span>
-			</Button>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button variant="ghost" size="icon" className="p-1 rounded-sm size-8">
+						<Image
+							src={DEFAULT_LOGO_URL}
+							alt="Project thumbnail"
+							width={32}
+							height={32}
+							className="invert dark:invert-0 size-5"
+						/>
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="start" className="z-100 w-44">
+					<DropdownMenuItem
+						onClick={handleExit}
+						disabled={isExiting}
+						icon={<HugeiconsIcon icon={Logout05Icon} />}
+					>
+						Exit project
+					</DropdownMenuItem>
+
+					<DropdownMenuItem
+						onClick={() => setOpenDialog("shortcuts")}
+						icon={<HugeiconsIcon icon={CommandIcon} />}
+					>
+						Shortcuts
+					</DropdownMenuItem>
+
+					{!isEmbed && (
+						<>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								asChild
+								icon={<FaDiscord className="size-4!" />}
+							>
+								<Link
+									href={SOCIAL_LINKS.discord}
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									Discord
+								</Link>
+							</DropdownMenuItem>
+						</>
+					)}
+				</DropdownMenuContent>
+			</DropdownMenu>
 			<RenameProjectDialog
 				isOpen={openDialog === "rename"}
 				onOpenChange={(isOpen) => setOpenDialog(isOpen ? "rename" : null)}
@@ -153,7 +186,7 @@ function ProjectDropdown({ isEmbed = false }: { isEmbed?: boolean }) {
 
 function EditableProjectName() {
 	const editor = useEditor();
-	const activeProject = editor.project.getActive();
+	const activeProject = useEditor((e) => e.project.getActive());
 	const [isEditing, setIsEditing] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const originalNameRef = useRef("");
@@ -203,6 +236,7 @@ function EditableProjectName() {
 			event.preventDefault();
 			if (inputRef.current) {
 				inputRef.current.value = originalNameRef.current;
+				inputRef.current.setSelectionRange(0, 0);
 			}
 			setIsEditing(false);
 			inputRef.current?.blur();
@@ -210,30 +244,19 @@ function EditableProjectName() {
 	};
 
 	return (
-		<div className="group/name relative flex items-center">
-			<input
-				ref={inputRef}
-				type="text"
-				defaultValue={projectName}
-				readOnly={!isEditing}
-				onClick={startEditing}
-				onBlur={saveEdit}
-				onKeyDown={handleKeyDown}
-				style={{ fieldSizing: "content" }}
-				className={cn(
-					"text-sm h-8 px-2 py-1 rounded-sm bg-transparent outline-none cursor-pointer hover:bg-accent hover:text-accent-foreground",
-					isEditing
-						? "ring-1 ring-ring cursor-text hover:bg-transparent"
-						: "border-b border-dashed border-muted-foreground/30",
-				)}
-			/>
-			{!isEditing && (
-				<HugeiconsIcon
-					icon={Edit03Icon}
-					className="size-4 text-muted-foreground opacity-0 group-hover/name:opacity-100 transition-opacity ml-1 pointer-events-none"
-					aria-hidden="true"
-				/>
+		<input
+			ref={inputRef}
+			type="text"
+			defaultValue={projectName}
+			readOnly={!isEditing}
+			onClick={startEditing}
+			onBlur={saveEdit}
+			onKeyDown={handleKeyDown}
+			style={{ fieldSizing: "content" }}
+			className={cn(
+				"text-[0.9rem] h-8 px-2 py-1 rounded-sm bg-transparent outline-none cursor-pointer hover:bg-accent hover:text-accent-foreground",
+				isEditing && "ring-1 ring-ring cursor-text hover:bg-transparent",
 			)}
-		</div>
+		/>
 	);
 }

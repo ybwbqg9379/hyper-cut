@@ -13,20 +13,24 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getExportMimeType, getExportFileExtension, downloadBuffer } from "@/lib/export";
+import {
+	getExportMimeType,
+	getExportFileExtension,
+	downloadBuffer,
+} from "@/lib/export";
 import { Check, Copy, Download, RotateCcw } from "lucide-react";
 import {
 	EXPORT_FORMAT_VALUES,
 	EXPORT_QUALITY_VALUES,
 	type ExportFormat,
 	type ExportQuality,
-} from "@/types/export";
+} from "@/lib/export";
 import {
 	Section,
 	SectionContent,
 	SectionHeader,
 	SectionTitle,
-} from "@/components/editor/panels/properties/section";
+} from "@/components/section";
 import { useEditor } from "@/hooks/use-editor";
 import { DEFAULT_EXPORT_OPTIONS } from "@/constants/export-constants";
 
@@ -41,8 +45,8 @@ function isExportQuality(value: string): value is ExportQuality {
 export function ExportButton() {
 	const [isExportPopoverOpen, setIsExportPopoverOpen] = useState(false);
 	const editor = useEditor();
-
-	const hasProject = !!editor.project.getActiveOrNull();
+	const activeProject = useEditor((e) => e.project.getActiveOrNull());
+	const hasProject = !!activeProject;
 
 	const handlePopoverOpenChange = ({ open }: { open: boolean }) => {
 		if (!open) {
@@ -53,7 +57,10 @@ export function ExportButton() {
 	};
 
 	return (
-		<Popover open={isExportPopoverOpen} onOpenChange={(open) => handlePopoverOpenChange({ open })}>
+		<Popover
+			open={isExportPopoverOpen}
+			onOpenChange={(open) => handlePopoverOpenChange({ open })}
+		>
 			<PopoverTrigger asChild>
 				<Button
 					variant="default"
@@ -77,9 +84,9 @@ function ExportPopover({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const editor = useEditor();
-	const activeProject = editor.project.getActive();
-	const { isExporting, progress, result: exportResult } =
-		editor.project.getExportState();
+	const activeProject = useEditor((e) => e.project.getActive());
+	const exportState = useEditor((e) => e.project.getExportState());
+	const { isExporting, progress, result: exportResult } = exportState;
 	const [format, setFormat] = useState<ExportFormat>(
 		DEFAULT_EXPORT_OPTIONS.format,
 	);
@@ -95,10 +102,10 @@ function ExportPopover({
 
 		const result = await editor.project.export({
 			options: {
-			format,
-			quality,
-			fps: activeProject.settings.fps,
-			includeAudio: shouldIncludeAudio,
+				format,
+				quality,
+				fps: activeProject.settings.fps,
+				includeAudio: shouldIncludeAudio,
 			},
 		});
 
@@ -142,7 +149,11 @@ function ExportPopover({
 						{!isExporting && (
 							<>
 								<div className="flex flex-col">
-									<Section collapsible defaultOpen={false} showTopBorder={false}>
+									<Section
+										collapsible
+										defaultOpen={false}
+										showTopBorder={false}
+									>
 										<SectionHeader>
 											<SectionTitle>Format</SectionTitle>
 										</SectionHeader>
@@ -214,10 +225,10 @@ function ExportPopover({
 											<div className="flex items-center space-x-2">
 												<Checkbox
 													id="include-audio"
-								checked={shouldIncludeAudio}
-												onCheckedChange={(checked) =>
-													setShouldIncludeAudio(!!checked)
-												}
+													checked={shouldIncludeAudio}
+													onCheckedChange={(checked) =>
+														setShouldIncludeAudio(!!checked)
+													}
 												/>
 												<Label htmlFor="include-audio">
 													Include audio in export
@@ -238,15 +249,15 @@ function ExportPopover({
 
 						{isExporting && (
 							<div className="space-y-4 p-3">
-							<div className="flex flex-col gap-2">
-								<div className="flex items-center justify-between text-center">
-									<p className="text-muted-foreground text-sm">
-										{Math.round(progress * 100)}%
-									</p>
-									<p className="text-muted-foreground text-sm">100%</p>
+								<div className="flex flex-col gap-2">
+									<div className="flex items-center justify-between text-center">
+										<p className="text-muted-foreground text-sm">
+											{Math.round(progress * 100)}%
+										</p>
+										<p className="text-muted-foreground text-sm">100%</p>
+									</div>
+									<Progress value={progress * 100} className="w-full" />
 								</div>
-								<Progress value={progress * 100} className="w-full" />
-							</div>
 
 								<Button
 									variant="outline"

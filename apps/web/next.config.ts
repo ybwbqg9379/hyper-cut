@@ -17,18 +17,6 @@ const nextConfig: NextConfig = {
 	reactStrictMode: true,
 	productionBrowserSourceMaps: true,
 	output: "standalone",
-	// Security: only allow framing from HyperCreator domain and self
-	headers: async () => [
-		{
-			source: "/:path*",
-			headers: [
-				{
-					key: "Content-Security-Policy",
-					value: "frame-ancestors 'self' https://*.hyper-creator.com https://hyper-creator.com http://localhost:*",
-				},
-			],
-		},
-	],
 	images: {
 		remotePatterns: [
 			{
@@ -62,6 +50,10 @@ const nextConfig: NextConfig = {
 			{
 				protocol: "https",
 				hostname: "api.unisvg.com",
+			},
+			{
+				protocol: "https",
+				hostname: "cdn.brandfetch.io",
 			},
 		],
 	},

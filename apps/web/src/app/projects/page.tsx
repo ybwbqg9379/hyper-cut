@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { EditorCore } from "@/core";
 import { MigrationDialog } from "@/components/editor/dialogs/migration-dialog";
+import { StoragePersistenceDialog } from "@/components/editor/dialogs/storage-persistence-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,7 +20,7 @@ import type {
 	TProjectMetadata,
 	TProjectSortKey,
 	TProjectSortOption,
-} from "@/types/project";
+} from "@/lib/project/types";
 import { formatTimeCode } from "@/lib/time";
 import { formatDate } from "@/utils/date";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -44,7 +46,7 @@ import {
 	ArrowDown02Icon,
 	InformationCircleIcon,
 } from "@hugeicons/core-free-icons";
-import { OcVideoIcon } from "@hypercut/ui/icons";
+import { OcVideoIcon } from "@/components/icons";
 import { Label } from "@/components/ui/label";
 import {
 	ContextMenu,
@@ -96,6 +98,13 @@ function ProjectsPageContent() {
 	const editor = useEditor();
 	const searchParams = useSearchParams();
 	const isEmbed = searchParams.get("embed") === "true";
+	const sortOption: TProjectSortOption = `${sortKey}-${sortOrder}`;
+
+	const isLoading = useEditor((e) => e.project.getIsLoading());
+	const isInitialized = useEditor((e) => e.project.getIsInitialized());
+	const projectsToDisplay = useEditor((e) =>
+		e.project.getFilteredAndSortedProjects({ searchQuery, sortOption }),
+	);
 
 	useEffect(() => {
 		if (!editor.project.getIsInitialized()) {
@@ -103,18 +112,10 @@ function ProjectsPageContent() {
 		}
 	}, [editor.project]);
 
-	const sortOption: TProjectSortOption = `${sortKey}-${sortOrder}`;
-	const projectsToDisplay = editor.project.getFilteredAndSortedProjects({
-		searchQuery,
-		sortOption,
-	});
-
-	const isLoading = editor.project.getIsLoading();
-	const isInitialized = editor.project.getIsInitialized();
-
 	return (
 		<div className="bg-background min-h-screen">
 			{!isEmbed && <MigrationDialog />}
+			<StoragePersistenceDialog />
 			<ProjectsHeader isEmbed={isEmbed} />
 			<ProjectsToolbar projectIds={projectsToDisplay.map((p) => p.id)} />
 			<main className="mx-auto px-4 pt-2 pb-6 flex flex-col gap-4">
@@ -374,7 +375,7 @@ async function deleteProjects({
 	editor,
 	ids,
 }: {
-	editor: ReturnType<typeof useEditor>;
+	editor: EditorCore;
 	ids: string[];
 }) {
 	await editor.project.deleteProjects({ ids });
@@ -384,7 +385,7 @@ async function duplicateProjects({
 	editor,
 	ids,
 }: {
-	editor: ReturnType<typeof useEditor>;
+	editor: EditorCore;
 	ids: string[];
 }) {
 	await editor.project.duplicateProjects({ ids });
@@ -395,7 +396,7 @@ async function renameProject({
 	id,
 	name,
 }: {
-	editor: ReturnType<typeof useEditor>;
+	editor: EditorCore;
 	id: string;
 	name: string;
 }) {

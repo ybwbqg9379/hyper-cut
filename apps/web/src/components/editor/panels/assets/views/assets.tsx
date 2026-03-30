@@ -2,11 +2,11 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
-import { PanelView } from "@/components/editor/panels/assets/views/base-view";
+import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import { MediaDragOverlay } from "@/components/editor/panels/assets/drag-overlay";
 import { DraggableItem } from "@/components/editor/panels/assets/draggable-item";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -28,9 +28,17 @@ import {
 import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 import { useEditor } from "@/hooks/use-editor";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import { invokeAction } from "@/lib/actions";
 import { useParentMediaBridge } from "@/hooks/use-parent-media-bridge";
-import { useRevealItem } from "@/hooks/use-reveal-item";
+import type { ParentMediaItem } from "@/hooks/use-parent-media-bridge";
 import { processMediaAssets } from "@/lib/media/processing";
+import { showMediaUploadToast } from "@/lib/media/upload-toast";
+import {
+	SelectableItem,
+	SelectableSurface,
+	useSelection,
+	useSelectionScope,
+} from "@/lib/selection";
 import { buildElementFromMedia } from "@/lib/timeline/element-utils";
 import {
 	type MediaSortKey,
@@ -38,11 +46,11 @@ import {
 	type MediaViewMode,
 	useAssetsPanelStore,
 } from "@/stores/assets-panel-store";
-import type { MediaAsset } from "@/types/assets";
+import { MASKABLE_ELEMENT_TYPES } from "@/lib/timeline";
+import type { MediaAsset } from "@/lib/media/types";
 import { cn } from "@/utils/ui";
 import {
 	CloudUploadIcon,
-	Folder02Icon,
 	GridViewIcon,
 	LeftToRightListDashIcon,
 	SortingOneNineIcon,
@@ -54,8 +62,8 @@ import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
 export function MediaView() {
 	const editor = useEditor();
-	const mediaFiles = editor.media.getAssets();
-	const activeProject = editor.project.getActive();
+	const mediaFiles = useEditor((e) => e.media.getAssets());
+	const activeProject = useEditor((e) => e.project.getActive());
 
 	const {
 		mediaViewMode,
@@ -66,17 +74,38 @@ export function MediaView() {
 		mediaSortOrder,
 		setMediaSort,
 	} = useAssetsPanelStore();
-	const { highlightedId, registerElement } = useRevealItem(
-		highlightMediaId,
-		clearHighlight,
-	);
 
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [progress, setProgress] = useState(0);
 	const { requestMedia, isRequesting, isBridgeAvailable } =
 		useParentMediaBridge();
 
-	const processFiles = async ({ files }: { files: FileList }) => {
+	const handleLibraryImport = async () => {
+		if (!activeProject) return;
+		const result = await requestMedia({ accept: "image/*,video/*,audio/*" });
+		if (!result.ok) return;
+
+		setIsProcessing(true);
+		setProgress(0);
+		try {
+			const files = await Promise.all(
+				result.assets.map(async (asset: ParentMediaItem) => {
+					const response = await fetch(asset.url);
+					const blob = await response.blob();
+					return new File([blob], asset.name, { type: asset.mimeType });
+				}),
+			);
+			await processFiles({ files });
+		} catch (error) {
+			console.error("Error importing from library:", error);
+			toast.error("Failed to import from library");
+		} finally {
+			setIsProcessing(false);
+			setProgress(0);
+		}
+	};
+
+	const processFiles = async ({ files }: { files: File[] }) => {
 		if (!files || files.length === 0) return;
 		if (!activeProject) {
 			toast.error("No active project");
@@ -86,20 +115,28 @@ export function MediaView() {
 		setIsProcessing(true);
 		setProgress(0);
 		try {
-			const processedAssets = await processMediaAssets({
-				files,
-				onProgress: (progress: { progress: number }) =>
-					setProgress(progress.progress),
+			await showMediaUploadToast({
+				filesCount: files.length,
+				promise: async () => {
+					const processedAssets = await processMediaAssets({
+						files,
+						onProgress: (progress: { progress: number }) =>
+							setProgress(progress.progress),
+					});
+					for (const asset of processedAssets) {
+						await editor.media.addMediaAsset({
+							projectId: activeProject.metadata.id,
+							asset,
+						});
+					}
+					return {
+						uploadedCount: processedAssets.length,
+						assetNames: processedAssets.map((asset) => asset.name),
+					};
+				},
 			});
-			for (const asset of processedAssets) {
-				await editor.media.addMediaAsset({
-					projectId: activeProject.metadata.id,
-					asset,
-				});
-			}
 		} catch (error) {
 			console.error("Error processing files:", error);
-			toast.error("Failed to process files");
 		} finally {
 			setIsProcessing(false);
 			setProgress(0);
@@ -113,118 +150,18 @@ export function MediaView() {
 			onFilesSelected: (files) => processFiles({ files }),
 		});
 
-	// Import media from parent HyperCreator asset library via postMessage.
-	// Each batch is downloaded, processed, and added to the project immediately,
-	// so blob/File memory is released before starting the next batch.
-	const handleLibraryImport = async () => {
-		if (!activeProject) {
-			toast.error("No active project");
-			return;
-		}
-
-		const result = await requestMedia({ accept: "image/*,video/*" });
-		if (!result.ok) {
-			if (result.reason === "timeout") {
-				toast.error("Library request timed out. Please try again.");
-			} else if (
-				result.reason === "no-bridge" ||
-				result.reason === "no-parent"
-			) {
-				toast.error("Asset library is not available.");
-			}
-			// "cancelled" is an intentional user action, no toast needed
-			return;
-		}
-
-		setIsProcessing(true);
-		setProgress(0);
-		try {
-			const MAX_CONCURRENT = 2;
-			let successCount = 0;
-			let failureCount = 0;
-			const total = result.assets.length;
-
-			for (let i = 0; i < total; i += MAX_CONCURRENT) {
-				const batch = result.assets.slice(i, i + MAX_CONCURRENT);
-
-				// 1. Download this batch
-				const batchResults = await Promise.allSettled(
-					batch.map(async (item) => {
-						const response = await fetch(item.url);
-						if (!response.ok) {
-							throw new Error(`Failed to fetch: ${response.status}`);
-						}
-						const blob = await response.blob();
-						const mimeType =
-							blob.type || item.mimeType || "application/octet-stream";
-						return new File([blob], item.name, { type: mimeType });
-					}),
-				);
-
-				const batchFiles = batchResults
-					.filter(
-						(r): r is PromiseFulfilledResult<File> => r.status === "fulfilled",
-					)
-					.map((r) => r.value);
-
-				failureCount += batchResults.filter(
-					(r) => r.status === "rejected",
-				).length;
-
-				// 2. Process and add to project immediately (releases blob memory)
-				if (batchFiles.length > 0) {
-					const processedAssets = await processMediaAssets({
-						files: batchFiles,
-					});
-
-					for (const asset of processedAssets) {
-						await editor.media.addMediaAsset({
-							projectId: activeProject.metadata.id,
-							asset,
-						});
-					}
-					successCount += processedAssets.length;
-				}
-
-				// batchFiles and blobs go out of scope here and can be GC'd
-
-				// Update overall progress
-				setProgress(Math.round(((i + batch.length) / total) * 100));
-			}
-
-			if (successCount === 0) {
-				toast.error("Failed to download assets");
-			} else if (failureCount > 0) {
-				toast.warning(
-					`Imported ${successCount} assets, ${failureCount} failed to download.`,
-				);
-			}
-		} catch (error) {
-			console.error("Library import failed:", error);
-			toast.error("Failed to import from library");
-		} finally {
-			setIsProcessing(false);
-			setProgress(0);
-		}
-	};
-
-	const handleRemove = async ({
+	const handleRemove = ({
 		event,
-		id,
+		ids,
 	}: {
 		event: React.MouseEvent;
-		id: string;
+		ids: string[];
 	}) => {
 		event.stopPropagation();
 
-		if (!activeProject) {
-			toast.error("No active project");
-			return;
-		}
-
-		await editor.media.removeMediaAsset({
+		invokeAction("remove-media-assets", {
 			projectId: activeProject.metadata.id,
-			id,
+			assetIds: ids,
 		});
 	};
 
@@ -271,6 +208,9 @@ export function MediaView() {
 
 		return filtered;
 	}, [mediaFiles, mediaSortBy, mediaSortOrder]);
+	const orderedMediaIds = useMemo(() => {
+		return filteredMediaItems.map((item) => item.id);
+	}, [filteredMediaItems]);
 
 	return (
 		<>
@@ -282,18 +222,17 @@ export function MediaView() {
 					<MediaActions
 						mediaViewMode={mediaViewMode}
 						setMediaViewMode={setMediaViewMode}
-						isProcessing={isProcessing}
+						isProcessing={isProcessing || isRequesting}
 						sortBy={mediaSortBy}
 						sortOrder={mediaSortOrder}
 						onSort={handleSort}
 						onImport={openFilePicker}
-						onLibraryImport={
-							isBridgeAvailable ? handleLibraryImport : undefined
-						}
-						isImportingFromLibrary={isRequesting}
+						isBridgeAvailable={isBridgeAvailable}
+						onLibraryImport={handleLibraryImport}
 					/>
 				}
 				className={cn(isDragOver && "bg-accent/30")}
+				contentClassName="h-full"
 				{...dragProps}
 			>
 				{isDragOver || filteredMediaItems.length === 0 ? (
@@ -304,29 +243,38 @@ export function MediaView() {
 						onClick={openFilePicker}
 					/>
 				) : (
-					<MediaItemList
-						items={filteredMediaItems}
-						mode={mediaViewMode}
-						onRemove={handleRemove}
-						highlightedId={highlightedId}
-						registerElement={registerElement}
-					/>
+					<SelectableSurface
+						ariaLabel="Assets"
+						orderedIds={orderedMediaIds}
+						revealId={highlightMediaId}
+						onRevealComplete={clearHighlight}
+					>
+						<MediaScopeRegistrar />
+						<MediaItemList
+							items={filteredMediaItems}
+							mode={mediaViewMode}
+							onRemove={handleRemove}
+						/>
+					</SelectableSurface>
 				)}
 			</PanelView>
 		</>
 	);
 }
 
+function MediaScopeRegistrar() {
+	useSelectionScope();
+	return null;
+}
+
 function MediaAssetDraggable({
 	item,
 	preview,
-	isHighlighted,
 	variant,
 	isRounded,
 }: {
 	item: MediaAsset;
 	preview: React.ReactNode;
-	isHighlighted: boolean;
 	variant: "card" | "compact";
 	isRounded?: boolean;
 }) {
@@ -364,7 +312,7 @@ function MediaAssetDraggable({
 				mediaType: item.type,
 				name: item.name,
 				...(item.type !== "audio" && {
-					targetElementTypes: ["video", "image"] as const,
+					targetElementTypes: [...MASKABLE_ELEMENT_TYPES],
 				}),
 			}}
 			shouldShowPlusOnDrag={false}
@@ -373,7 +321,6 @@ function MediaAssetDraggable({
 			}
 			variant={variant}
 			isRounded={isRounded}
-			isHighlighted={isHighlighted}
 		/>
 	);
 }
@@ -385,18 +332,31 @@ function MediaItemWithContextMenu({
 }: {
 	item: MediaAsset;
 	children: React.ReactNode;
-	onRemove: ({ event, id }: { event: React.MouseEvent; id: string }) => void;
+	onRemove: ({
+		event,
+		ids,
+	}: {
+		event: React.MouseEvent;
+		ids: string[];
+	}) => void;
 }) {
+	const { isSelected, selectedIds } = useSelection();
+	const idsToDelete = isSelected(item.id) ? selectedIds : [item.id];
+	const deleteLabel =
+		idsToDelete.length > 1 ? `Delete ${idsToDelete.length} items` : "Delete";
+
 	return (
 		<ContextMenu>
-			<ContextMenuTrigger>{children}</ContextMenuTrigger>
+			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
 			<ContextMenuContent>
 				<ContextMenuItem>Export clips</ContextMenuItem>
 				<ContextMenuItem
 					variant="destructive"
-					onClick={(event) => onRemove({ event, id: item.id })}
+					onClick={(event: React.MouseEvent<HTMLDivElement>) =>
+						onRemove({ event, ids: idsToDelete })
+					}
 				>
-					Delete
+					{deleteLabel}
 				</ContextMenuItem>
 			</ContextMenuContent>
 		</ContextMenu>
@@ -407,27 +367,29 @@ function MediaItemList({
 	items,
 	mode,
 	onRemove,
-	highlightedId,
-	registerElement,
 }: {
 	items: MediaAsset[];
 	mode: MediaViewMode;
-	onRemove: ({ event, id }: { event: React.MouseEvent; id: string }) => void;
-	highlightedId: string | null;
-	registerElement: (id: string, element: HTMLElement | null) => void;
+	onRemove: ({
+		event,
+		ids,
+	}: {
+		event: React.MouseEvent;
+		ids: string[];
+	}) => void;
 }) {
 	const isGrid = mode === "grid";
 
 	return (
 		<div
-			className={cn(isGrid ? "grid gap-2" : "flex flex-col gap-1")}
+			className={cn(isGrid ? "grid gap-4" : "flex flex-col gap-1.5")}
 			style={
-				isGrid ? { gridTemplateColumns: "repeat(auto-fill, 160px)" } : undefined
+				isGrid ? { gridTemplateColumns: "repeat(auto-fill, 7rem)" } : undefined
 			}
 		>
 			{items.map((item) => (
-				<div key={item.id} ref={(element) => registerElement(item.id, element)}>
-					<MediaItemWithContextMenu item={item} onRemove={onRemove}>
+				<MediaItemWithContextMenu item={item} onRemove={onRemove} key={item.id}>
+					<SelectableItem className={cn(!isGrid && "w-full")} id={item.id}>
 						<MediaAssetDraggable
 							item={item}
 							preview={
@@ -438,16 +400,15 @@ function MediaItemList({
 							}
 							variant={isGrid ? "card" : "compact"}
 							isRounded={isGrid ? false : undefined}
-							isHighlighted={highlightedId === item.id}
 						/>
-					</MediaItemWithContextMenu>
-				</div>
+					</SelectableItem>
+				</MediaItemWithContextMenu>
 			))}
 		</div>
 	);
 }
 
-export function formatDuration({ duration }: { duration: number }) {
+function formatDuration({ duration }: { duration: number }) {
 	const min = Math.floor(duration / 60);
 	const sec = Math.floor(duration % 60);
 	return `${min}:${sec.toString().padStart(2, "0")}`;
@@ -509,7 +470,7 @@ function MediaPreview({
 
 	if (item.type === "image") {
 		return (
-			<div className="relative flex size-full items-center justify-center">
+			<div className="relative flex size-full items-center justify-center bg-muted">
 				<Image
 					src={item.url ?? ""}
 					alt={item.name}
@@ -577,8 +538,8 @@ function MediaActions({
 	sortOrder,
 	onSort,
 	onImport,
+	isBridgeAvailable,
 	onLibraryImport,
-	isImportingFromLibrary = false,
 }: {
 	mediaViewMode: MediaViewMode;
 	setMediaViewMode: (mode: MediaViewMode) => void;
@@ -587,8 +548,8 @@ function MediaActions({
 	sortOrder: MediaSortOrder;
 	onSort: ({ key }: { key: MediaSortKey }) => void;
 	onImport: () => void;
+	isBridgeAvailable?: boolean;
 	onLibraryImport?: () => void;
-	isImportingFromLibrary?: boolean;
 }) {
 	return (
 		<div className="flex gap-1.5">
@@ -682,15 +643,14 @@ function MediaActions({
 				<HugeiconsIcon icon={CloudUploadIcon} />
 				Import
 			</Button>
-			{onLibraryImport && (
+			{isBridgeAvailable && onLibraryImport && (
 				<Button
 					variant="outline"
 					onClick={onLibraryImport}
-					disabled={isProcessing || isImportingFromLibrary}
+					disabled={isProcessing}
 					size="sm"
 					className="items-center justify-center gap-1.5"
 				>
-					<HugeiconsIcon icon={Folder02Icon} />
 					Library
 				</Button>
 			)}

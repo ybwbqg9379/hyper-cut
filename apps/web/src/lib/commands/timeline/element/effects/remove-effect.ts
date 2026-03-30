@@ -1,7 +1,7 @@
 import { Command } from "@/lib/commands/base-command";
 import { EditorCore } from "@/core";
 import { isVisualElement, updateElementInTracks } from "@/lib/timeline";
-import type { TimelineTrack, VisualElement } from "@/types/timeline";
+import type { TimelineTrack, VisualElement } from "@/lib/timeline";
 
 function removeEffectFromElement({
 	element,
@@ -45,11 +45,11 @@ export class RemoveClipEffectCommand extends Command {
 			trackId: this.trackId,
 			elementId: this.elementId,
 			elementPredicate: isVisualElement,
-		update: (element) => {
-			return removeEffectFromElement({
-				element: element as VisualElement,
-				effectId: this.effectId,
-			});
+			update: (element) => {
+				return removeEffectFromElement({
+					element: element as VisualElement,
+					effectId: this.effectId,
+				});
 			},
 		});
 

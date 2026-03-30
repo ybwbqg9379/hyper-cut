@@ -23,7 +23,7 @@ function buildMarkdown({
 	const { grouped, orderedTypes } = groupAndOrderChanges({ changes });
 
 	for (const type of orderedTypes) {
-		lines.push(`## ${getSectionTitle(type)}`);
+		lines.push(`## ${getSectionTitle({ type })}`);
 		for (const change of grouped[type]) {
 			lines.push(`- ${change.text}`);
 		}
@@ -54,7 +54,10 @@ export function CopyMarkdownButton({
 			size="sm"
 			variant="text"
 			onClick={handleCopy}
-			className={cn("flex items-center gap-1.5", copied && "pointer-events-none")}
+			className={cn(
+				"flex items-center gap-1.5",
+				copied && "pointer-events-none",
+			)}
 			title="Copy as markdown"
 		>
 			{copied ? (
