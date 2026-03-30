@@ -36,7 +36,7 @@ export function MobileGate({ children }: MobileGateProps) {
 	};
 
 	return (
-		<div className="dark bg-background relative flex h-screen w-screen flex-col overflow-hidden">
+		<div className="bg-background relative flex h-screen w-screen flex-col overflow-hidden">
 			<Button
 				variant="text"
 				className="absolute top-6 left-6 flex items-center gap-1 text-muted-foreground"
@@ -52,15 +52,13 @@ export function MobileGate({ children }: MobileGateProps) {
 						Desktop only (for now)
 					</h1>
 					<p className="text-muted-foreground text-sm leading-relaxed">
-						OpenCut isn't optimized for mobile or iPad yet. Things will break
+						HyperCut isn't optimized for mobile or iPad yet. Things will break
 						and the layout will be a mess. Come back on a desktop for the real
 						experience.
 					</p>
 				</div>
 				<div className="flex items-center gap-3">
-					<Button onClick={handleContinue}>
-						Take a look anyway
-					</Button>
+					<Button onClick={handleContinue}>Take a look anyway</Button>
 					<Button variant="ghost" asChild>
 						<Link href="/roadmap" className="flex items-center gap-1">
 							Roadmap

@@ -1,6 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
-import { webEnv } from "@hypercut/env/web";
+import { webEnv } from "@/lib/env/web";
 
 const redis = new Redis({
 	url: webEnv.UPSTASH_REDIS_REST_URL,
@@ -15,11 +15,6 @@ export const baseRateLimit = new Ratelimit({
 });
 
 export async function checkRateLimit({ request }: { request: Request }) {
-	// Skip Redis-backed rate limiting in local development to reduce setup friction.
-	if (webEnv.NODE_ENV === "development") {
-		return { success: true, limited: false };
-	}
-
 	const ip = request.headers.get("x-forwarded-for") ?? "anonymous";
 	const { success } = await baseRateLimit.limit(ip);
 	return { success, limited: !success };

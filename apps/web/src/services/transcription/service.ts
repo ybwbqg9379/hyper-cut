@@ -3,7 +3,7 @@ import type {
 	TranscriptionResult,
 	TranscriptionProgress,
 	TranscriptionModelId,
-} from "@/types/transcription";
+} from "@/lib/transcription/types";
 import {
 	DEFAULT_TRANSCRIPTION_MODEL,
 	TRANSCRIPTION_MODELS,
@@ -17,17 +17,14 @@ class TranscriptionService {
 	private currentModelId: TranscriptionModelId | null = null;
 	private isInitialized = false;
 	private isInitializing = false;
-	private lastResult: TranscriptionResult | null = null;
 
 	async transcribe({
 		audioData,
-		sampleRate = 16_000,
 		language = "auto",
 		modelId = DEFAULT_TRANSCRIPTION_MODEL,
 		onProgress,
 	}: {
 		audioData: Float32Array;
-		sampleRate?: number;
 		language?: TranscriptionLanguage;
 		modelId?: TranscriptionModelId;
 		onProgress?: ProgressCallback;
@@ -54,13 +51,11 @@ class TranscriptionService {
 
 					case "transcribe-complete":
 						this.worker?.removeEventListener("message", handleMessage);
-						this.lastResult = {
+						resolve({
 							text: response.text,
 							segments: response.segments,
-							words: response.words,
 							language,
-						};
-						resolve(this.lastResult);
+						});
 						break;
 
 					case "transcribe-error":
@@ -80,7 +75,6 @@ class TranscriptionService {
 			this.worker.postMessage({
 				type: "transcribe",
 				audio: audioData,
-				sampleRate,
 				language,
 			} satisfies WorkerMessage);
 		});
@@ -88,10 +82,6 @@ class TranscriptionService {
 
 	cancel() {
 		this.worker?.postMessage({ type: "cancel" } satisfies WorkerMessage);
-	}
-
-	getLastResult(): TranscriptionResult | null {
-		return this.lastResult;
 	}
 
 	private async ensureWorker({
@@ -190,7 +180,6 @@ class TranscriptionService {
 		this.isInitialized = false;
 		this.isInitializing = false;
 		this.currentModelId = null;
-		this.lastResult = null;
 	}
 }
 

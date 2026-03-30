@@ -16,8 +16,8 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 import { sliderToZoom, zoomToSlider } from "@/lib/timeline/zoom-utils";
-import { ScenesView } from "../../scenes-view";
-import { type TAction, invokeAction } from "@/lib/actions";
+import { ScenesView } from "@/components/editor/scenes-view";
+import { type TActionWithOptionalArgs, invokeAction } from "@/lib/actions";
 import { cn } from "@/utils/ui";
 import { useTimelineStore } from "@/stores/timeline-store";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -34,8 +34,10 @@ import {
 	AlignLeftIcon,
 	AlignRightIcon,
 	Layers01Icon,
+	Chart03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { OcRippleIcon } from "@/components/icons";
 
 export function TimelineToolbar({
 	zoomLevel,
@@ -76,15 +78,15 @@ export function TimelineToolbar({
 }
 
 function ToolbarLeftSection() {
-	const editor = useEditor();
-	const currentTime = editor.playback.getCurrentTime();
-	const isCurrentlyBookmarked = editor.scenes.isBookmarked({ time: currentTime });
+	const isCurrentlyBookmarked = useEditor((e) =>
+		e.scenes.isBookmarked({ time: e.playback.getCurrentTime() }),
+	);
 
 	const handleAction = ({
 		action,
 		event,
 	}: {
-		action: TAction;
+		action: TActionWithOptionalArgs;
 		event: React.MouseEvent;
 	}) => {
 		event.stopPropagation();
@@ -149,11 +151,19 @@ function ToolbarLeftSection() {
 				<Tooltip>
 					<ToolbarButton
 						icon={<HugeiconsIcon icon={Bookmark02Icon} />}
-				isActive={isCurrentlyBookmarked}
-					tooltip={isCurrentlyBookmarked ? "Remove bookmark" : "Add bookmark"}
+						isActive={isCurrentlyBookmarked}
+						tooltip={isCurrentlyBookmarked ? "Remove bookmark" : "Add bookmark"}
 						onClick={({ event }) =>
 							handleAction({ action: "toggle-bookmark", event })
 						}
+					/>
+				</Tooltip>
+
+				<Tooltip>
+					<ToolbarButton
+						icon={<HugeiconsIcon icon={Chart03Icon} />}
+						tooltip="Graph"
+						onClick={() => {}}
 					/>
 				</Tooltip>
 			</TooltipProvider>
@@ -207,7 +217,7 @@ function ToolbarRightSection({
 				/>
 
 				<ToolbarButton
-					icon={<HugeiconsIcon icon={Link04Icon} className="scale-110" />}
+					icon={<OcRippleIcon size={24} className="scale-110" />}
 					isActive={rippleEditingEnabled}
 					tooltip="Ripple editing"
 					onClick={() => toggleRippleEditing()}

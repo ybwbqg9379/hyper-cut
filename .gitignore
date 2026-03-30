@@ -1,8 +1,5 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# macOS
-.DS_Store
-
 # asdf version management
 .tool-versions
 
@@ -20,6 +17,8 @@ bun.lockb
 .content-collections
 
 # Twiggy
-.cursor/rules/file-structure.mdc
-*.tsbuildinfo
-apps/web/reports/
+.cursor/
+
+.open-next
+
+target/

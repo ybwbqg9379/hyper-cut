@@ -8,7 +8,8 @@ export type TActionArgsMap = {
 	"seek-backward": { seconds: number } | undefined;
 	"jump-forward": { seconds: number } | undefined;
 	"jump-backward": { seconds: number } | undefined;
-	"paste-at-time": { time: number } | undefined;
+	"remove-media-asset": { projectId: string; assetId: string };
+	"remove-media-assets": { projectId: string; assetIds: string[] };
 };
 
 type TKeysWithValueUndefined<T> = {
@@ -28,8 +29,8 @@ export type TArgOfAction<A extends TAction> = A extends TActionWithArgs
 	: undefined;
 
 export type TActionFunc<A extends TAction> = A extends TActionWithArgs
-	? (arg: TArgOfAction<A>, trigger?: TInvocationTrigger) => unknown
-	: (_?: undefined, trigger?: TInvocationTrigger) => unknown;
+	? (arg: TArgOfAction<A>, trigger?: TInvocationTrigger) => void
+	: (_?: undefined, trigger?: TInvocationTrigger) => void;
 
 export type TInvocationTrigger = "keypress" | "mouseclick";
 

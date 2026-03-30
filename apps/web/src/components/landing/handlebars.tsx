@@ -1,8 +1,19 @@
 "use client";
 
-import { type PropsWithChildren, useEffect, useRef, useState } from "react";
+import {
+	type PropsWithChildren,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 
 type HandlebarsProps = PropsWithChildren;
+
+const MIN_HANDLE_SEPARATION_PX = 60;
+const MASK_GRADIENT_EDGE_PADDING_PX = 10;
+const HANDLEBARS_ROTATE_DEG = 2.76;
+const RIGHT_HANDLE_LEFT_OFFSET_PX = -30;
 
 export function Handlebars({ children }: HandlebarsProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -31,18 +42,18 @@ export function Handlebars({ children }: HandlebarsProps) {
 		initialPosition: 0,
 	});
 
-	useEffect(() => {
-		const el = containerRef.current;
-		if (!el) return;
+	useLayoutEffect(() => {
+		const container = containerRef.current;
+		if (!container) return;
 
 		const updateWidth = () => {
-			const newWidth = el.offsetWidth;
+			const newWidth = container.offsetWidth;
 			setWidth(newWidth);
 			setRightHandle(newWidth);
 		};
 
 		const observer = new ResizeObserver(updateWidth);
-		observer.observe(el);
+		observer.observe(container);
 		updateWidth();
 
 		return () => observer.disconnect();
@@ -66,7 +77,10 @@ export function Handlebars({ children }: HandlebarsProps) {
 			const deltaX = event.clientX - startX;
 
 			if (side === "left") {
-				const maxLeft = Math.max(0, rightHandlePositionRef.current - 60);
+				const maxLeft = Math.max(
+					0,
+					rightHandlePositionRef.current - MIN_HANDLE_SEPARATION_PX,
+				);
 				const nextLeftHandle = Math.max(
 					0,
 					Math.min(maxLeft, initialPosition + deltaX),
@@ -77,7 +91,7 @@ export function Handlebars({ children }: HandlebarsProps) {
 
 			const minRight = Math.min(
 				widthRef.current,
-				leftHandlePositionRef.current + 60,
+				leftHandlePositionRef.current + MIN_HANDLE_SEPARATION_PX,
 			);
 			const nextRightHandle = Math.max(
 				minRight,
@@ -106,13 +120,30 @@ export function Handlebars({ children }: HandlebarsProps) {
 		};
 	}, []);
 
-	const leftGradientPercent = width > 0 ? (leftHandle / (width - 10)) * 100 : 0;
-	const rightGradientPercent =
-		width > 0 ? (rightHandle / (width + 10)) * 100 : 0;
+	const hasMeasuredWidth = width > 0;
+	const leftGradientPercent = hasMeasuredWidth
+		? (leftHandle / (width - MASK_GRADIENT_EDGE_PADDING_PX)) * 100
+		: 0;
+	const rightGradientPercent = hasMeasuredWidth
+		? (rightHandle / (width + MASK_GRADIENT_EDGE_PADDING_PX)) * 100
+		: 100;
+	const textMask = hasMeasuredWidth
+		? `linear-gradient(90deg,
+            rgba(255, 255, 255, 0) 0%, 
+            rgba(255, 255, 255, 0) ${leftGradientPercent}%, 
+            rgba(0, 0, 0) ${leftGradientPercent}%, 
+            rgba(0, 0, 0) ${rightGradientPercent}%, 
+            rgba(255, 255, 255, 0) ${rightGradientPercent}%, 
+            rgba(255, 255, 255, 0) 100%)`
+		: undefined;
 
 	return (
 		<div className="flex justify-center gap-4 leading-16">
-			<div ref={containerRef} className="relative mt-0.5 -rotate-[2.76deg]">
+			<div
+				ref={containerRef}
+				className="relative mt-0.5"
+				style={{ transform: `rotate(-${HANDLEBARS_ROTATE_DEG}deg)` }}
+			>
 				<div className="absolute inset-0 z-10 flex size-full justify-between rounded-2xl border border-yellow-500">
 					<div
 						ref={leftHandleRef}
@@ -135,9 +166,13 @@ export function Handlebars({ children }: HandlebarsProps) {
 
 					<div
 						ref={rightHandleRef}
-						className="bg-background absolute -left-[30px] z-20 flex h-full w-7 cursor-ew-resize touch-none items-center justify-center rounded-full border border-yellow-500 select-none"
+						className="bg-background absolute z-20 flex h-full w-7 cursor-ew-resize touch-none items-center justify-center rounded-full border border-yellow-500 select-none"
 						style={{
-							translate: `${rightHandle}px 0`,
+							left: hasMeasuredWidth
+								? `${RIGHT_HANDLE_LEFT_OFFSET_PX}px`
+								: undefined,
+							right: hasMeasuredWidth ? undefined : "0px",
+							translate: hasMeasuredWidth ? `${rightHandle}px 0` : undefined,
 						}}
 						onPointerDown={(event) => {
 							event.preventDefault();
@@ -156,13 +191,8 @@ export function Handlebars({ children }: HandlebarsProps) {
 				<span
 					className="relative z-0 inline-flex size-full items-center justify-center rounded-2xl px-9 will-change-auto"
 					style={{
-						mask: `linear-gradient(90deg,
-            rgba(255, 255, 255, 0) 0%, 
-            rgba(255, 255, 255, 0) ${leftGradientPercent}%, 
-            rgba(0, 0, 0) ${leftGradientPercent}%, 
-            rgba(0, 0, 0) ${rightGradientPercent}%, 
-            rgba(255, 255, 255, 0) ${rightGradientPercent}%, 
-            rgba(255, 255, 255, 0) 100%)`,
+						mask: textMask,
+						WebkitMask: textMask,
 					}}
 				>
 					{children}

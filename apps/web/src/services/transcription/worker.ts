@@ -3,10 +3,7 @@ import {
 	type AutomaticSpeechRecognitionPipeline,
 	type AutomaticSpeechRecognitionOutput,
 } from "@huggingface/transformers";
-import type {
-	TranscriptionSegment,
-	TranscriptionWord,
-} from "@/types/transcription";
+import type { TranscriptionSegment } from "@/lib/transcription/types";
 import {
 	DEFAULT_CHUNK_LENGTH_SECONDS,
 	DEFAULT_STRIDE_SECONDS,
@@ -14,12 +11,7 @@ import {
 
 export type WorkerMessage =
 	| { type: "init"; modelId: string }
-	| {
-			type: "transcribe";
-			audio: Float32Array;
-			sampleRate: number;
-			language: string;
-	  }
+	| { type: "transcribe"; audio: Float32Array; language: string }
 	| { type: "cancel" };
 
 export type WorkerResponse =
@@ -31,7 +23,6 @@ export type WorkerResponse =
 			type: "transcribe-complete";
 			text: string;
 			segments: TranscriptionSegment[];
-			words: TranscriptionWord[];
 	  }
 	| { type: "transcribe-error"; error: string }
 	| { type: "cancelled" };
@@ -40,10 +31,6 @@ let transcriber: AutomaticSpeechRecognitionPipeline | null = null;
 let cancelled = false;
 let lastReportedProgress = -1;
 const fileBytes = new Map<string, { loaded: number; total: number }>();
-const WHISPER_SAMPLE_RATE = 16_000;
-const CJK_CHAR_REGEX = /[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/;
-const PUNCTUATION_TOKEN_REGEX = /^[.,!?;:，。！？；：、…]+$/;
-const LATIN_WORD_REGEX = /^[a-z0-9]+(?:['’-][a-z0-9]+)*$/i;
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 	const message = event.data;
@@ -55,7 +42,6 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 		case "transcribe":
 			await handleTranscribe({
 				audio: message.audio,
-				sampleRate: message.sampleRate,
 				language: message.language,
 			});
 			break;
@@ -132,11 +118,9 @@ async function handleInit({ modelId }: { modelId: string }) {
 
 async function handleTranscribe({
 	audio,
-	sampleRate,
 	language,
 }: {
 	audio: Float32Array;
-	sampleRate: number;
 	language: string;
 }) {
 	if (!transcriber) {
@@ -150,25 +134,37 @@ async function handleTranscribe({
 	cancelled = false;
 
 	try {
-		const result = await runTranscription({
-			audio,
-			sampleRate,
-			language,
+		const rawResult = await transcriber(audio, {
+			chunk_length_s: DEFAULT_CHUNK_LENGTH_SECONDS,
+			stride_length_s: DEFAULT_STRIDE_SECONDS,
+			language: language === "auto" ? undefined : language,
+			return_timestamps: true,
 		});
 
 		if (cancelled) return;
 
-		let segments = buildSegmentsFromChunks(result);
-		const words = buildWordsFromChunks(result);
-		if (segments.length === 0 && words.length > 0) {
-			segments = buildSegmentsFromWords(words);
+		const result: AutomaticSpeechRecognitionOutput = Array.isArray(rawResult)
+			? rawResult[0]
+			: rawResult;
+
+		const segments: TranscriptionSegment[] = [];
+
+		if (result.chunks) {
+			for (const chunk of result.chunks) {
+				if (chunk.timestamp && chunk.timestamp.length >= 2) {
+					segments.push({
+						text: chunk.text,
+						start: chunk.timestamp[0] ?? 0,
+						end: chunk.timestamp[1] ?? chunk.timestamp[0] ?? 0,
+					});
+				}
+			}
 		}
 
 		self.postMessage({
 			type: "transcribe-complete",
 			text: result.text,
 			segments,
-			words,
 		} satisfies WorkerResponse);
 	} catch (error) {
 		if (cancelled) return;
@@ -177,277 +173,4 @@ async function handleTranscribe({
 			error: error instanceof Error ? error.message : "Transcription failed",
 		} satisfies WorkerResponse);
 	}
-}
-
-async function runTranscription({
-	audio,
-	sampleRate,
-	language,
-}: {
-	audio: Float32Array;
-	sampleRate: number;
-	language: string;
-}): Promise<AutomaticSpeechRecognitionOutput> {
-	try {
-		return await runTranscriptionWithTimestamps({
-			audio,
-			sampleRate,
-			language,
-			returnTimestamps: "word",
-		});
-	} catch (error) {
-		console.warn(
-			"Word-level timestamps unavailable, fallback to segment timestamps",
-			error,
-		);
-		return runTranscriptionWithTimestamps({
-			audio,
-			sampleRate,
-			language,
-			returnTimestamps: true,
-		});
-	}
-}
-
-async function runTranscriptionWithTimestamps({
-	audio,
-	sampleRate,
-	language,
-	returnTimestamps,
-}: {
-	audio: Float32Array;
-	sampleRate: number;
-	language: string;
-	returnTimestamps: boolean | "word";
-}): Promise<AutomaticSpeechRecognitionOutput> {
-	if (!transcriber) {
-		throw new Error("Model not initialized");
-	}
-
-	const normalizedAudio = toWhisperSampleRate({
-		audio,
-		sampleRate,
-		targetSampleRate: WHISPER_SAMPLE_RATE,
-	});
-
-	const rawResult = await transcriber(normalizedAudio, {
-		chunk_length_s: DEFAULT_CHUNK_LENGTH_SECONDS,
-		stride_length_s: DEFAULT_STRIDE_SECONDS,
-		language: language === "auto" ? undefined : language,
-		task: "transcribe",
-		return_timestamps: returnTimestamps,
-	});
-
-	return Array.isArray(rawResult) ? rawResult[0] : rawResult;
-}
-
-function toWhisperSampleRate({
-	audio,
-	sampleRate,
-	targetSampleRate,
-}: {
-	audio: Float32Array;
-	sampleRate: number;
-	targetSampleRate: number;
-}): Float32Array {
-	if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
-		return audio;
-	}
-	if (Math.abs(sampleRate - targetSampleRate) < 1e-6) {
-		return audio;
-	}
-
-	const nextLength = Math.max(
-		1,
-		Math.round((audio.length * targetSampleRate) / sampleRate),
-	);
-	const resampled = new Float32Array(nextLength);
-	const ratio = sampleRate / targetSampleRate;
-
-	for (let i = 0; i < nextLength; i += 1) {
-		const sourceIndex = i * ratio;
-		const left = Math.floor(sourceIndex);
-		const right = Math.min(left + 1, audio.length - 1);
-		const mix = sourceIndex - left;
-		const leftValue = audio[left] ?? 0;
-		const rightValue = audio[right] ?? leftValue;
-		resampled[i] = leftValue * (1 - mix) + rightValue * mix;
-	}
-
-	return resampled;
-}
-
-function normalizeChunkText(text: string): string {
-	return text.replace(/\s+/g, " ").trim();
-}
-
-function splitChunkToTokens(text: string): string[] {
-	const normalized = normalizeChunkText(text);
-	if (!normalized) return [];
-
-	const whitespaceTokens = normalized.split(" ").filter(Boolean);
-	if (whitespaceTokens.length > 1) {
-		return whitespaceTokens;
-	}
-
-	if (CJK_CHAR_REGEX.test(normalized)) {
-		return Array.from(normalized).filter((token) => token.trim().length > 0);
-	}
-
-	return whitespaceTokens;
-}
-
-function isPunctuationToken(text: string): boolean {
-	return PUNCTUATION_TOKEN_REGEX.test(text.trim());
-}
-
-function shouldInsertSpaceBetween({
-	prev,
-	next,
-}: {
-	prev: string;
-	next: string;
-}): boolean {
-	const prevTrimmed = prev.trim();
-	const nextTrimmed = next.trim();
-	if (!prevTrimmed || !nextTrimmed) return false;
-	if (isPunctuationToken(prevTrimmed) || isPunctuationToken(nextTrimmed)) {
-		return false;
-	}
-
-	return (
-		LATIN_WORD_REGEX.test(prevTrimmed) && LATIN_WORD_REGEX.test(nextTrimmed)
-	);
-}
-
-function joinTokens(tokens: string[]): string {
-	let text = "";
-	for (const tokenValue of tokens) {
-		const token = tokenValue.trim();
-		if (!token) continue;
-		if (!text) {
-			text = token;
-			continue;
-		}
-		text += shouldInsertSpaceBetween({ prev: text, next: token })
-			? ` ${token}`
-			: token;
-	}
-	return text.trim();
-}
-
-function buildWordsFromChunks(
-	result: AutomaticSpeechRecognitionOutput,
-): TranscriptionWord[] {
-	const words: TranscriptionWord[] = [];
-	const chunks = result.chunks ?? [];
-
-	for (const chunk of chunks) {
-		const [rawStart, rawEnd] = chunk.timestamp;
-		const start = Number.isFinite(rawStart) ? rawStart : 0;
-		const end = Number.isFinite(rawEnd) ? rawEnd : start;
-		const tokens = splitChunkToTokens(chunk.text);
-		if (tokens.length === 0) {
-			continue;
-		}
-
-		if (tokens.length === 1) {
-			words.push({
-				text: tokens[0],
-				start,
-				end: Math.max(start, end),
-			});
-			continue;
-		}
-
-		const duration = Math.max(0, end - start);
-		const tokenDuration = duration > 0 ? duration / tokens.length : 0;
-
-		for (let i = 0; i < tokens.length; i++) {
-			const tokenStart = start + tokenDuration * i;
-			const tokenEnd =
-				i === tokens.length - 1 ? end : start + tokenDuration * (i + 1);
-			words.push({
-				text: tokens[i],
-				start: tokenStart,
-				end: Math.max(tokenStart, tokenEnd),
-			});
-		}
-	}
-
-	return words;
-}
-
-function buildSegmentsFromChunks(
-	result: AutomaticSpeechRecognitionOutput,
-): TranscriptionSegment[] {
-	const segments: TranscriptionSegment[] = [];
-	const chunks = result.chunks ?? [];
-
-	for (const chunk of chunks) {
-		const [rawStart, rawEnd] = chunk.timestamp;
-		const start = Number.isFinite(rawStart) ? rawStart : 0;
-		const end = Number.isFinite(rawEnd) ? rawEnd : start;
-		const text = normalizeChunkText(chunk.text);
-		if (!text) {
-			continue;
-		}
-
-		segments.push({
-			text,
-			start,
-			end: Math.max(start, end),
-		});
-	}
-
-	return segments;
-}
-
-function buildSegmentsFromWords(
-	words: TranscriptionWord[],
-): TranscriptionSegment[] {
-	if (words.length === 0) return [];
-
-	const segments: TranscriptionSegment[] = [];
-	let currentWords: TranscriptionWord[] = [];
-	const GAP_BREAK_SECONDS = 0.9;
-	const MAX_SEGMENT_DURATION_SECONDS = 8;
-
-	for (const word of words) {
-		if (currentWords.length === 0) {
-			currentWords.push(word);
-			continue;
-		}
-
-		const lastWord = currentWords[currentWords.length - 1];
-		const gap = Math.max(0, word.start - lastWord.end);
-		const segmentDuration = word.end - currentWords[0].start;
-		const isPunctuationBreak = /[。！？.!?]$/.test(lastWord.text);
-
-		if (
-			gap > GAP_BREAK_SECONDS ||
-			segmentDuration > MAX_SEGMENT_DURATION_SECONDS ||
-			isPunctuationBreak
-		) {
-			segments.push({
-				text: joinTokens(currentWords.map((item) => item.text)),
-				start: currentWords[0].start,
-				end: currentWords[currentWords.length - 1].end,
-			});
-			currentWords = [word];
-			continue;
-		}
-
-		currentWords.push(word);
-	}
-
-	if (currentWords.length > 0) {
-		segments.push({
-			text: joinTokens(currentWords.map((item) => item.text)),
-			start: currentWords[0].start,
-			end: currentWords[currentWords.length - 1].end,
-		});
-	}
-
-	return segments;
 }

@@ -8,12 +8,8 @@ import type {
 	TInvocationTrigger,
 } from "./types";
 
-type ActionHandler = (arg: unknown, trigger?: TInvocationTrigger) => unknown;
+type ActionHandler = (arg: unknown, trigger?: TInvocationTrigger) => void;
 const boundActions: Partial<Record<TAction, ActionHandler[]>> = {};
-
-export function hasActionHandlers<A extends TAction>(action: A): boolean {
-	return (boundActions[action]?.length ?? 0) > 0;
-}
 
 export function bindAction<A extends TAction>(
 	action: A,
@@ -48,12 +44,12 @@ type InvokeActionFunc = {
 		action: TActionWithOptionalArgs,
 		args?: undefined,
 		trigger?: TInvocationTrigger,
-	): unknown[];
+	): void;
 	<A extends TActionWithArgs>(
 		action: A,
 		args: TActionArgsMap[A],
 		trigger?: TInvocationTrigger,
-	): unknown[];
+	): void;
 };
 
 export const invokeAction: InvokeActionFunc = <A extends TAction>(
@@ -61,7 +57,30 @@ export const invokeAction: InvokeActionFunc = <A extends TAction>(
 	args?: TArgOfAction<A>,
 	trigger?: TInvocationTrigger,
 ) => {
-	const handlers = boundActions[action];
-	if (!handlers?.length) return [];
-	return handlers.map((handler) => handler(args, trigger));
+	if (trigger === "keypress") {
+		// #region agent log
+		fetch("http://127.0.0.1:7245/ingest/669b22f8-172b-4e65-aa3f-1c702ede83f7", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"X-Debug-Session-Id": "3997d9",
+			},
+			body: JSON.stringify({
+				sessionId: "3997d9",
+				runId: "initial",
+				hypothesisId: "H4",
+				location: "actions/registry.ts:invokeAction",
+				message: "Action invoked from keypress",
+				data: {
+					action,
+					handlerCount: boundActions[action]?.length ?? 0,
+				},
+				timestamp: Date.now(),
+			}),
+		}).catch(() => {});
+		// #endregion
+	}
+	boundActions[action]?.forEach((handler) => {
+		handler(args, trigger);
+	});
 };

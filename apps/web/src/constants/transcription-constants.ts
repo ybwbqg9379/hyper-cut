@@ -2,8 +2,8 @@ import { LANGUAGES } from "@/constants/language-constants";
 import type {
 	TranscriptionModel,
 	TranscriptionModelId,
-} from "@/types/transcription";
-import type { LanguageCode } from "@/types/language";
+} from "@/lib/transcription/types";
+import type { LanguageCode } from "@/constants/language-constants";
 
 const SUPPORTED_TRANSCRIPTION_LANGS: ReadonlyArray<LanguageCode> = [
 	"en",
@@ -50,6 +50,8 @@ export const TRANSCRIPTION_MODELS: TranscriptionModel[] = [
 
 export const DEFAULT_TRANSCRIPTION_MODEL: TranscriptionModelId =
 	"whisper-small";
+
+export const DEFAULT_TRANSCRIPTION_SAMPLE_RATE = 16000;
 
 export const DEFAULT_CHUNK_LENGTH_SECONDS = 30;
 export const DEFAULT_STRIDE_SECONDS = 5;
