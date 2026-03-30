@@ -32,4 +32,18 @@ const webEnvSchema = z.object({
 
 export type WebEnv = z.infer<typeof webEnvSchema>;
 
-export const webEnv = webEnvSchema.parse(process.env);
+const parsed = webEnvSchema.safeParse(process.env);
+
+if (!parsed.success) {
+	if (process.env.NODE_ENV === "production") {
+		throw parsed.error;
+	}
+	// In development, log the missing vars but don't crash.
+	// This allows the client-side editor to run without server-side env vars.
+	console.warn(
+		"[env] Missing environment variables (server-side features will be unavailable):",
+		parsed.error.issues.map((i) => i.path.join(".")).join(", "),
+	);
+}
+
+export const webEnv = (parsed.success ? parsed.data : {}) as WebEnv;
