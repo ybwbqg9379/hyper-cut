@@ -47,7 +47,10 @@ export class RetimeKeyframeCommand extends Command {
 					return element;
 				}
 
-				const boundedTime = Math.max(0, Math.min(this.nextTime, element.duration));
+				const boundedTime = Math.max(
+					0,
+					Math.min(this.nextTime, element.duration),
+				);
 				return {
 					...element,
 					animations: retimeElementKeyframe({

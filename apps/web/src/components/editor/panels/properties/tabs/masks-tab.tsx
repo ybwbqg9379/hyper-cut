@@ -2,7 +2,10 @@
 
 import type { MaskableElement } from "@/lib/timeline";
 import type { Mask, MaskType } from "@/lib/masks/types";
-import type { NumberParamDefinition, SelectParamDefinition } from "@/lib/params";
+import type {
+	NumberParamDefinition,
+	SelectParamDefinition,
+} from "@/lib/params";
 import { masksRegistry, buildDefaultMaskInstance } from "@/lib/masks";
 import { useEditor } from "@/hooks/use-editor";
 import { useElementPreview } from "@/hooks/use-element-preview";
@@ -626,7 +629,9 @@ function MaskNumberField({
 		parse: (input) => {
 			const parsed = parseFloat(input);
 			if (Number.isNaN(parsed)) return null;
-			return clampDisplay(snapToStep({ value: parsed, step })) / displayMultiplier;
+			return (
+				clampDisplay(snapToStep({ value: parsed, step })) / displayMultiplier
+			);
 		},
 		onPreview,
 		onCommit,

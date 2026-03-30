@@ -4,9 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { usePreviewViewport } from "@/components/editor/panels/preview/preview-viewport";
 import { useEditor } from "@/hooks/use-editor";
 import type { TextElement } from "@/lib/timeline";
-import {
-	FONT_SIZE_SCALE_REFERENCE,
-} from "@/constants/text-constants";
+import { FONT_SIZE_SCALE_REFERENCE } from "@/constants/text-constants";
 import { DEFAULTS } from "@/lib/timeline/defaults";
 import {
 	getMetricAscent,
@@ -59,11 +57,13 @@ function measureCSSVisualCenterOffset({
 		const baseline = i * lineHeightPx + halfLeading + fontAscent;
 		visualTop = Math.min(
 			visualTop,
-			baseline - getMetricAscent({ metrics, fallbackFontSize: displayFontSize }),
+			baseline -
+				getMetricAscent({ metrics, fallbackFontSize: displayFontSize }),
 		);
 		visualBottom = Math.max(
 			visualBottom,
-			baseline + getMetricDescent({ metrics, fallbackFontSize: displayFontSize }),
+			baseline +
+				getMetricDescent({ metrics, fallbackFontSize: displayFontSize }),
 		);
 	}
 

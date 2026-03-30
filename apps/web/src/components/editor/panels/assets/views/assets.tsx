@@ -29,6 +29,8 @@ import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
 import { useEditor } from "@/hooks/use-editor";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { invokeAction } from "@/lib/actions";
+import { useParentMediaBridge } from "@/hooks/use-parent-media-bridge";
+import type { ParentMediaItem } from "@/hooks/use-parent-media-bridge";
 import { processMediaAssets } from "@/lib/media/processing";
 import { showMediaUploadToast } from "@/lib/media/upload-toast";
 import {
@@ -75,6 +77,33 @@ export function MediaView() {
 
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [progress, setProgress] = useState(0);
+	const { requestMedia, isRequesting, isBridgeAvailable } =
+		useParentMediaBridge();
+
+	const handleLibraryImport = async () => {
+		if (!activeProject) return;
+		const result = await requestMedia({ accept: "image/*,video/*,audio/*" });
+		if (!result.ok) return;
+
+		setIsProcessing(true);
+		setProgress(0);
+		try {
+			const files = await Promise.all(
+				result.assets.map(async (asset: ParentMediaItem) => {
+					const response = await fetch(asset.url);
+					const blob = await response.blob();
+					return new File([blob], asset.name, { type: asset.mimeType });
+				}),
+			);
+			await processFiles({ files });
+		} catch (error) {
+			console.error("Error importing from library:", error);
+			toast.error("Failed to import from library");
+		} finally {
+			setIsProcessing(false);
+			setProgress(0);
+		}
+	};
 
 	const processFiles = async ({ files }: { files: File[] }) => {
 		if (!files || files.length === 0) return;
@@ -193,11 +222,13 @@ export function MediaView() {
 					<MediaActions
 						mediaViewMode={mediaViewMode}
 						setMediaViewMode={setMediaViewMode}
-						isProcessing={isProcessing}
+						isProcessing={isProcessing || isRequesting}
 						sortBy={mediaSortBy}
 						sortOrder={mediaSortOrder}
 						onSort={handleSort}
 						onImport={openFilePicker}
+						isBridgeAvailable={isBridgeAvailable}
+						onLibraryImport={handleLibraryImport}
 					/>
 				}
 				className={cn(isDragOver && "bg-accent/30")}
@@ -507,6 +538,8 @@ function MediaActions({
 	sortOrder,
 	onSort,
 	onImport,
+	isBridgeAvailable,
+	onLibraryImport,
 }: {
 	mediaViewMode: MediaViewMode;
 	setMediaViewMode: (mode: MediaViewMode) => void;
@@ -515,6 +548,8 @@ function MediaActions({
 	sortOrder: MediaSortOrder;
 	onSort: ({ key }: { key: MediaSortKey }) => void;
 	onImport: () => void;
+	isBridgeAvailable?: boolean;
+	onLibraryImport?: () => void;
 }) {
 	return (
 		<div className="flex gap-1.5">
@@ -608,6 +643,17 @@ function MediaActions({
 				<HugeiconsIcon icon={CloudUploadIcon} />
 				Import
 			</Button>
+			{isBridgeAvailable && onLibraryImport && (
+				<Button
+					variant="outline"
+					onClick={onLibraryImport}
+					disabled={isProcessing}
+					size="sm"
+					className="items-center justify-center gap-1.5"
+				>
+					Library
+				</Button>
+			)}
 		</div>
 	);
 }

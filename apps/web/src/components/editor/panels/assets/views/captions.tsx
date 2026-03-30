@@ -132,7 +132,11 @@ export function Captions() {
 			contentClassName="px-0 flex flex-col h-full"
 			ref={containerRef}
 		>
-			<Section showTopBorder={false} showBottomBorder={false} className="flex-1">
+			<Section
+				showTopBorder={false}
+				showBottomBorder={false}
+				className="flex-1"
+			>
 				<SectionContent className="flex flex-col gap-4 h-full pt-1">
 					<SectionFields>
 						<SectionField label="Language">

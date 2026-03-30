@@ -58,8 +58,7 @@ export abstract class VisualNode<
 	protected isInRange({ time }: { time: number }): boolean {
 		const localTime = time - this.params.timeOffset;
 		return (
-			localTime >= -TIME_EPSILON_SECONDS &&
-			localTime < this.params.duration
+			localTime >= -TIME_EPSILON_SECONDS && localTime < this.params.duration
 		);
 	}
 

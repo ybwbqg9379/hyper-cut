@@ -26,8 +26,7 @@ export function buildGaussianBlurPasses({
 		Math.max(
 			1,
 			Math.ceil(
-				(maxSigma * maxSigma) /
-					(MAX_EFFECTIVE_SIGMA * MAX_EFFECTIVE_SIGMA),
+				(maxSigma * maxSigma) / (MAX_EFFECTIVE_SIGMA * MAX_EFFECTIVE_SIGMA),
 			),
 		),
 	);
@@ -58,7 +57,11 @@ export function buildGaussianBlurPasses({
 	return passes;
 }
 
-function intensityToSigma(intensity: number, resolution: number, reference: number): number {
+function intensityToSigma(
+	intensity: number,
+	resolution: number,
+	reference: number,
+): number {
 	return (intensity / 5) * (resolution / reference);
 }
 
@@ -88,7 +91,10 @@ export const blurEffectDefinition: EffectDefinition = {
 			{
 				fragmentShader: blurFragmentShader,
 				uniforms: ({ effectParams, width }) => ({
-					u_sigma: Math.max(intensityToSigma(parseIntensity(effectParams), width, 1920), 0.001),
+					u_sigma: Math.max(
+						intensityToSigma(parseIntensity(effectParams), width, 1920),
+						0.001,
+					),
 					u_step: 1,
 					u_direction: [1, 0],
 				}),
@@ -96,7 +102,10 @@ export const blurEffectDefinition: EffectDefinition = {
 			{
 				fragmentShader: blurFragmentShader,
 				uniforms: ({ effectParams, height }) => ({
-					u_sigma: Math.max(intensityToSigma(parseIntensity(effectParams), height, 1080), 0.001),
+					u_sigma: Math.max(
+						intensityToSigma(parseIntensity(effectParams), height, 1080),
+						0.001,
+					),
 					u_step: 1,
 					u_direction: [0, 1],
 				}),

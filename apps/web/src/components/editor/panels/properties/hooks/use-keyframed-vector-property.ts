@@ -86,7 +86,9 @@ export function useKeyframedVectorProperty({
 		}
 
 		editor.timeline.previewElements({
-			updates: [{ trackId, elementId, updates: buildBaseUpdates({ value: nextValue }) }],
+			updates: [
+				{ trackId, elementId, updates: buildBaseUpdates({ value: nextValue }) },
+			],
 		});
 	};
 

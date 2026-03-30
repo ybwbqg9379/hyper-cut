@@ -2,7 +2,10 @@ import { EditorCore } from "@/core";
 import { clampRetimeRate } from "@/constants/retime-constants";
 import { clampAnimationsToDuration } from "@/lib/animation";
 import { Command } from "@/lib/commands/base-command";
-import { getTimelineDurationForSourceSpan, getSourceSpanAtClipTime } from "@/lib/retime";
+import {
+	getTimelineDurationForSourceSpan,
+	getSourceSpanAtClipTime,
+} from "@/lib/retime";
 import { isRetimableElement, updateElementInTracks } from "@/lib/timeline";
 import type { RetimeConfig, TimelineTrack } from "@/lib/timeline";
 

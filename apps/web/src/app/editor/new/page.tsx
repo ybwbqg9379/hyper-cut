@@ -84,9 +84,7 @@ function NewEditorPageContent() {
 						const processedAssets = await processMediaAssets({
 							files,
 							onProgress: ({ progress }) => {
-								setStatus(
-									`Processing videos... ${progress}%`,
-								);
+								setStatus(`Processing videos... ${progress}%`);
 							},
 						});
 
@@ -99,9 +97,7 @@ function NewEditorPageContent() {
 						}
 					}
 
-					const failures = fetchResults.filter(
-						(r) => r.status === "rejected",
-					);
+					const failures = fetchResults.filter((r) => r.status === "rejected");
 					if (failures.length > 0) {
 						console.warn(
 							`${failures.length} of ${videoUrls.length} videos failed to download`,
@@ -111,9 +107,9 @@ function NewEditorPageContent() {
 
 				// Step 3: Navigate to the editor (preserve embed mode and theme if active)
 				const params = new URLSearchParams();
-				if (searchParams.get('embed') === 'true') params.set('embed', 'true');
-				if (themeParam) params.set('theme', themeParam);
-				const suffix = params.toString() ? `?${params.toString()}` : '';
+				if (searchParams.get("embed") === "true") params.set("embed", "true");
+				if (themeParam) params.set("theme", themeParam);
+				const suffix = params.toString() ? `?${params.toString()}` : "";
 				router.replace(`/editor/${projectId}${suffix}`);
 			} catch (err) {
 				setError(

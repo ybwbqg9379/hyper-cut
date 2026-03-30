@@ -31,7 +31,10 @@ export function getRaisedProjectFpsForImportedMedia({
 		mediaAssets: importedAssets,
 	});
 
-	if (highestImportedVideoFps === null || highestImportedVideoFps <= currentFps) {
+	if (
+		highestImportedVideoFps === null ||
+		highestImportedVideoFps <= currentFps
+	) {
 		return null;
 	}
 

@@ -20,7 +20,10 @@ import {
 	enforceMainTrackStart,
 } from "@/lib/timeline/track-utils";
 import type { MediaAsset } from "@/lib/media/types";
-import { ELEMENT_TRACK_MAP, TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
+import {
+	ELEMENT_TRACK_MAP,
+	TIMELINE_CONSTANTS,
+} from "@/constants/timeline-constants";
 import { graphicsRegistry, registerDefaultGraphics } from "@/lib/graphics";
 
 type InsertElementPlacement =
@@ -171,7 +174,10 @@ export class InsertElementCommand extends Command {
 
 		if (element.type === "graphic") {
 			registerDefaultGraphics();
-			if (!element.definitionId || !graphicsRegistry.has(element.definitionId)) {
+			if (
+				!element.definitionId ||
+				!graphicsRegistry.has(element.definitionId)
+			) {
 				console.error("Graphic element must have a valid definitionId");
 				return false;
 			}

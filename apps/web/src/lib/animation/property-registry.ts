@@ -34,7 +34,11 @@ export interface AnimationPropertyDefinition {
 	defaultInterpolation: AnimationInterpolation;
 	numericRange?: NumericSpec;
 	supportsElement: ({ element }: { element: TimelineElement }) => boolean;
-	getValue: ({ element }: { element: TimelineElement }) => AnimationValue | null;
+	getValue: ({
+		element,
+	}: {
+		element: TimelineElement;
+	}) => AnimationValue | null;
 	setValue: ({
 		element,
 		value,
@@ -128,7 +132,7 @@ const ANIMATION_PROPERTY_REGISTRY: Record<
 		numericRange: { min: VOLUME_DB_MIN, max: VOLUME_DB_MAX, step: 0.01 },
 		supportsElement: ({ element }) => canElementHaveAudio(element),
 		getValue: ({ element }) =>
-			canElementHaveAudio(element) ? element.volume ?? 0 : null,
+			canElementHaveAudio(element) ? (element.volume ?? 0) : null,
 		setValue: ({ element, value }) =>
 			canElementHaveAudio(element)
 				? { ...element, volume: value as number }
@@ -239,7 +243,10 @@ const ANIMATION_PROPERTY_REGISTRY: Record<
 			element.type === "text"
 				? {
 						...element,
-						background: { ...element.background, cornerRadius: value as number },
+						background: {
+							...element.background,
+							cornerRadius: value as number,
+						},
 					}
 				: element,
 	},

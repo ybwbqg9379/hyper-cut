@@ -3,10 +3,7 @@ import type {
 	GraphicParamPath,
 } from "@/lib/animation/types";
 import type { ParamValues } from "@/lib/params";
-import {
-	getGraphicDefinition,
-	resolveGraphicParams,
-} from "@/lib/graphics";
+import { getGraphicDefinition, resolveGraphicParams } from "@/lib/graphics";
 import { getChannel } from "./keyframes";
 import { getChannelValueAtTime } from "./interpolation";
 

@@ -16,7 +16,11 @@ import type {
 	SerializedProject,
 	SerializedScene,
 } from "./types";
-import type { SavedSoundsData, SavedSound, SoundEffect } from "@/lib/sounds/types";
+import type {
+	SavedSoundsData,
+	SavedSound,
+	SoundEffect,
+} from "@/lib/sounds/types";
 import {
 	migrations,
 	runStorageMigrations,

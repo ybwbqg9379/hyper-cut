@@ -1,4 +1,3 @@
-import { webEnv } from "@/lib/env/web";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -202,7 +201,7 @@ export async function GET(request: NextRequest) {
 
 		const params = new URLSearchParams({
 			query: query || "",
-			token: webEnv.FREESOUND_API_KEY,
+			token: process.env.FREESOUND_API_KEY ?? "",
 			page: page.toString(),
 			page_size: pageSize.toString(),
 			sort: sortParam,

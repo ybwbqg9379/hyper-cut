@@ -26,8 +26,9 @@ export function setCanvasLetterSpacing({
 	letterSpacingPx: number;
 }): void {
 	if ("letterSpacing" in ctx) {
-		(ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing =
-			`${letterSpacingPx}px`;
+		(
+			ctx as CanvasRenderingContext2D & { letterSpacing: string }
+		).letterSpacing = `${letterSpacingPx}px`;
 	}
 }
 
@@ -67,10 +68,7 @@ export function measureTextBlock({
 	for (let index = 0; index < lineMetrics.length; index++) {
 		const metrics = lineMetrics[index];
 		const lineY = index * lineHeightPx;
-		top = Math.min(
-			top,
-			lineY - getMetricAscent({ metrics, fallbackFontSize }),
-		);
+		top = Math.min(top, lineY - getMetricAscent({ metrics, fallbackFontSize }));
 		bottom = Math.max(
 			bottom,
 			lineY + getMetricDescent({ metrics, fallbackFontSize }),

@@ -2,7 +2,11 @@ import { generateUUID } from "@/utils/id";
 import { buildDefaultParamValues } from "@/lib/registry";
 import { effectsRegistry } from "./registry";
 import type { ParamValues } from "@/lib/params";
-import type { Effect, EffectDefinition, ResolvedEffectPass } from "@/lib/effects/types";
+import type {
+	Effect,
+	EffectDefinition,
+	ResolvedEffectPass,
+} from "@/lib/effects/types";
 import { VISUAL_ELEMENT_TYPES } from "@/lib/timeline";
 
 export { effectsRegistry } from "./registry";

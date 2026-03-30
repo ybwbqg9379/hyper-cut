@@ -22,11 +22,7 @@ class EffectPreviewService {
 		this.loadPreviewImage();
 	}
 
-	onPreviewImageReady({
-		callback,
-	}: {
-		callback: () => void;
-	}): () => void {
+	onPreviewImageReady({ callback }: { callback: () => void }): () => void {
 		this.onReadyCallbacks.add(callback);
 		return () => this.onReadyCallbacks.delete(callback);
 	}
@@ -120,7 +116,10 @@ class EffectPreviewService {
 	}: {
 		width: number;
 		height: number;
-	}): { canvas: OffscreenCanvas | HTMLCanvasElement; gl: WebGLRenderingContext } {
+	}): {
+		canvas: OffscreenCanvas | HTMLCanvasElement;
+		gl: WebGLRenderingContext;
+	} {
 		if (!this.previewCanvas || !this.previewGl) {
 			this.previewCanvas = createOffscreenCanvas({ width, height });
 			this.previewGl = this.previewCanvas.getContext("webgl", {
@@ -130,7 +129,10 @@ class EffectPreviewService {
 				throw new Error("WebGL not supported");
 			}
 		}
-		if (this.previewCanvas.width !== width || this.previewCanvas.height !== height) {
+		if (
+			this.previewCanvas.width !== width ||
+			this.previewCanvas.height !== height
+		) {
 			this.previewCanvas.width = width;
 			this.previewCanvas.height = height;
 		}
@@ -165,7 +167,10 @@ class EffectPreviewService {
 		height: number;
 		passes: EffectPassData[];
 	}): OffscreenCanvas | HTMLCanvasElement {
-		const { canvas: glCanvas, gl } = this.getOrCreatePreviewContext({ width, height });
+		const { canvas: glCanvas, gl } = this.getOrCreatePreviewContext({
+			width,
+			height,
+		});
 
 		applyMultiPassEffect({
 			context: gl,

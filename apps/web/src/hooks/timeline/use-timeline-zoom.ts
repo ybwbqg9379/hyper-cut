@@ -81,22 +81,22 @@ export function useTimelineZoom({
 				return;
 			}
 
-		// pinch-zoom (ctrl/meta + wheel)
-		if (isZoomGesture) {
-			const normalizedDelta =
-				event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-			const cappedDelta =
-				Math.sign(normalizedDelta) * Math.min(Math.abs(normalizedDelta), 30);
-			const zoomFactor = Math.exp(-cappedDelta / 300);
-			setZoomLevel((prev) => {
-				const nextZoom = Math.max(
-					minZoom,
-					Math.min(TIMELINE_CONSTANTS.ZOOM_MAX, prev * zoomFactor),
-				);
-				return nextZoom;
-			});
-			return;
-		}
+			// pinch-zoom (ctrl/meta + wheel)
+			if (isZoomGesture) {
+				const normalizedDelta =
+					event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+				const cappedDelta =
+					Math.sign(normalizedDelta) * Math.min(Math.abs(normalizedDelta), 30);
+				const zoomFactor = Math.exp(-cappedDelta / 300);
+				setZoomLevel((prev) => {
+					const nextZoom = Math.max(
+						minZoom,
+						Math.min(TIMELINE_CONSTANTS.ZOOM_MAX, prev * zoomFactor),
+					);
+					return nextZoom;
+				});
+				return;
+			}
 		},
 		[minZoom, setZoomLevel],
 	);

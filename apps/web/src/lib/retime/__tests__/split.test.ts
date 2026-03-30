@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-	getSourceSpanAtClipTime,
-	splitRetimeAtClipTime,
-} from "@/lib/retime";
+import { getSourceSpanAtClipTime, splitRetimeAtClipTime } from "@/lib/retime";
 import type { RetimeConfig } from "@/lib/timeline";
 
 describe("retime split", () => {

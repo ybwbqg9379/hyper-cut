@@ -4,7 +4,10 @@ import {
 	hasKeyframesForPath,
 	upsertElementKeyframe,
 } from "@/lib/animation";
-import type { AnimationPropertyPath, ElementAnimations } from "@/lib/animation/types";
+import type {
+	AnimationPropertyPath,
+	ElementAnimations,
+} from "@/lib/animation/types";
 import type { TimelineElement } from "@/lib/timeline";
 import { snapToStep } from "@/utils/math";
 import { usePropertyDraft } from "./use-property-draft";
@@ -38,7 +41,10 @@ export function useKeyframedNumberProperty({
 	const snapValue = (value: number) =>
 		step != null ? snapToStep({ value, step }) : value;
 
-	const hasAnimatedKeyframes = hasKeyframesForPath({ animations, propertyPath });
+	const hasAnimatedKeyframes = hasKeyframesForPath({
+		animations,
+		propertyPath,
+	});
 	const keyframeAtTime = isPlayheadWithinElementRange
 		? getKeyframeAtTime({ animations, propertyPath, time: localTime })
 		: null;

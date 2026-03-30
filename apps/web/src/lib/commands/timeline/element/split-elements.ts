@@ -96,6 +96,48 @@ export class SplitElementsCommand extends Command {
 
 				if (this.retainSide === "left") {
 					return [
+						{
+							...element,
+							duration: leftVisibleDuration,
+							trimEnd: element.trimEnd + rightSourceSpan,
+							name: `${element.name} (left)`,
+							animations: leftAnimations,
+							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
+						},
+					];
+				}
+
+				if (this.retainSide === "right") {
+					if (this.rippleEnabled && elementsToSplit.length === 1) {
+						leftVisibleDurationForRipple = leftVisibleDuration;
+					}
+					const newId = generateUUID();
+					this.rightSideElements.push({
+						trackId: track.id,
+						elementId: newId,
+					});
+					return [
+						{
+							...element,
+							id: newId,
+							startTime: this.splitTime,
+							duration: rightVisibleDuration,
+							trimStart: element.trimStart + leftSourceSpan,
+							name: `${element.name} (right)`,
+							animations: rightAnimations,
+							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
+						},
+					];
+				}
+
+				// "both" - split into two pieces
+				const secondElementId = generateUUID();
+				this.rightSideElements.push({
+					trackId: track.id,
+					elementId: secondElementId,
+				});
+
+				return [
 					{
 						...element,
 						duration: leftVisibleDuration,
@@ -104,22 +146,9 @@ export class SplitElementsCommand extends Command {
 						animations: leftAnimations,
 						...(retimeRef !== undefined ? { retime: retimeRef } : {}),
 					},
-				];
-			}
-
-			if (this.retainSide === "right") {
-				if (this.rippleEnabled && elementsToSplit.length === 1) {
-					leftVisibleDurationForRipple = leftVisibleDuration;
-				}
-				const newId = generateUUID();
-				this.rightSideElements.push({
-					trackId: track.id,
-					elementId: newId,
-				});
-				return [
 					{
 						...element,
-						id: newId,
+						id: secondElementId,
 						startTime: this.splitTime,
 						duration: rightVisibleDuration,
 						trimStart: element.trimStart + leftSourceSpan,
@@ -128,35 +157,6 @@ export class SplitElementsCommand extends Command {
 						...(retimeRef !== undefined ? { retime: retimeRef } : {}),
 					},
 				];
-			}
-
-			// "both" - split into two pieces
-			const secondElementId = generateUUID();
-			this.rightSideElements.push({
-				trackId: track.id,
-				elementId: secondElementId,
-			});
-
-			return [
-				{
-					...element,
-					duration: leftVisibleDuration,
-					trimEnd: element.trimEnd + rightSourceSpan,
-					name: `${element.name} (left)`,
-					animations: leftAnimations,
-					...(retimeRef !== undefined ? { retime: retimeRef } : {}),
-				},
-				{
-					...element,
-					id: secondElementId,
-					startTime: this.splitTime,
-					duration: rightVisibleDuration,
-					trimStart: element.trimStart + leftSourceSpan,
-					name: `${element.name} (right)`,
-					animations: rightAnimations,
-					...(retimeRef !== undefined ? { retime: retimeRef } : {}),
-				},
-			];
 			});
 
 			if (this.rippleEnabled && leftVisibleDurationForRipple !== null) {

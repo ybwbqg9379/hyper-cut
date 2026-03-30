@@ -16,7 +16,11 @@ interface CachedStickerSource {
 
 const stickerSourceCache = new Map<string, Promise<CachedStickerSource>>();
 
-function loadStickerSource({ stickerId }: { stickerId: string }): Promise<CachedStickerSource> {
+function loadStickerSource({
+	stickerId,
+}: {
+	stickerId: string;
+}): Promise<CachedStickerSource> {
 	const cached = stickerSourceCache.get(stickerId);
 	if (cached) return cached;
 
@@ -35,7 +39,11 @@ function loadStickerSource({ stickerId }: { stickerId: string }): Promise<Cached
 			image.src = url;
 		});
 
-		return { source: image, width: image.naturalWidth, height: image.naturalHeight };
+		return {
+			source: image,
+			width: image.naturalWidth,
+			height: image.naturalHeight,
+		};
 	})();
 
 	stickerSourceCache.set(stickerId, promise);
@@ -57,8 +65,11 @@ export class StickerNode extends VisualNode<StickerNodeParams> {
 			return;
 		}
 
-		const { source, width: loadedWidth, height: loadedHeight } =
-			await this.cachedSource;
+		const {
+			source,
+			width: loadedWidth,
+			height: loadedHeight,
+		} = await this.cachedSource;
 
 		// Prefer element-stored intrinsic dimensions as the geometry authority.
 		// The loaded image is only the drawable source.

@@ -1,5 +1,8 @@
 import { PitchShifter } from "soundtouchjs";
-import { clampRetimeRate, shouldMaintainPitch } from "@/constants/retime-constants";
+import {
+	clampRetimeRate,
+	shouldMaintainPitch,
+} from "@/constants/retime-constants";
 import type { RetimeConfig } from "@/lib/timeline";
 import { getSourceTimeAtClipTime } from "./resolve";
 
@@ -124,10 +127,7 @@ async function buildPitchPreservedBuffer({
 	resampleSourceNode.start(0);
 	const resampledBuffer = await resampleCtx.startRendering();
 
-	const outputSamples = Math.max(
-		1,
-		Math.ceil(clipDuration * targetSampleRate),
-	);
+	const outputSamples = Math.max(1, Math.ceil(clipDuration * targetSampleRate));
 	const stretchCtx = new OfflineAudioContext(
 		numChannels,
 		outputSamples,

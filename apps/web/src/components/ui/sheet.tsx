@@ -18,7 +18,11 @@ function Sheet({
 		onOpenChange,
 	});
 	return (
-		<SheetPrimitive.Root open={open} onOpenChange={handleOpenChange} {...props} />
+		<SheetPrimitive.Root
+			open={open}
+			onOpenChange={handleOpenChange}
+			{...props}
+		/>
 	);
 }
 

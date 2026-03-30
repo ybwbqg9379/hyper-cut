@@ -1,10 +1,6 @@
 import { Command } from "@/lib/commands/base-command";
 import { EditorCore } from "@/core";
-import type {
-	TimelineTrack,
-	TimelineElement,
-	TrackType,
-} from "@/lib/timeline";
+import type { TimelineTrack, TimelineElement, TrackType } from "@/lib/timeline";
 import {
 	buildEmptyTrack,
 	isMainTrack,
@@ -61,7 +57,9 @@ export class MoveElementCommand extends Command {
 			throw new Error("Source track or element not found");
 		}
 
-		let targetTrack = this.savedState.find((track) => track.id === this.targetTrackId);
+		let targetTrack = this.savedState.find(
+			(track) => track.id === this.targetTrackId,
+		);
 		let tracksToUpdate = this.savedState;
 		if (!targetTrack && this.createTrack) {
 			const newTrack = buildEmptyTrack({

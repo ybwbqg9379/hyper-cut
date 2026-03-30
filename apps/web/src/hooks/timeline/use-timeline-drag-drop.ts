@@ -444,7 +444,8 @@ export function useTimelineDragDrop({
 						if (!createdAsset) continue;
 
 						const duration =
-							createdAsset.duration ?? TIMELINE_CONSTANTS.DEFAULT_ELEMENT_DURATION;
+							createdAsset.duration ??
+							TIMELINE_CONSTANTS.DEFAULT_ELEMENT_DURATION;
 						const currentTracks = editor.timeline.getTracks();
 						const currentTime = editor.playback.getCurrentTime();
 						const onlyTrack = currentTracks[0];

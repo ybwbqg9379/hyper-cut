@@ -78,9 +78,7 @@ export function GraphicTab({
 					</SectionFields>
 				</SectionContent>
 			</Section>
-			{hasStrokeParams && (
-				<StrokeSection element={element} trackId={trackId} />
-			)}
+			{hasStrokeParams && <StrokeSection element={element} trackId={trackId} />}
 		</div>
 	);
 }
@@ -206,21 +204,23 @@ function AnimatedGraphicParamField({
 	isPlayheadWithinElementRange: boolean;
 	resolvedParams: ParamValues;
 }) {
-	const animatedParam: KeyframedParamPropertyResult = useKeyframedParamProperty({
-		param,
-		trackId,
-		elementId: element.id,
-		animations: element.animations,
-		localTime,
-		isPlayheadWithinElementRange,
-		resolvedValue: resolvedParams[param.key] ?? param.default,
-		buildBaseUpdates: ({ value }) => ({
-			params: {
-				...element.params,
-				[param.key]: value,
-			},
-		}),
-	});
+	const animatedParam: KeyframedParamPropertyResult = useKeyframedParamProperty(
+		{
+			param,
+			trackId,
+			elementId: element.id,
+			animations: element.animations,
+			localTime,
+			isPlayheadWithinElementRange,
+			resolvedValue: resolvedParams[param.key] ?? param.default,
+			buildBaseUpdates: ({ value }) => ({
+				params: {
+					...element.params,
+					[param.key]: value,
+				},
+			}),
+		},
+	);
 
 	return (
 		<PropertyParamField

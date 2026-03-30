@@ -113,7 +113,14 @@ export function useBookmarkDrag({
 				snapPoint: result.snapPoint,
 			};
 		},
-		[snappingEnabled, tracks, playheadTime, bookmarks, zoomLevel, isShiftHeldRef],
+		[
+			snappingEnabled,
+			tracks,
+			playheadTime,
+			bookmarks,
+			zoomLevel,
+			isShiftHeldRef,
+		],
 	);
 
 	useEffect(() => {

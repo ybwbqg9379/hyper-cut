@@ -114,14 +114,15 @@ export function SettingsView() {
 		};
 	});
 
-	const selectedPresetId = canvasSizeMode === "preset"
-		? (presetItems.find((preset) =>
-				areCanvasSizesEqual({
-					left: preset.canvasSize,
-					right: currentCanvasSize,
-				}),
-			)?.id ?? null)
-		: null;
+	const selectedPresetId =
+		canvasSizeMode === "preset"
+			? (presetItems.find((preset) =>
+					areCanvasSizesEqual({
+						left: preset.canvasSize,
+						right: currentCanvasSize,
+					}),
+				)?.id ?? null)
+			: null;
 
 	const updateCustomCanvasSize = ({
 		canvasSize,

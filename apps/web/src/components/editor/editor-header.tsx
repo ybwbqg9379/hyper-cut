@@ -148,7 +148,10 @@ function ProjectDropdown({ isEmbed = false }: { isEmbed?: boolean }) {
 					{!isEmbed && (
 						<>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem asChild icon={<FaDiscord className="size-4!" />}>
+							<DropdownMenuItem
+								asChild
+								icon={<FaDiscord className="size-4!" />}
+							>
 								<Link
 									href={SOCIAL_LINKS.discord}
 									target="_blank"

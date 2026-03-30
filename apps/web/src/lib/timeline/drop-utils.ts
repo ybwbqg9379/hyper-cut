@@ -213,10 +213,7 @@ export function computeDropTarget({
 	const { trackIndex, relativeY } = trackAtMouse;
 	const track = tracks[trackIndex];
 
-	if (
-		targetElementTypes &&
-		targetElementTypes.length > 0
-	) {
+	if (targetElementTypes && targetElementTypes.length > 0) {
 		const targetElement = findElementAtPosition({
 			mouseX,
 			tracks,

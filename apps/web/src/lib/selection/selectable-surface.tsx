@@ -197,7 +197,11 @@ export function SelectableSurface({
 				return;
 			}
 
-			if (event.key !== "Enter" && event.key !== " " && event.key !== "Escape") {
+			if (
+				event.key !== "Enter" &&
+				event.key !== " " &&
+				event.key !== "Escape"
+			) {
 				return;
 			}
 

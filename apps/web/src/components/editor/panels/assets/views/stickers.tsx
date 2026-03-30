@@ -25,9 +25,7 @@ import type {
 } from "@/lib/stickers";
 import { useStickersStore } from "@/stores/stickers-store";
 import { cn } from "@/utils/ui";
-import {
-	HappyIcon,
-} from "@hugeicons/core-free-icons";
+import { HappyIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 export function StickersView() {
@@ -358,7 +356,9 @@ function StickerItem({
 
 	const displayName = item.name;
 	const shapePreset =
-		item.provider === "shapes" ? parseShapeStickerId({ stickerId: item.id }) : null;
+		item.provider === "shapes"
+			? parseShapeStickerId({ stickerId: item.id })
+			: null;
 
 	const handleAdd = async () => {
 		setIsAdding(true);

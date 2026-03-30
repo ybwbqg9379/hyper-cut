@@ -1,4 +1,3 @@
-import { webEnv } from "@/lib/env/web";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -83,7 +82,7 @@ export async function GET(request: NextRequest) {
 
 		const soundId = validation.data;
 		const params = new URLSearchParams({
-			token: webEnv.FREESOUND_API_KEY,
+			token: process.env.FREESOUND_API_KEY ?? "",
 			fields:
 				"id,name,description,url,previews,download,duration,filesize,type,channels,bitrate,bitdepth,samplerate,username,tags,license,created,num_downloads,avg_rating,num_ratings",
 		});

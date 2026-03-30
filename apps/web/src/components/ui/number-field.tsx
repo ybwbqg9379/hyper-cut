@@ -141,7 +141,9 @@ function NumberField({
 	const cumulativeDeltaRef = useRef(0);
 	const [isInputFocused, setIsInputFocused] = useState(false);
 	const [suffixLeft, setSuffixLeft] = useState(0);
-	const ghostValue = Array.isArray(value) ? value.join(", ") : String(value ?? "");
+	const ghostValue = Array.isArray(value)
+		? value.join(", ")
+		: String(value ?? "");
 
 	useLayoutEffect(() => {
 		if (!suffix) {

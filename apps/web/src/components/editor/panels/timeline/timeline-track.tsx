@@ -5,7 +5,10 @@ import { TimelineElement } from "./timeline-element";
 import type { TimelineTrack } from "@/lib/timeline";
 import type { TimelineElement as TimelineElementType } from "@/lib/timeline";
 import type { SnapPoint } from "@/lib/timeline/snap-utils";
-import { TIMELINE_CONSTANTS, TIMELINE_LAYERS } from "@/constants/timeline-constants";
+import {
+	TIMELINE_CONSTANTS,
+	TIMELINE_LAYERS,
+} from "@/constants/timeline-constants";
 import { useEdgeAutoScroll } from "@/hooks/timeline/use-edge-auto-scroll";
 import type { ElementDragState } from "@/lib/timeline";
 import { useEditor } from "@/hooks/use-editor";
@@ -68,9 +71,9 @@ export function TimelineTrackContent({
 				type="button"
 				className="absolute inset-0 m-0 size-full appearance-none border-0 bg-transparent p-0"
 				aria-label={`Select ${track.name} track`}
-			onMouseUp={(event) => {
+				onMouseUp={(event) => {
 					if (shouldIgnoreClick?.()) return;
-				onTrackMouseUp?.(event);
+					onTrackMouseUp?.(event);
 				}}
 				onMouseDown={(event) => {
 					event.preventDefault();
