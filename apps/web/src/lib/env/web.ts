@@ -8,26 +8,23 @@ const webEnvSchema = z.object({
 
 	// Public
 	NEXT_PUBLIC_SITE_URL: z.url().default("http://localhost:3000"),
-	NEXT_PUBLIC_MARBLE_API_URL: z.url(),
 
-	// Server
-	DATABASE_URL: z.string().refine(
-		(url) =>
-			url.startsWith("postgres://") || url.startsWith("postgresql://"),
-		"DATABASE_URL must be a postgres:// or postgresql:// URL",
-	),
+	// --- Commented out: not used by HyperCut (client-side iframe editor) ---
+	// Restore these if upstream server-side features are needed in the future.
 
-	BETTER_AUTH_SECRET: z.string(),
-	UPSTASH_REDIS_REST_URL: z.url(),
-	UPSTASH_REDIS_REST_TOKEN: z.string(),
-	MARBLE_WORKSPACE_KEY: z.string(),
-	FREESOUND_CLIENT_ID: z.string(),
-	FREESOUND_API_KEY: z.string(),
-	CLOUDFLARE_ACCOUNT_ID: z.string(),
-	R2_ACCESS_KEY_ID: z.string(),
-	R2_SECRET_ACCESS_KEY: z.string(),
-	R2_BUCKET_NAME: z.string(),
-	MODAL_TRANSCRIPTION_URL: z.url(),
+	// NEXT_PUBLIC_MARBLE_API_URL: z.url(),               // Dead code: declared but never read
+	// DATABASE_URL: z.string(),                           // Upstream auth/db (HyperCut uses browser storage)
+	// BETTER_AUTH_SECRET: z.string(),                     // Upstream auth (HyperCut auth is on HyperCreator side)
+	// UPSTASH_REDIS_REST_URL: z.url(),                    // Upstream rate-limit + auth
+	// UPSTASH_REDIS_REST_TOKEN: z.string(),               // Upstream rate-limit + auth
+	// MARBLE_WORKSPACE_KEY: z.string(),                   // Dead code: declared but never read
+	// FREESOUND_CLIENT_ID: z.string(),                    // Upstream sounds search API (optional feature)
+	// FREESOUND_API_KEY: z.string(),                      // Upstream sounds search API (optional feature)
+	// CLOUDFLARE_ACCOUNT_ID: z.string(),                  // Dead code: declared but never read
+	// R2_ACCESS_KEY_ID: z.string(),                       // Dead code: declared but never read
+	// R2_SECRET_ACCESS_KEY: z.string(),                   // Dead code: declared but never read
+	// R2_BUCKET_NAME: z.string(),                         // Dead code: declared but never read
+	// MODAL_TRANSCRIPTION_URL: z.url(),                   // Dead code: declared but never read
 });
 
 export type WebEnv = z.infer<typeof webEnvSchema>;
