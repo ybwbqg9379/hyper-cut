@@ -28,6 +28,7 @@ import {
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/lib/timeline/creation";
 import { useEditor } from "@/hooks/use-editor";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import { useParentMediaBridge } from "@/hooks/use-parent-media-bridge";
 import { invokeAction } from "@/lib/actions";
 import { processMediaAssets } from "@/lib/media/processing";
 import { showMediaUploadToast } from "@/lib/media/upload-toast";
@@ -75,6 +76,8 @@ export function MediaView() {
 
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [progress, setProgress] = useState(0);
+	const { requestMedia, isRequesting, isBridgeAvailable } =
+		useParentMediaBridge();
 
 	const processFiles = async ({ files }: { files: File[] }) => {
 		if (!files || files.length === 0) return;
@@ -144,6 +147,56 @@ export function MediaView() {
 		}
 	};
 
+	const handleLibraryImport = async () => {
+		if (!activeProject) return;
+		const result = await requestMedia({ accept: "image/*,video/*,audio/*" });
+		if (!result.ok) {
+			if (result.reason === "timeout") {
+				toast.error("Library request timed out. Please try again.");
+			} else if (
+				result.reason === "no-bridge" ||
+				result.reason === "no-parent"
+			) {
+				toast.error("Parent library connection lost.");
+			}
+			return;
+		}
+		if (result.assets.length === 0) return;
+
+		setIsProcessing(true);
+		setProgress(0);
+		try {
+			const files: File[] = [];
+			for (const item of result.assets) {
+				try {
+					const response = await fetch(item.url);
+					const blob = await response.blob();
+					files.push(new File([blob], item.name, { type: item.mimeType }));
+				} catch (fetchError) {
+					console.error(`Failed to fetch library asset: ${item.name}`, fetchError);
+				}
+			}
+			if (files.length > 0) {
+				const processedAssets = await processMediaAssets({
+					files,
+					onProgress: (p: { progress: number }) => setProgress(p.progress),
+				});
+				for (const asset of processedAssets) {
+					await editor.media.addMediaAsset({
+						projectId: activeProject.metadata.id,
+						asset,
+					});
+				}
+			}
+		} catch (error) {
+			console.error("Library import failed:", error);
+			toast.error("Failed to import library assets.");
+		} finally {
+			setIsProcessing(false);
+			setProgress(0);
+		}
+	};
+
 	const filteredMediaItems = useMemo(() => {
 		const filtered = mediaFiles.filter((item) => !item.ephemeral);
 
@@ -198,6 +251,10 @@ export function MediaView() {
 						sortOrder={mediaSortOrder}
 						onSort={handleSort}
 						onImport={openFilePicker}
+						onLibraryImport={
+							isBridgeAvailable ? handleLibraryImport : undefined
+						}
+						isImportingFromLibrary={isRequesting}
 					/>
 				}
 				className={cn(isDragOver && "bg-accent/30")}
@@ -507,6 +564,8 @@ function MediaActions({
 	sortOrder,
 	onSort,
 	onImport,
+	onLibraryImport,
+	isImportingFromLibrary = false,
 }: {
 	mediaViewMode: MediaViewMode;
 	setMediaViewMode: (mode: MediaViewMode) => void;
@@ -515,6 +574,8 @@ function MediaActions({
 	sortOrder: MediaSortOrder;
 	onSort: ({ key }: { key: MediaSortKey }) => void;
 	onImport: () => void;
+	onLibraryImport?: () => void;
+	isImportingFromLibrary?: boolean;
 }) {
 	return (
 		<div className="flex gap-1.5">
@@ -598,6 +659,17 @@ function MediaActions({
 					</TooltipContent>
 				</Tooltip>
 			</TooltipProvider>
+			{onLibraryImport && (
+				<Button
+					variant="outline"
+					onClick={onLibraryImport}
+					disabled={isProcessing || isImportingFromLibrary}
+					size="sm"
+					className="items-center justify-center gap-1.5"
+				>
+					Library
+				</Button>
+			)}
 			<Button
 				variant="outline"
 				onClick={onImport}
