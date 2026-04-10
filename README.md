@@ -1,10 +1,10 @@
 <table width="100%">
   <tr>
     <td align="left" width="120">
-      <img src="apps/web/public/logos/opencut/icon.svg" alt="OpenCut Logo" width="100" />
+      <img src="apps/web/public/logos/hypercut/icon.svg" alt="HyperCut Logo" width="100" />
     </td>
     <td align="right">
-      <h1>OpenCut</h1>
+      <h1>HyperCut</h1>
       <h3 style="margin-top: -10px;">A free, open-source video editor for web, desktop, and mobile.</h3>
     </td>
   </tr>
@@ -12,7 +12,7 @@
 
 ## Sponsors
 
-Thanks to [Vercel](https://vercel.com?utm_source=github-opencut&utm_campaign=oss) and [fal.ai](https://fal.ai?utm_source=github-opencut&utm_campaign=oss) for their support of open-source software.
+Thanks to [Vercel](https://vercel.com?utm_source=github-hypercut&utm_campaign=oss) and [fal.ai](https://fal.ai?utm_source=github-hypercut&utm_campaign=oss) for their support of open-source software.
 
 <a href="https://vercel.com/oss">
   <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge.svg" />
@@ -34,8 +34,8 @@ Thanks to [Vercel](https://vercel.com?utm_source=github-opencut&utm_campaign=oss
 - Multi-track support
 - Real-time preview
 - No watermarks or subscriptions
-- Analytics provided by [Databuddy](https://www.databuddy.cc?utm_source=opencut), 100% Anonymized & Non-invasive.
-- Blog powered by [Marble](https://marblecms.com?utm_source=opencut), Headless CMS.
+- Analytics provided by [Databuddy](https://www.databuddy.cc?utm_source=hypercut), 100% Anonymized & Non-invasive.
+- Blog powered by [Marble](https://marblecms.com?utm_source=hypercut), Headless CMS.
 
 ## Project Structure
 
@@ -114,7 +114,7 @@ Only needed if you're editing `rust/wasm` and want the web app to use your local
 
    ```bash
    cd apps/web
-   bun link opencut-wasm
+   bun link hypercut-wasm
    ```
 
 4. Rebuild on changes while you work:
@@ -127,7 +127,7 @@ To switch `apps/web` back to the published package, run:
 
 ```bash
 cd apps/web
-bun add opencut-wasm
+bun add hypercut-wasm
 ```
 
 ### Self-Hosting with Docker
@@ -163,4 +163,4 @@ See our [Contributing Guide](.github/CONTRIBUTING.md) for detailed setup instruc
 
 ---
 
-![Star History Chart](https://api.star-history.com/svg?repos=opencut-app/opencut&type=Date)
+![Star History Chart](https://api.star-history.com/svg?repos=hypercut-app/hypercut&type=Date)
