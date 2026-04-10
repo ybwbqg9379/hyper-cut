@@ -1,0 +1,36 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const applyEffectPasses: (a: any) => [number, number, number];
+export const applyMaskFeather: (a: any) => [number, number, number];
+export const initializeGpu: () => any;
+export const formatTimecode: (a: any) => [number, number];
+export const guessTimecodeFormat: (a: any) => any;
+export const parseTimecode: (a: any) => any;
+export const TICKS_PER_SECOND: () => number;
+export const floorToFrame: (a: any) => any;
+export const isFrameAligned: (a: any) => number;
+export const lastFrameTime: (a: any) => any;
+export const mediaTimeAdd: (a: any) => any;
+export const mediaTimeClamp: (a: any) => any;
+export const mediaTimeFromFrame: (a: any) => any;
+export const mediaTimeFromSeconds: (a: any) => any;
+export const mediaTimeMax: (a: any) => any;
+export const mediaTimeMin: (a: any) => any;
+export const mediaTimeSub: (a: any) => any;
+export const mediaTimeToFrame: (a: any) => [number, bigint];
+export const mediaTimeToSeconds: (a: any) => number;
+export const roundToFrame: (a: any) => any;
+export const snappedSeekTime: (a: any) => any;
+export const wasm_bindgen__convert__closures_____invoke__he232159dac672442: (a: number, b: number, c: any) => [number, number];
+export const wasm_bindgen__convert__closures_____invoke__h41b114d20b0b0163: (a: number, b: number, c: any, d: any) => void;
+export const wasm_bindgen__convert__closures_____invoke__h31621db3e5ffa71d: (a: number, b: number, c: any) => void;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_destroy_closure: (a: number, b: number) => void;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;
