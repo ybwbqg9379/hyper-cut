@@ -24,3 +24,8 @@ fi
 echo "Building WASM..."
 cd rust/wasm
 wasm-pack build --target bundler --out-dir pkg
+
+# 5. 产物内聚：将 WASM 拷贝到 Web 目录以确保 CI 可访问
+echo "Synchronizing WASM artifacts to apps/web/wasm-pkg..."
+mkdir -p ../../apps/web/wasm-pkg
+cp -r pkg/* ../../apps/web/wasm-pkg/
