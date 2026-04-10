@@ -2,7 +2,7 @@ import { type JSX, useLayoutEffect, useRef } from "react";
 import {
 	BASE_TIMELINE_PIXELS_PER_SECOND,
 } from "@/lib/timeline/scale";
-import { mediaTimeToSeconds } from "opencut-wasm";
+import { safeMediaTimeToSeconds } from "@/lib/wasm/safe-timecode";
 import { TICKS_PER_SECOND } from "@/lib/wasm";
 import { TIMELINE_RULER_HEIGHT_PX } from "./layout";
 import { DEFAULT_FPS } from "@/lib/fps/constants";
@@ -33,7 +33,7 @@ export function TimelineRuler({
 	handleRulerMouseDown,
 }: TimelineRulerProps) {
 	const durationTicks = useEditor((e) => e.timeline.getTotalDuration());
-	const durationSeconds = mediaTimeToSeconds({ time: durationTicks });
+	const durationSeconds = safeMediaTimeToSeconds({ time: durationTicks });
 	const pixelsPerSecond = BASE_TIMELINE_PIXELS_PER_SECOND * zoomLevel;
 	const visibleDurationSeconds = dynamicTimelineWidth / pixelsPerSecond;
 	const effectiveDurationSeconds = Math.max(durationSeconds, visibleDurationSeconds);

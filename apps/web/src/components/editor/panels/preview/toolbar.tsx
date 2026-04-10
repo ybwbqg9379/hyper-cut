@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useEditor } from "@/hooks/use-editor";
-import { formatTimecode } from "opencut-wasm";
+import { safeFormatTimecode } from "@/lib/wasm/safe-timecode";
 import { invokeAction } from "@/lib/actions";
 import { EditableTimecode } from "@/components/editable-timecode";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ function TimecodeDisplay() {
 			/>
 			<span className="text-muted-foreground px-2 font-mono text-xs">/</span>
 			<span className="text-muted-foreground font-mono text-xs">
-				{formatTimecode({ time: totalDuration, format: "HH:MM:SS:FF", rate: fps })}
+				{safeFormatTimecode({ time: totalDuration, format: "HH:MM:SS:FF", rate: fps })}
 			</span>
 		</div>
 	);

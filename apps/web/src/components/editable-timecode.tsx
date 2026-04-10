@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatTimecode, parseTimecode, snappedSeekTime, type FrameRate, type TimeCodeFormat } from "opencut-wasm";
+import { parseTimecode, snappedSeekTime, type FrameRate, type TimeCodeFormat } from "opencut-wasm";
+import { safeFormatTimecode } from "@/lib/wasm/safe-timecode";
 import { cn } from "@/utils/ui";
 
 interface EditableTimecodeProps {
@@ -28,7 +29,7 @@ export function EditableTimecode({
 	const [hasError, setHasError] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const enterPressedRef = useRef(false);
-	const formattedTime = formatTimecode({ time, format, rate: fps }) ?? "";
+	const formattedTime = safeFormatTimecode({ time, format, rate: fps }) ?? "";
 
 	const startEditing = () => {
 		if (disabled) return;
