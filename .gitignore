@@ -1,26 +1,40 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# node_modules
+node_modules
+apps/web/node_modules
+
+# build/dist
+.next
+.turbo
+.open-next
+dist
+apps/web/.content-collections
+rust/wasm/pkg
+
+# Rust/Cargo
+target/
+.cargo-tools/
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+npm_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# cursor/editor
+.cursorignore
+.cursor/
+
+# env
+.env*
+!*.env.example
 
 # asdf version management
 .tool-versions
 
-node_modules
-.cursorignore
-.turbo
-
-.env*
-!*.env.example
-
-# cursor
+# Bun
 bun.lockb
-
-# content-collections
-.content-collections
-
-# Twiggy
-.cursor/
-
-.open-next
-
-target/
-
-.cargo-tools/
