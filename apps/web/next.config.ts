@@ -9,6 +9,25 @@ const nextConfig: NextConfig = {
 	reactStrictMode: true,
 	productionBrowserSourceMaps: true,
 	output: "standalone",
+	// Enable WebAssembly support for production builds (webpack)
+	// Turbopack (dev) handles WASM natively, but production uses webpack
+	webpack(config, { isServer }) {
+		// Enable async WASM loading
+		config.experiments = {
+			...config.experiments,
+			asyncWebAssembly: true,
+		};
+
+		// Fix WASM file output path — webpack needs to know where to emit .wasm files
+		if (!isServer) {
+			config.output = {
+				...config.output,
+				webassemblyModuleFilename: "static/wasm/[modulehash].wasm",
+			};
+		}
+
+		return config;
+	},
 	images: {
 		remotePatterns: [
 			{

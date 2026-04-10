@@ -21,6 +21,7 @@ import type {
 	TProjectSortKey,
 	TProjectSortOption,
 } from "@/lib/project/types";
+import { formatTimecode, mediaTimeToSeconds } from "opencut-wasm";
 import { formatDate } from "@/utils/date";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -75,16 +76,9 @@ const formatProjectDuration = ({
 		return null;
 	}
 
-	// Pure JS timecode formatting (avoids WASM initialization blocking page load)
-	const totalSeconds = Math.floor(duration);
-	const hours = Math.floor(totalSeconds / 3600);
-	const minutes = Math.floor((totalSeconds % 3600) / 60);
-	const seconds = totalSeconds % 60;
-
-	if (hours > 0) {
-		return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-	}
-	return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+	const durationSeconds = mediaTimeToSeconds({ time: duration });
+	const format = durationSeconds >= 3600 ? "HH:MM:SS" : "MM:SS";
+	return formatTimecode({ time: duration, format }) ?? "";
 };
 
 const VIEW_MODE_OPTIONS = [

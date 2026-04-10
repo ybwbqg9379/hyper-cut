@@ -122,7 +122,7 @@ function ProjectDropdown({ isEmbed: _isEmbed = false }: { isEmbed?: boolean }) {
 							alt="HyperCut Logo"
 							width={24}
 							height={24}
-							className="size-[1.4rem] object-contain opacity-90 group-hover:opacity-100"
+							className="size-[1.4rem] object-contain opacity-90 group-hover:opacity-100 invert dark:invert-0"
 						/>
 					</Button>
 				</DropdownMenuTrigger>
