@@ -20,7 +20,8 @@
     "preview:web": "turbo run preview --filter=@hypercut/web",
     "publish:wasm": "bun run build:wasm && npm publish rust/wasm/pkg --access public",
     "start:tools": "turbo run start --filter=@hypercut/tools",
-    "test": "bun test"
+    "test": "bun test",
+    "build:wasm": "bash scripts/build-wasm.sh"
   },
   "dependencies": {
     "@biomejs/biome": "^2.4.8",
