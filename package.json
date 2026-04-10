@@ -7,7 +7,6 @@
   ],
   "scripts": {
     "build:tools": "turbo run build --filter=@hypercut/tools",
-    "build:wasm": "wasm-pack build rust/wasm --target bundler --out-dir pkg",
     "build:web": "turbo run build --filter=@hypercut/web",
     "deploy:web": "turbo run deploy --filter=@hypercut/web",
     "dev:tools": "turbo run dev --filter=@hypercut/tools",
