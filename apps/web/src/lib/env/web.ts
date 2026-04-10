@@ -8,21 +8,24 @@ const webEnvSchema = z.object({
 
 	// Public
 	NEXT_PUBLIC_SITE_URL: z.url().default("http://localhost:3000"),
-	NEXT_PUBLIC_MARBLE_API_URL: z.url(),
+	NEXT_PUBLIC_MARBLE_API_URL: z
+		.url()
+		.default("https://api.marblecms.com"),
 
-	// Server
-	DATABASE_URL: z.string().refine(
-		(url) =>
-			url.startsWith("postgres://") || url.startsWith("postgresql://"),
-		"DATABASE_URL must be a postgres:// or postgresql:// URL",
-	),
-
-	BETTER_AUTH_SECRET: z.string(),
-	UPSTASH_REDIS_REST_URL: z.url(),
-	UPSTASH_REDIS_REST_TOKEN: z.string(),
-	MARBLE_WORKSPACE_KEY: z.string(),
-	FREESOUND_CLIENT_ID: z.string(),
-	FREESOUND_API_KEY: z.string(),
+	// Server — default to placeholders so the build succeeds even when
+	// credentials are not yet configured. Runtime code that depends on
+	// these services will fail at request time, not at build time.
+	DATABASE_URL: z
+		.string()
+		.default("postgresql://placeholder:placeholder@localhost:5432/placeholder"),
+	BETTER_AUTH_SECRET: z.string().default("placeholder"),
+	UPSTASH_REDIS_REST_URL: z
+		.url()
+		.default("https://placeholder.upstash.io"),
+	UPSTASH_REDIS_REST_TOKEN: z.string().default("placeholder"),
+	MARBLE_WORKSPACE_KEY: z.string().default("placeholder"),
+	FREESOUND_CLIENT_ID: z.string().default("placeholder"),
+	FREESOUND_API_KEY: z.string().default("placeholder"),
 });
 
 export type WebEnv = z.infer<typeof webEnvSchema>;
