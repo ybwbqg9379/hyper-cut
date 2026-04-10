@@ -75,8 +75,7 @@ const formatProjectDuration = ({
 		return null;
 	}
 
-	// Pure JS replacement for WASM formatTimecode/mediaTimeToSeconds
-	// Duration is stored in seconds (media time base)
+	// Pure JS timecode formatting (avoids WASM initialization blocking page load)
 	const totalSeconds = Math.floor(duration);
 	const hours = Math.floor(totalSeconds / 3600);
 	const minutes = Math.floor((totalSeconds % 3600) / 60);
