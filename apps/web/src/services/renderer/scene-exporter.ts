@@ -13,7 +13,7 @@ import {
 	QUALITY_VERY_HIGH,
 } from "mediabunny";
 import type { FrameRate } from "opencut-wasm";
-import { mediaTimeToSeconds } from "opencut-wasm";
+import { safeMediaTimeToSeconds } from "@/lib/wasm/safe-timecode";
 import { TICKS_PER_SECOND } from "@/lib/wasm";
 import { frameRateToFloat } from "@/lib/fps/utils";
 import type { RootNode } from "./nodes/root-node";
@@ -142,7 +142,7 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 			}
 
 			const timeTicks = i * ticksPerFrame;
-			const timeSeconds = mediaTimeToSeconds({ time: timeTicks });
+			const timeSeconds = safeMediaTimeToSeconds({ time: timeTicks });
 			await this.renderer.render({ node: rootNode, time: timeTicks });
 			await videoSource.add(timeSeconds, 1 / fpsFloat);
 

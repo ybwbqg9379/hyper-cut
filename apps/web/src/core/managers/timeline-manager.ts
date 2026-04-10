@@ -22,7 +22,7 @@ import type {
 	AnimationValue,
 	ScalarCurveKeyframePatch,
 } from "@/lib/animation/types";
-import { lastFrameTime } from "opencut-wasm";
+import { safeLastFrameTime } from "@/lib/wasm/safe-timecode";
 import { BatchCommand } from "@/lib/commands";
 import {
 	AddTrackCommand,
@@ -209,7 +209,7 @@ export class TimelineManager {
 		const duration = this.getTotalDuration();
 		const fps = this.editor.project.getActive()?.settings.fps;
 		if (!fps || duration <= 0) return duration;
-		return lastFrameTime({ duration, rate: fps }) ?? duration;
+		return safeLastFrameTime({ duration, rate: fps }) ?? duration;
 	}
 
 	getTrackById({ trackId }: { trackId: string }): TimelineTrack | null {

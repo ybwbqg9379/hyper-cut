@@ -8,7 +8,7 @@ import {
 import { useEditor } from "@/hooks/use-editor";
 import { getKeyframeById } from "@/lib/animation";
 import { useKeyframeSelection } from "./use-keyframe-selection";
-import { roundToFrame, snappedSeekTime } from "opencut-wasm";
+import { safeRoundToFrame, safeSnappedSeekTime } from "@/lib/wasm/safe-timecode";
 import { timelineTimeToSnappedPixels } from "@/lib/timeline";
 import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/lib/timeline/scale";
 import { TICKS_PER_SECOND } from "@/lib/wasm";
@@ -147,7 +147,7 @@ export function useKeyframeDrag({
 
 		const startX = mouseDownXRef.current ?? clientX;
 		const rawDelta = Math.round(((clientX - startX) / pixelsPerSecond) * TICKS_PER_SECOND);
-		const snappedDelta = roundToFrame({ time: rawDelta, rate: fps }) ?? rawDelta;
+		const snappedDelta = safeRoundToFrame({ time: rawDelta, rate: fps }) ?? rawDelta;
 
 			setDragState((previous) => ({ ...previous, deltaTime: snappedDelta }));
 		};
@@ -256,7 +256,7 @@ export function useKeyframeDrag({
 			if (wasDrag) return;
 
 			const duration = editor.timeline.getTotalDuration();
-			const seekTime = snappedSeekTime({ time: displayedStartTime + indicatorTime, duration, rate: fps }) ?? displayedStartTime + indicatorTime;
+			const seekTime = safeSnappedSeekTime({ time: displayedStartTime + indicatorTime, duration, rate: fps }) ?? displayedStartTime + indicatorTime;
 			editor.playback.seek({ time: seekTime });
 
 			if (event.shiftKey) {

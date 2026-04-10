@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/lib/timeline/scale";
-import { snappedSeekTime } from "opencut-wasm";
+import { safeSnappedSeekTime } from "@/lib/wasm/safe-timecode";
 import { TICKS_PER_SECOND } from "@/lib/wasm";
 import { useEditor } from "../use-editor";
 
@@ -139,7 +139,7 @@ export function useTimelineSeek({
 		const rawTime = Math.round(rawTimeSeconds * TICKS_PER_SECOND);
 
 		const rate = activeProject?.settings.fps;
-		const time = rate ? (snappedSeekTime({ time: rawTime, duration, rate }) ?? rawTime) : rawTime;
+		const time = rate ? (safeSnappedSeekTime({ time: rawTime, duration, rate }) ?? rawTime) : rawTime;
 			seek(time);
 			editor.project.setTimelineViewState({
 				viewState: {

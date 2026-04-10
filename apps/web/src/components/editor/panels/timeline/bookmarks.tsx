@@ -9,7 +9,7 @@ import {
 } from "./theme";
 import { TIMELINE_BOOKMARK_ROW_HEIGHT_PX } from "./layout";
 import { DEFAULT_FPS } from "@/lib/fps/constants";
-import { snappedSeekTime } from "opencut-wasm";
+import { safeSnappedSeekTime } from "@/lib/wasm/safe-timecode";
 import {
 	ArrowTurnBackwardIcon,
 	Delete02Icon,
@@ -49,7 +49,7 @@ function seekToBookmarkTime({
 	const activeProject = editor.project.getActive();
 	const duration = editor.timeline.getTotalDuration();
 	const rate = activeProject?.settings.fps ?? DEFAULT_FPS;
-	const snappedTime = snappedSeekTime({ time, duration, rate }) ?? time;
+	const snappedTime = safeSnappedSeekTime({ time, duration, rate }) ?? time;
 	editor.playback.seek({ time: snappedTime });
 }
 

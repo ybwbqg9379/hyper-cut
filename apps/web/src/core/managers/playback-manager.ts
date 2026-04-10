@@ -1,6 +1,6 @@
 import type { EditorCore } from "@/core";
 import { TICKS_PER_SECOND } from "@/lib/wasm";
-import { roundToFrame } from "opencut-wasm";
+import { safeRoundToFrame } from "@/lib/wasm/safe-timecode";
 
 export class PlaybackManager {
 	private isPlaying = false;
@@ -160,7 +160,7 @@ export class PlaybackManager {
 		const fps = this.editor.project.getActive()?.settings.fps;
 		const elapsedSeconds = (performance.now() - this.playbackStartWallTime) / 1000;
 		const rawTime = this.playbackStartTime + Math.round(elapsedSeconds * TICKS_PER_SECOND);
-		const newTime = fps ? (roundToFrame({ time: rawTime, rate: fps }) ?? rawTime) : rawTime;
+		const newTime = fps ? (safeRoundToFrame({ time: rawTime, rate: fps }) ?? rawTime) : rawTime;
 		const maxTime = this.editor.timeline.getTotalDuration();
 
 		if (maxTime > 0 && newTime >= maxTime) {

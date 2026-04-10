@@ -2,7 +2,7 @@ import {
 	buildGaussianBlurPasses,
 	intensityToSigma,
 } from "@/lib/effects/definitions/blur";
-import { mediaTimeToSeconds } from "opencut-wasm";
+import { safeMediaTimeToSeconds } from "@/lib/wasm/safe-timecode";
 import { getSourceTimeAtClipTime } from "@/lib/retime";
 import { videoCache } from "@/services/video-cache/service";
 import type { RetimeConfig } from "@/lib/timeline";
@@ -66,7 +66,7 @@ export class BlurBackgroundNode extends BaseNode<BlurBackgroundNodeParams> {
 			const frame = await videoCache.getFrameAt({
 				mediaId: this.params.mediaId,
 				file: this.params.file,
-				time: mediaTimeToSeconds({ time: sourceTimeTicks }),
+				time: safeMediaTimeToSeconds({ time: sourceTimeTicks }),
 			});
 
 			if (!frame) {

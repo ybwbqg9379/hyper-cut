@@ -13,7 +13,7 @@ import { useElementSelection } from "@/hooks/timeline/element/use-element-select
 import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/lib/timeline/scale";
 import { TICKS_PER_SECOND } from "@/lib/wasm";
 import { TIMELINE_DRAG_THRESHOLD_PX } from "@/components/editor/panels/timeline/interaction";
-import { roundToFrame } from "opencut-wasm";
+import { safeRoundToFrame } from "@/lib/wasm/safe-timecode";
 import { computeDropTarget } from "@/components/editor/panels/timeline/drop-target";
 import { getMouseTimeFromClientX } from "@/lib/timeline/drag-utils";
 import { generateUUID } from "@/utils/id";
@@ -317,7 +317,7 @@ export function useElementInteraction({
 					0,
 					mouseTime - pendingDragRef.current.clickOffsetTime,
 				);
-				const snappedTime = roundToFrame({
+				const snappedTime = safeRoundToFrame({
 					time: adjustedTime,
 					rate: activeProject.settings.fps,
 				}) ?? adjustedTime;
@@ -363,7 +363,7 @@ export function useElementInteraction({
 			});
 			const adjustedTime = Math.max(0, mouseTime - dragState.clickOffsetTime);
 			const fps = activeProject.settings.fps;
-			const frameSnappedTime = roundToFrame({ time: adjustedTime, rate: fps }) ?? adjustedTime;
+			const frameSnappedTime = safeRoundToFrame({ time: adjustedTime, rate: fps }) ?? adjustedTime;
 
 			const sourceTrack = tracks.find(({ id }) => id === dragState.trackId);
 			const movingElement = sourceTrack?.elements.find(

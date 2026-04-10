@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { showMediaUploadToast } from "@/lib/media/upload-toast";
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/lib/timeline/creation";
 import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/lib/timeline/scale";
-import { roundToFrame } from "opencut-wasm";
+import { safeRoundToFrame } from "@/lib/wasm/safe-timecode";
 import {
 	buildTextElement,
 	buildGraphicElement,
@@ -46,7 +46,7 @@ export function useTimelineDragDrop({
 	const getSnappedTime = useCallback(
 		({ time }: { time: number }) => {
 			const projectFps = editor.project.getActive().settings.fps;
-			return roundToFrame({ time, rate: projectFps }) ?? time;
+			return safeRoundToFrame({ time, rate: projectFps }) ?? time;
 		},
 		[editor],
 	);
