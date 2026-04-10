@@ -43,6 +43,12 @@ export const SOCIAL_LINKS = {
 	discord: "https://discord.com/invite/Mu3acKZvCp",
 };
 
+export const ALLOWED_BRIDGE_ORIGINS = [
+	"https://cut.hyper-creator.com",
+	"https://hyper-creator.com",
+	"http://localhost:3000",
+];
+
 export type Sponsor = {
 	name: string;
 	url: string;

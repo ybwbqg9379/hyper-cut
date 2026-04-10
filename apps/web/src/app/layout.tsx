@@ -19,6 +19,8 @@ const protectedRoutes = [
 	},
 ];
 
+import { BridgeProvider } from "../components/editor/bridge-provider";
+
 export default function RootLayout({
 	children,
 }: Readonly<{
@@ -53,6 +55,7 @@ export default function RootLayout({
 				>
 					<TooltipProvider>
 						<Toaster />
+						<BridgeProvider />
 						<Script
 							src="https://cdn.databuddy.cc/databuddy.js"
 							strategy="afterInteractive"
@@ -72,3 +75,4 @@ export default function RootLayout({
 		</html>
 	);
 }
+
