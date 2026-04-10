@@ -1,5 +1,4 @@
 import type { FrameRate } from "opencut-wasm";
-import { frameRateToFloat } from "@/lib/fps/utils";
 import type { BaseNode } from "./nodes/base-node";
 
 export type CanvasRendererParams = {

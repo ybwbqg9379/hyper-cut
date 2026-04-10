@@ -150,14 +150,14 @@ export function useTimelineSeek({
 			});
 		},
 		[
-			duration,
-			zoomLevel,
-			rulerScrollRef,
-			tracksScrollRef,
-			seek,
-			editor,
-			activeProject?.settings.fps.numerator,
-		activeProject?.settings.fps.denominator,
+			duration, 
+			zoomLevel, 
+			rulerScrollRef, 
+			tracksScrollRef, 
+			seek, 
+			editor, 
+			activeProject?.settings.fps.numerator, 
+		activeProject?.settings.fps.denominator, activeProject?.settings.fps
 		],
 	);
 

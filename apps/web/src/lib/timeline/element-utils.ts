@@ -15,7 +15,6 @@ import {
 	type TextElement,
 	type SceneTracks,
 	type TimelineElement,
-	type TimelineTrack,
 	type AudioElement,
 	type VideoElement,
 	type ImageElement,

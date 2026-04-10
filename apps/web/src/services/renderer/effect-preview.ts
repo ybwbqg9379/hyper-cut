@@ -18,11 +18,7 @@ class EffectPreviewService {
 		this.loadPreviewImage();
 	}
 
-	onPreviewImageReady({
-		callback,
-	}: {
-		callback: () => void;
-	}): () => void {
+	onPreviewImageReady({ callback }: { callback: () => void }): () => void {
 		this.onReadyCallbacks.add(callback);
 		return () => this.onReadyCallbacks.delete(callback);
 	}

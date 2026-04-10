@@ -2,6 +2,7 @@ import {
 	useState,
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	type MouseEvent as ReactMouseEvent,
 	type RefObject,
@@ -169,11 +170,14 @@ export function useElementInteraction({
 	const editor = useEditor();
 	const isShiftHeldRef = useShiftKey();
 	const sceneTracks = editor.scenes.getActiveScene().tracks;
-	const tracks = [
-		...sceneTracks.overlay,
-		sceneTracks.main,
-		...sceneTracks.audio,
-	];
+	const tracks = useMemo(
+		() => [
+			...sceneTracks.overlay,
+			sceneTracks.main,
+			...sceneTracks.audio,
+		],
+		[sceneTracks],
+	);
 	const {
 		isElementSelected,
 		selectElement,
@@ -280,7 +284,7 @@ export function useElementInteraction({
 				snapPoint: snapResult.snapPoint,
 			};
 		},
-		[snappingEnabled, editor.playback, tracks, zoomLevel, isShiftHeldRef],
+		[snappingEnabled, editor.playback, zoomLevel, isShiftHeldRef, sceneTracks],
 	);
 
 	useEffect(() => {
@@ -401,24 +405,24 @@ export function useElementInteraction({
 		document.addEventListener("mousemove", handleMouseMove);
 		return () => document.removeEventListener("mousemove", handleMouseMove);
 	}, [
-		dragState.isDragging,
-		dragState.clickOffsetTime,
-		dragState.elementId,
-		dragState.startMouseY,
-		dragState.trackId,
-		zoomLevel,
-		isElementSelected,
-		selectElement,
-		editor.project,
-		timelineRef,
-		tracksScrollRef,
-		tracksContainerRef,
-		headerRef,
-		tracks,
-		isPendingDrag,
-		startDrag,
-		getDragSnapResult,
-		onSnapPointChange,
+		dragState.isDragging, 
+		dragState.clickOffsetTime, 
+		dragState.elementId, 
+		dragState.startMouseY, 
+		dragState.trackId, 
+		zoomLevel, 
+		isElementSelected, 
+		selectElement, 
+		editor.project, 
+		timelineRef, 
+		tracksScrollRef, 
+		tracksContainerRef, 
+		headerRef, 
+		tracks, 
+		isPendingDrag, 
+		startDrag, 
+		getDragSnapResult, 
+		onSnapPointChange, sceneTracks
 	]);
 
 	useEffect(() => {
@@ -519,20 +523,20 @@ export function useElementInteraction({
 		document.addEventListener("mouseup", handleMouseUp);
 		return () => document.removeEventListener("mouseup", handleMouseUp);
 	}, [
-		dragState.isDragging,
-		dragState.elementId,
-		dragState.startMouseY,
-		dragState.trackId,
-		dragState.currentTime,
-		zoomLevel,
-		tracks,
-		endDrag,
-		onSnapPointChange,
-		editor.timeline,
-		tracksContainerRef,
-		tracksScrollRef,
-		headerRef,
-		selectElement,
+		dragState.isDragging, 
+		dragState.elementId, 
+		dragState.startMouseY, 
+		dragState.trackId, 
+		dragState.currentTime, 
+		zoomLevel, 
+		tracks, 
+		endDrag, 
+		onSnapPointChange, 
+		editor.timeline, 
+		tracksContainerRef, 
+		tracksScrollRef, 
+		headerRef, 
+		selectElement, sceneTracks
 	]);
 
 	useEffect(() => {

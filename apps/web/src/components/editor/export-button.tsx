@@ -66,25 +66,25 @@ export function ExportButton() {
 				<button
 					type="button"
 					className={cn(
-						"flex items-center gap-1.5 rounded-md bg-[#38BDF8] px-[0.12rem] py-[0.12rem] text-white",
-						hasProject ? "cursor-pointer" : "cursor-not-allowed opacity-50",
+						"group relative flex items-center gap-2 overflow-hidden rounded-full px-5 py-1.5 transition-all duration-300 active:scale-95",
+						"bg-gradient-to-r from-[#2567EC] to-[#38BDF8] hover:from-[#38BDF8] hover:to-[#2567EC]",
+						"shadow-[0_4px_14px_rgba(37,103,236,0.3)] hover:shadow-[0_6px_20px_rgba(56,189,248,0.4)]",
+						"hover:scale-[1.02] transform-gpu",
+						!hasProject && "cursor-not-allowed opacity-50",
+						"text-white",
 					)}
 					onClick={hasProject ? () => setIsExportPopoverOpen(true) : undefined}
 					disabled={!hasProject}
-					onKeyDown={(event) => {
-						if (hasProject && (event.key === "Enter" || event.key === " ")) {
-							event.preventDefault();
-							setIsExportPopoverOpen(true);
-						}
-					}}
 				>
-					<div className="relative flex items-center gap-1.5 rounded-[0.6rem] bg-linear-270 from-[#2567EC] to-[#37B6F7] px-4 py-1 shadow-[0_1px_3px_0px_rgba(0,0,0,0.65)]">
-						<HugeiconsIcon icon={TransitionTopIcon} className="z-50 size-4" />
-						<span className="z-50 text-[0.875rem]">Export</span>
-						<div className="absolute top-0 left-0 z-10 flex size-full items-center justify-center rounded-[0.6rem] bg-linear-to-t from-white/0 to-white/50">
-							<div className="absolute top-[0.08rem] z-50 h-[calc(100%-2px)] w-[calc(100%-2px)] rounded-[0.6rem] bg-linear-270 from-[#2567EC] to-[#37B6F7]"></div>
-						</div>
-					</div>
+					<HugeiconsIcon
+						icon={TransitionTopIcon}
+						className="relative z-10 size-4 transition-transform duration-300 group-hover:-translate-y-1"
+					/>
+					<span className="relative z-10 text-[0.9rem] font-semibold tracking-wide">
+						Export
+					</span>
+					{/* Ripple Glossy Overlay */}
+					<div className="absolute inset-0 z-0 bg-white/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 				</button>
 			</PopoverTrigger>
 			{hasProject && <ExportPopover onOpenChange={setIsExportPopoverOpen} />}
@@ -159,19 +159,20 @@ function ExportPopover({
 						</h3>
 					</div>
 
-					<div className="flex flex-col gap-4">
+					<div className="flex flex-col gap-0">
 						{!isExporting && (
 							<>
 								<div className="flex flex-col">
 									<Section
 										collapsible
-										defaultOpen={false}
+										defaultOpen={true}
 										showTopBorder={false}
+										className="border-none"
 									>
-										<SectionHeader>
-											<SectionTitle>Format</SectionTitle>
+										<SectionHeader className="py-2.5 px-4 hover:bg-accent/30 transition-colors">
+											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Format</SectionTitle>
 										</SectionHeader>
-										<SectionContent>
+										<SectionContent className="px-4 pb-4">
 											<RadioGroup
 												value={format}
 												onValueChange={(value) => {
@@ -179,28 +180,31 @@ function ExportPopover({
 														setFormat(value);
 													}
 												}}
+												className="gap-3"
 											>
-												<div className="flex items-center space-x-2">
-													<RadioGroupItem value="mp4" id="mp4" />
-													<Label htmlFor="mp4">
-														MP4 (H.264) - Better compatibility
+												<div className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent/20 transition-colors cursor-pointer group">
+													<RadioGroupItem value="mp4" id="mp4" className="border-primary/50" />
+													<Label htmlFor="mp4" className="text-sm font-normal cursor-pointer flex-1">
+														MP4 (H.264)
+														<span className="block text-[10px] text-muted-foreground mt-0.5">Better compatibility for sharing</span>
 													</Label>
 												</div>
-												<div className="flex items-center space-x-2">
-													<RadioGroupItem value="webm" id="webm" />
-													<Label htmlFor="webm">
-														WebM (VP9) - Smaller file size
+												<div className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent/20 transition-colors cursor-pointer group">
+													<RadioGroupItem value="webm" id="webm" className="border-primary/50" />
+													<Label htmlFor="webm" className="text-sm font-normal cursor-pointer flex-1">
+														WebM (VP9)
+														<span className="block text-[10px] text-muted-foreground mt-0.5">Optimized for web performance</span>
 													</Label>
 												</div>
 											</RadioGroup>
 										</SectionContent>
 									</Section>
 
-									<Section collapsible defaultOpen={false}>
-										<SectionHeader>
-											<SectionTitle>Quality</SectionTitle>
+									<Section collapsible defaultOpen={true} className="border-t border-border/40">
+										<SectionHeader className="py-2.5 px-4 hover:bg-accent/30 transition-colors">
+											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Quality</SectionTitle>
 										</SectionHeader>
-										<SectionContent>
+										<SectionContent className="px-4 pb-4">
 											<RadioGroup
 												value={quality}
 												onValueChange={(value) => {
@@ -208,35 +212,41 @@ function ExportPopover({
 														setQuality(value);
 													}
 												}}
+												className="grid grid-cols-2 gap-2"
 											>
-												<div className="flex items-center space-x-2">
-													<RadioGroupItem value="low" id="low" />
-													<Label htmlFor="low">Low - Smallest file size</Label>
-												</div>
-												<div className="flex items-center space-x-2">
-													<RadioGroupItem value="medium" id="medium" />
-													<Label htmlFor="medium">Medium - Balanced</Label>
-												</div>
-												<div className="flex items-center space-x-2">
-													<RadioGroupItem value="high" id="high" />
-													<Label htmlFor="high">High - Recommended</Label>
-												</div>
-												<div className="flex items-center space-x-2">
-													<RadioGroupItem value="very_high" id="very_high" />
-													<Label htmlFor="very_high">
-														Very high - Largest file size
-													</Label>
-												</div>
+												{["low", "medium", "high", "very_high"].map((q) => (
+													<div key={q} className="relative">
+														<RadioGroupItem 
+															value={q} 
+															id={`q-${q}`} 
+															className="sr-only" 
+														/>
+														<Label
+															htmlFor={`q-${q}`}
+															className={cn(
+																"flex h-9 items-center justify-center rounded-md border text-xs font-medium cursor-pointer transition-all",
+																quality === q 
+																	? "bg-primary/10 border-primary text-primary shadow-sm" 
+																	: "bg-transparent border-border/60 text-muted-foreground hover:border-border hover:bg-accent/30"
+															)}
+														>
+															{q.replace("_", " ").toUpperCase()}
+														</Label>
+													</div>
+												))}
 											</RadioGroup>
 										</SectionContent>
 									</Section>
 
-									<Section collapsible defaultOpen={false}>
-										<SectionHeader>
-											<SectionTitle>Audio</SectionTitle>
+									<Section collapsible defaultOpen={false} className="border-t border-border/40">
+										<SectionHeader className="py-2.5 px-4 hover:bg-accent/30 transition-colors">
+											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Audio</SectionTitle>
 										</SectionHeader>
-										<SectionContent>
-											<div className="flex items-center space-x-2">
+										<SectionContent className="px-4 pb-4">
+											<div className="flex items-center justify-between p-2 rounded-md bg-accent/20">
+												<Label htmlFor="include-audio" className="text-sm cursor-pointer">
+													Include audio track
+												</Label>
 												<Checkbox
 													id="include-audio"
 													checked={shouldIncludeAudio}
@@ -244,18 +254,18 @@ function ExportPopover({
 														setShouldIncludeAudio(!!checked)
 													}
 												/>
-												<Label htmlFor="include-audio">
-													Include audio in export
-												</Label>
 											</div>
 										</SectionContent>
 									</Section>
 								</div>
 
-								<div className="p-3 pt-0">
-									<Button onClick={handleExport} className="w-full gap-2">
+								<div className="p-4 border-t border-border/40 bg-accent/5">
+									<Button 
+										onClick={handleExport} 
+										className="w-full gap-2 h-10 bg-linear-to-r from-[#2567EC] to-[#38BDF8] hover:opacity-90 transition-opacity"
+									>
 										<Download className="size-4" />
-										Export
+										Start Rendering
 									</Button>
 								</div>
 							</>

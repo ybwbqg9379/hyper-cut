@@ -58,8 +58,9 @@ export function Captions() {
 			setError(null);
 			setProcessingStep("Extracting audio...");
 
+			const activeScene = editor.scenes.getActiveScene();
 			const audioBlob = await extractTimelineAudio({
-				tracks: editor.scenes.getActiveScene().tracks,
+				tracks: activeScene.tracks,
 				mediaAssets: editor.media.getAssets(),
 				totalDuration: editor.timeline.getTotalDuration(),
 			});

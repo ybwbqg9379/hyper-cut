@@ -48,7 +48,7 @@ const ASSET_SECTIONS: AssetSection[] = [
 	{
 		title: "Symbol",
 		description:
-			"Use the symbol on its own when the OpenCut name is already present nearby or space is limited.",
+			"Use the symbol on its own when the HyperCut name is already present nearby or space is limited.",
 		cols: "2",
 		assets: [
 			{
@@ -112,7 +112,7 @@ export default function BrandPage() {
 			title="Brand"
 			description={
 				<>
-					Download OpenCut brand assets for use in your projects.{" "}
+					Download HyperCut brand assets for use in your projects.{" "}
 					<Link
 						href="#guidelines"
 						className="underline underline-offset-4"
@@ -173,17 +173,17 @@ export default function BrandPage() {
 				<div className="flex flex-col gap-3">
 					<h2 className="font-semibold text-lg">Usage</h2>
 					<p className="text-muted-foreground text-base leading-relaxed">
-						OpenCut is open source — the code is free to use under its license.
+						HyperCut is open source — the code is free to use under its license.
 						That license does not cover the name or logo. You can say you use
-						OpenCut, that your project integrates with OpenCut, or that it was
-						built on top of OpenCut. You cannot name your product OpenCut, imply
+						HyperCut, that your project integrates with HyperCut, or that it was
+						built on top of HyperCut. You cannot name your product HyperCut, imply
 						we made or endorse your product, or use the marks commercially
 						without asking first. For anything unclear, reach out at{" "}
 						<Link
-							href="mailto:brand@opencut.app"
+							href="mailto:brand@hypercut.app"
 							className="underline underline-offset-4"
 						>
-							brand@opencut.app
+							brand@hypercut.app
 						</Link>
 						.
 					</p>
@@ -193,8 +193,8 @@ export default function BrandPage() {
 					<h2 className="font-semibold text-lg">What's not allowed</h2>
 					<ul className="text-muted-foreground text-base flex flex-col gap-2 leading-relaxed">
 						{[
-							"Using OpenCut in the name of your product, service, or domain.",
-							"Implying that OpenCut made, sponsors, or endorses your work.",
+							"Using HyperCut in the name of your product, service, or domain.",
+							"Implying that HyperCut made, sponsors, or endorses your work.",
 							"Using the logo or name on merchandise or commercial marketing.",
 							"Modifying the marks.",
 						].map((item) => (

@@ -1,4 +1,7 @@
-import { buildGaussianBlurPasses, intensityToSigma } from "@/lib/effects/definitions/blur";
+import {
+	buildGaussianBlurPasses,
+	intensityToSigma,
+} from "@/lib/effects/definitions/blur";
 import { mediaTimeToSeconds } from "opencut-wasm";
 import { getSourceTimeAtClipTime } from "@/lib/retime";
 import { videoCache } from "@/services/video-cache/service";
@@ -127,8 +130,16 @@ export class BlurBackgroundNode extends BaseNode<BlurBackgroundNodeParams> {
 		);
 
 		const passes = buildGaussianBlurPasses({
-			sigmaX: intensityToSigma({ intensity: this.params.blurIntensity, resolution: renderer.width, reference: 1920 }),
-			sigmaY: intensityToSigma({ intensity: this.params.blurIntensity, resolution: renderer.height, reference: 1080 }),
+			sigmaX: intensityToSigma({
+				intensity: this.params.blurIntensity,
+				resolution: renderer.width,
+				reference: 1920,
+			}),
+			sigmaY: intensityToSigma({
+				intensity: this.params.blurIntensity,
+				resolution: renderer.height,
+				reference: 1080,
+			}),
 		});
 		const effectResult = gpuRenderer.applyEffect({
 			source: offscreen as CanvasImageSource,

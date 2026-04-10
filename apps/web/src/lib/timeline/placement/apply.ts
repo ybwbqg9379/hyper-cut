@@ -6,7 +6,6 @@ import type {
 	SceneTracks,
 	TextTrack,
 	TimelineElement,
-	TimelineTrack,
 	VideoTrack,
 } from "@/lib/timeline";
 import { generateUUID } from "@/utils/id";

@@ -26,7 +26,6 @@ import {
 	type NumericSpec,
 	withElementBaseValueForProperty,
 } from "./property-registry";
-import { parseColorToLinearRgba } from "./binding-values";
 
 export interface AnimationPathDescriptor {
 	kind: AnimationBindingKind;

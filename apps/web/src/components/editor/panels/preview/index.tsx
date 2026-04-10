@@ -132,7 +132,7 @@ function PreviewCanvas({
 			height: nativeHeight,
 			fps: activeProject.settings.fps,
 		});
-	}, [nativeWidth, nativeHeight, activeProject.settings.fps.numerator, activeProject.settings.fps.denominator]);
+	}, [nativeWidth, nativeHeight, activeProject.settings.fps.numerator, activeProject.settings.fps.denominator, activeProject.settings.fps]);
 
 	const render = useCallback(() => {
 		if (canvasRef.current && renderTree && !renderingRef.current) {
@@ -161,7 +161,7 @@ function PreviewCanvas({
 					});
 			}
 		}
-	}, [renderer, renderTree, editor.playback]);
+	}, [renderer, renderTree, editor.playback, editor.timeline.getLastFrameTime]);
 
 	useRafLoop(render);
 

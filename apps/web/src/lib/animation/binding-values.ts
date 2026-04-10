@@ -29,14 +29,14 @@ const toRgb = converter("rgb");
 function srgbToLinear({ value }: { value: number }): number {
 	return value <= 0.04045
 		? value / 12.92
-		: Math.pow((value + 0.055) / 1.055, 2.4);
+		: ((value + 0.055) / 1.055) ** 2.4;
 }
 
 function linearToSrgb({ value }: { value: number }): number {
 	const clamped = clamp({ value, min: 0, max: 1 });
 	return clamped <= 0.0031308
 		? clamped * 12.92
-		: 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+		: 1.055 * clamped ** (1 / 2.4) - 0.055;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

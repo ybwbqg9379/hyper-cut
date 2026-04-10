@@ -48,7 +48,7 @@ export class SplitElementsCommand extends Command {
 				return track;
 			}
 
-			let elements = track.elements.flatMap((element) => {
+			const elements = track.elements.flatMap((element) => {
 				const shouldSplit = elementsToSplit.some(
 					(target) => target.elementId === element.id,
 				);

@@ -21,7 +21,6 @@ import {
 	decomposeAnimationValue,
 } from "./binding-values";
 import {
-	getBezierPoint,
 	getDefaultLeftHandle,
 	getDefaultRightHandle,
 	solveBezierProgressForTime,

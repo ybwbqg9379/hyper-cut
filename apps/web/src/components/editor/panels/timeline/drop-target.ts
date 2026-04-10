@@ -106,7 +106,7 @@ export function computeDropTarget({
 	targetElementTypes,
 }: ComputeDropTargetParams): DropTarget {
 	const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
-	const mainTrackIndex = tracks.overlay.length;
+	const _mainTrackIndex = tracks.overlay.length;
 	const xPosition =
 		typeof startTimeOverride === "number"
 			? startTimeOverride

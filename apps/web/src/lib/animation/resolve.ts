@@ -2,7 +2,6 @@ import type {
 	AnimationColorPropertyPath,
 	AnimationNumericPropertyPath,
 	AnimationPath,
-	AnimationPropertyPath,
 	AnimationValueForPath,
 	ElementAnimations,
 } from "@/lib/animation/types";

@@ -112,14 +112,13 @@ export function useTimelinePlayhead({
 			lastMouseXRef.current = event.clientX;
 		},
 		[
-			duration,
-			zoomLevel,
-			seek,
-			rulerRef,
-			activeProject.settings.fps,
-			isShiftHeldRef,
-			editor.scenes,
-			editor.timeline,
+			duration, 
+			zoomLevel, 
+			seek, 
+			rulerRef, 
+			activeProject.settings.fps, 
+			isShiftHeldRef, 
+			editor.scenes
 		],
 	);
 

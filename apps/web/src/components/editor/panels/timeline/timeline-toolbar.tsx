@@ -27,7 +27,6 @@ import {
 	SnowIcon,
 	ScissorIcon,
 	MagnetIcon,
-	Link04Icon,
 	SearchAddIcon,
 	SearchMinusIcon,
 	Copy01Icon,

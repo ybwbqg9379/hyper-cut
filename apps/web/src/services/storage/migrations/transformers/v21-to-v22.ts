@@ -17,7 +17,7 @@ interface LinearRgba {
 function srgbToLinear({ value }: { value: number }): number {
 	return value <= 0.04045
 		? value / 12.92
-		: Math.pow((value + 0.055) / 1.055, 2.4);
+		: ((value + 0.055) / 1.055) ** 2.4;
 }
 
 function parseColorToLinearRgba({
@@ -57,12 +57,7 @@ interface LegacyVectorValue {
 	y: number;
 }
 
-interface LegacyVectorKeyframe {
-	id: string;
-	time: number;
-	value: LegacyVectorValue;
-	interpolation: LegacyInterpolation;
-}
+
 
 interface MigratedAnimationChannel {
 	binding: ProjectRecord;

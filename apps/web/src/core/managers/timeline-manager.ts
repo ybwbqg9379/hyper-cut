@@ -11,7 +11,6 @@ import type {
 import { calculateTotalDuration } from "@/lib/timeline";
 import {
 	findTrackInSceneTracks,
-	updateElementInSceneTracks,
 } from "@/lib/timeline/track-element-update";
 import {
 	canElementBeHidden,
