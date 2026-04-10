@@ -52,14 +52,14 @@ const ASSET_SECTIONS: AssetSection[] = [
 		cols: "2",
 		assets: [
 			{
-				src: "/logos/opencut/symbol.svg",
+				src: "/logos/hypercut/symbol.svg",
 				theme: "dark",
 				label: "Symbol",
 				width: 400,
 				height: 400,
 			},
 			{
-				src: "/logos/opencut/symbol-light.svg",
+				src: "/logos/hypercut/symbol-light.svg",
 				theme: "light",
 				label: "Symbol",
 				width: 400,
@@ -74,28 +74,28 @@ const ASSET_SECTIONS: AssetSection[] = [
 		cols: "2",
 		assets: [
 			{
-				src: "/logos/opencut/logo.svg",
+				src: "/logos/hypercut/logo.svg",
 				theme: "dark",
 				label: "Logo",
 				width: 1809,
 				height: 400,
 			},
 			{
-				src: "/logos/opencut/logo-light.svg",
+				src: "/logos/hypercut/logo-light.svg",
 				theme: "light",
 				label: "Logo",
 				width: 1809,
 				height: 400,
 			},
 			{
-				src: "/logos/opencut/text.svg",
+				src: "/logos/hypercut/text.svg",
 				theme: "dark",
 				label: "Text",
 				width: 1760,
 				height: 400,
 			},
 			{
-				src: "/logos/opencut/text-light.svg",
+				src: "/logos/hypercut/text-light.svg",
 				theme: "light",
 				label: "Text",
 				width: 1760,

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "../ui/button";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -10,7 +10,7 @@ import {
 } from "../ui/dropdown-menu";
 import { RenameProjectDialog } from "./dialogs/rename-project-dialog";
 import { DeleteProjectDialog } from "./dialogs/delete-project-dialog";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ExportButton } from "./export-button";
 import { ThemeToggle } from "../theme-toggle";
 import { DEFAULT_LOGO_URL, } from "@/constants/site-constants";
@@ -22,11 +22,11 @@ import { ShortcutsDialog } from "./dialogs/shortcuts-dialog";
 import Image from "next/image";
 import { cn } from "@/utils/ui";
 
-export function EditorHeader() {
+export function EditorHeader({ isEmbed = false }: { isEmbed?: boolean }) {
 	return (
 		<header className="bg-background flex h-[3.4rem] items-center justify-between px-4 pt-0.5 border-b border-border/40">
 			<div className="flex items-center gap-1.5 ">
-				<ProjectDropdown />
+				<ProjectDropdown isEmbed={isEmbed} />
 				<EditableProjectName />
 			</div>
 			<nav className="flex items-center gap-3">
@@ -37,14 +37,25 @@ export function EditorHeader() {
 	);
 }
 
-function ProjectDropdown() {
+function ProjectDropdown({ isEmbed: _isEmbed = false }: { isEmbed?: boolean }) {
 	const [openDialog, setOpenDialog] = useState<
 		"delete" | "rename" | "shortcuts" | null
 	>(null);
 	const [isExiting, setIsExiting] = useState(false);
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
+
+	// Build the /projects URL preserving embed and theme params
+	const buildProjectsUrl = useCallback(() => {
+		const params = new URLSearchParams();
+		if (searchParams.get("embed") === "true") params.set("embed", "true");
+		const themeParam = searchParams.get("theme");
+		if (themeParam) params.set("theme", themeParam);
+		const suffix = params.toString() ? `?${params.toString()}` : "";
+		return `/projects${suffix}`;
+	}, [searchParams]);
 
 	const handleExit = async () => {
 		if (isExiting) return;
@@ -57,7 +68,7 @@ function ProjectDropdown() {
 			console.error("Failed to prepare project exit:", error);
 		} finally {
 			editor.project.closeProject();
-			router.push("/projects");
+			router.push(buildProjectsUrl());
 		}
 	};
 
@@ -89,7 +100,7 @@ function ProjectDropdown() {
 				await editor.project.deleteProjects({
 					ids: [activeProject.metadata.id],
 				});
-				router.push("/projects");
+				router.push(buildProjectsUrl());
 			} catch (error) {
 				toast.error("Failed to delete project", {
 					description:

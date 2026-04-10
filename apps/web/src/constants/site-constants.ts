@@ -24,18 +24,18 @@ export const EXTERNAL_TOOLS: ExternalTool[] = [
 		name: "Marble",
 		description:
 			"Modern headless CMS for content management and the blog for HyperCut",
-		url: "https://marblecms.com?utm_source=opencut",
+		url: "https://marblecms.com?utm_source=hypercut",
 		icon: OcMarbleIcon,
 	},
 	{
 		name: "Databuddy",
 		description: "GDPR compliant analytics and user insights for HyperCut",
-		url: "https://databuddy.cc?utm_source=opencut",
+		url: "https://databuddy.cc?utm_source=hypercut",
 		icon: OcDataBuddyIcon,
 	},
 ];
 
-export const DEFAULT_LOGO_URL = "/logos/hypercut/logo.svg";
+export const DEFAULT_LOGO_URL = "/logos/hypercut/svg/logo.svg";
 
 export const SOCIAL_LINKS = {
 	x: "https://x.com/hypercutapp",
@@ -60,14 +60,14 @@ export type Sponsor = {
 export const SPONSORS: Sponsor[] = [
 	{
 		name: "Fal.ai",
-		url: "https://fal.ai?utm_source=opencut",
+		url: "https://fal.ai?utm_source=hypercut",
 		logo: "/logos/others/fal.svg",
 		description: "Generative image, video, and audio models all in one place.",
 		invertOnDark: true,
 	},
 	{
 		name: "Vercel",
-		url: "https://vercel.com?utm_source=opencut",
+		url: "https://vercel.com?utm_source=hypercut",
 		logo: "/logos/others/vercel.svg",
 		description: "Platform where we deploy and host HyperCut.",
 		invertOnDark: true,
