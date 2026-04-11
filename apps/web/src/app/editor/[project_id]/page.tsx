@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import {
 	ResizablePanelGroup,
 	ResizablePanel,
@@ -20,13 +20,15 @@ import { MobileGate } from "@/components/editor/mobile-gate";
 
 export default function Editor() {
 	const params = useParams();
+	const searchParams = useSearchParams();
 	const projectId = params.project_id as string;
+	const isEmbed = searchParams.get("embed") === "true";
 
 	return (
 		<MobileGate>
 			<EditorProvider projectId={projectId}>
 				<div className="bg-background flex h-screen w-screen flex-col overflow-hidden">
-					<EditorHeader />
+					{!isEmbed && <EditorHeader isEmbed={isEmbed} />}
 					<div className="min-h-0 min-w-0 flex-1">
 						<EditorLayout />
 					</div>
