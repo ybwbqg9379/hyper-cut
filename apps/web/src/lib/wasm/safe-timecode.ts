@@ -36,7 +36,6 @@ import {
 	type MediaTime,
 } from "opencut-wasm";
 
-
 /**
  * Safely converts any time value to a valid MediaTime (i64 ticks) by rounding.
  * The upstream WASM API requires MediaTime to be an integer.
