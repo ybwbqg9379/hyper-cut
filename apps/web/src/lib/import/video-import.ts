@@ -36,9 +36,7 @@ export async function fetchVideoAsFile(
 	const name = lastSegment.includes(".") ? lastSegment : fallbackName;
 
 	// Ensure the blob has a video MIME type
-	const mimeType = blob.type.startsWith("video/")
-		? blob.type
-		: "video/mp4";
+	const mimeType = blob.type.startsWith("video/") ? blob.type : "video/mp4";
 
 	return new File([blob], name, { type: mimeType });
 }

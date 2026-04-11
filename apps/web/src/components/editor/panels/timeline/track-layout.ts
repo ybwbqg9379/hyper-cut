@@ -1,8 +1,5 @@
 import type { TrackType } from "@/lib/timeline";
-import {
-	TIMELINE_TRACK_GAP_PX,
-	TIMELINE_TRACK_HEIGHTS_PX,
-} from "./layout";
+import { TIMELINE_TRACK_GAP_PX, TIMELINE_TRACK_HEIGHTS_PX } from "./layout";
 
 export function getTrackHeight({ type }: { type: TrackType }): number {
 	return TIMELINE_TRACK_HEIGHTS_PX[type];
@@ -18,7 +15,8 @@ export function getCumulativeHeightBefore({
 	return tracks
 		.slice(0, trackIndex)
 		.reduce(
-			(sum, track) => sum + getTrackHeight({ type: track.type }) + TIMELINE_TRACK_GAP_PX,
+			(sum, track) =>
+				sum + getTrackHeight({ type: track.type }) + TIMELINE_TRACK_GAP_PX,
 			0,
 		);
 }

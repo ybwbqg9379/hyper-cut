@@ -110,7 +110,10 @@ export class RendererManager {
 				return { success: false, error: "Failed to create image" };
 			}
 
-			const timecode = safeFormatTimecode({ time: renderTime, rate: fps })?.replace(/:/g, "-");
+			const timecode = safeFormatTimecode({
+				time: renderTime,
+				rate: fps,
+			})?.replace(/:/g, "-");
 			const safeName =
 				activeProject.metadata.name.replace(/[<>:"/\\|?*]/g, "-").trim() ||
 				"snapshot";

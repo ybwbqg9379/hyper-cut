@@ -37,9 +37,8 @@ export function useBoxSelect<TId>({
 	getIsAdditiveSelection?: (event: React.MouseEvent<Element>) => boolean;
 	isEnabled?: boolean;
 }) {
-	const [selectionBox, setSelectionBox] = useState<SelectionBoxState<TId> | null>(
-		null,
-	);
+	const [selectionBox, setSelectionBox] =
+		useState<SelectionBoxState<TId> | null>(null);
 	const justFinishedSelectingRef = useRef(false);
 	const shouldStartSelectionCheck = shouldStartSelection ?? (() => true);
 	const getIsAdditiveSelectionCheck =
@@ -142,7 +141,8 @@ export function useBoxSelect<TId>({
 		}
 
 		const previousBodyUserSelect = document.body.style.userSelect;
-		const previousContainerUserSelect = containerRef.current?.style.userSelect ?? "";
+		const previousContainerUserSelect =
+			containerRef.current?.style.userSelect ?? "";
 
 		document.body.style.userSelect = "none";
 		if (containerRef.current) {

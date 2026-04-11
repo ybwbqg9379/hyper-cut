@@ -158,9 +158,13 @@ export class PlaybackManager {
 		if (!this.isPlaying) return;
 
 		const fps = this.editor.project.getActive()?.settings.fps;
-		const elapsedSeconds = (performance.now() - this.playbackStartWallTime) / 1000;
-		const rawTime = this.playbackStartTime + Math.round(elapsedSeconds * TICKS_PER_SECOND);
-		const newTime = fps ? (safeRoundToFrame({ time: rawTime, rate: fps }) ?? rawTime) : rawTime;
+		const elapsedSeconds =
+			(performance.now() - this.playbackStartWallTime) / 1000;
+		const rawTime =
+			this.playbackStartTime + Math.round(elapsedSeconds * TICKS_PER_SECOND);
+		const newTime = fps
+			? (safeRoundToFrame({ time: rawTime, rate: fps }) ?? rawTime)
+			: rawTime;
 		const maxTime = this.editor.timeline.getTotalDuration();
 
 		if (maxTime > 0 && newTime >= maxTime) {

@@ -170,7 +170,9 @@ function ExportPopover({
 										className="border-none"
 									>
 										<SectionHeader className="py-2.5 px-4 hover:bg-accent/30 transition-colors">
-											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Format</SectionTitle>
+											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+												Format
+											</SectionTitle>
 										</SectionHeader>
 										<SectionContent className="px-4 pb-4">
 											<RadioGroup
@@ -183,26 +185,50 @@ function ExportPopover({
 												className="gap-3"
 											>
 												<div className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent/20 transition-colors cursor-pointer group">
-													<RadioGroupItem value="mp4" id="mp4" className="border-primary/50" />
-													<Label htmlFor="mp4" className="text-sm font-normal cursor-pointer flex-1">
+													<RadioGroupItem
+														value="mp4"
+														id="mp4"
+														className="border-primary/50"
+													/>
+													<Label
+														htmlFor="mp4"
+														className="text-sm font-normal cursor-pointer flex-1"
+													>
 														MP4 (H.264)
-														<span className="block text-[10px] text-muted-foreground mt-0.5">Better compatibility for sharing</span>
+														<span className="block text-[10px] text-muted-foreground mt-0.5">
+															Better compatibility for sharing
+														</span>
 													</Label>
 												</div>
 												<div className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent/20 transition-colors cursor-pointer group">
-													<RadioGroupItem value="webm" id="webm" className="border-primary/50" />
-													<Label htmlFor="webm" className="text-sm font-normal cursor-pointer flex-1">
+													<RadioGroupItem
+														value="webm"
+														id="webm"
+														className="border-primary/50"
+													/>
+													<Label
+														htmlFor="webm"
+														className="text-sm font-normal cursor-pointer flex-1"
+													>
 														WebM (VP9)
-														<span className="block text-[10px] text-muted-foreground mt-0.5">Optimized for web performance</span>
+														<span className="block text-[10px] text-muted-foreground mt-0.5">
+															Optimized for web performance
+														</span>
 													</Label>
 												</div>
 											</RadioGroup>
 										</SectionContent>
 									</Section>
 
-									<Section collapsible defaultOpen={true} className="border-t border-border/40">
+									<Section
+										collapsible
+										defaultOpen={true}
+										className="border-t border-border/40"
+									>
 										<SectionHeader className="py-2.5 px-4 hover:bg-accent/30 transition-colors">
-											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Quality</SectionTitle>
+											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+												Quality
+											</SectionTitle>
 										</SectionHeader>
 										<SectionContent className="px-4 pb-4">
 											<RadioGroup
@@ -216,18 +242,18 @@ function ExportPopover({
 											>
 												{["low", "medium", "high", "very_high"].map((q) => (
 													<div key={q} className="relative">
-														<RadioGroupItem 
-															value={q} 
-															id={`q-${q}`} 
-															className="sr-only" 
+														<RadioGroupItem
+															value={q}
+															id={`q-${q}`}
+															className="sr-only"
 														/>
 														<Label
 															htmlFor={`q-${q}`}
 															className={cn(
 																"flex h-9 items-center justify-center rounded-md border text-xs font-medium cursor-pointer transition-all",
-																quality === q 
-																	? "bg-primary/10 border-primary text-primary shadow-sm" 
-																	: "bg-transparent border-border/60 text-muted-foreground hover:border-border hover:bg-accent/30"
+																quality === q
+																	? "bg-primary/10 border-primary text-primary shadow-sm"
+																	: "bg-transparent border-border/60 text-muted-foreground hover:border-border hover:bg-accent/30",
 															)}
 														>
 															{q.replace("_", " ").toUpperCase()}
@@ -238,13 +264,22 @@ function ExportPopover({
 										</SectionContent>
 									</Section>
 
-									<Section collapsible defaultOpen={false} className="border-t border-border/40">
+									<Section
+										collapsible
+										defaultOpen={false}
+										className="border-t border-border/40"
+									>
 										<SectionHeader className="py-2.5 px-4 hover:bg-accent/30 transition-colors">
-											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Audio</SectionTitle>
+											<SectionTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+												Audio
+											</SectionTitle>
 										</SectionHeader>
 										<SectionContent className="px-4 pb-4">
 											<div className="flex items-center justify-between p-2 rounded-md bg-accent/20">
-												<Label htmlFor="include-audio" className="text-sm cursor-pointer">
+												<Label
+													htmlFor="include-audio"
+													className="text-sm cursor-pointer"
+												>
 													Include audio track
 												</Label>
 												<Checkbox
@@ -260,8 +295,8 @@ function ExportPopover({
 								</div>
 
 								<div className="p-4 border-t border-border/40 bg-accent/5">
-									<Button 
-										onClick={handleExport} 
+									<Button
+										onClick={handleExport}
 										className="w-full gap-2 h-10 bg-linear-to-r from-[#2567EC] to-[#38BDF8] hover:opacity-90 transition-opacity"
 									>
 										<Download className="size-4" />

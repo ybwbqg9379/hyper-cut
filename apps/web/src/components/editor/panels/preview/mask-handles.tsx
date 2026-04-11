@@ -106,35 +106,35 @@ export function MaskHandles({
 					onPointerUp={onPointerUp}
 				/>
 			)}
-			{def.overlayShape === "box" && rectangleOutlineProps && (
-				def.buildOverlayPath ? (
-						<>
-							<BoundingBoxOutline {...rectangleOutlineProps} dashed />
-							<ShapeOutline
-								{...rectangleOutlineProps}
-								pathData={def.buildOverlayPath({
-									width: rectangleOutlineProps.outlineWidth,
-									height: rectangleOutlineProps.outlineHeight,
-								})}
-								onPointerDown={(event) =>
-									handlePointerDown({ event, handleId: "position" })
-								}
-								onPointerMove={onPointerMove}
-								onPointerUp={onPointerUp}
-							/>
-						</>
-					) : (
-						<BoundingBoxOutline
+			{def.overlayShape === "box" &&
+				rectangleOutlineProps &&
+				(def.buildOverlayPath ? (
+					<>
+						<BoundingBoxOutline {...rectangleOutlineProps} dashed />
+						<ShapeOutline
 							{...rectangleOutlineProps}
-							cursor="cursor-move"
+							pathData={def.buildOverlayPath({
+								width: rectangleOutlineProps.outlineWidth,
+								height: rectangleOutlineProps.outlineHeight,
+							})}
 							onPointerDown={(event) =>
 								handlePointerDown({ event, handleId: "position" })
 							}
 							onPointerMove={onPointerMove}
 							onPointerUp={onPointerUp}
 						/>
-					)
-			)}
+					</>
+				) : (
+					<BoundingBoxOutline
+						{...rectangleOutlineProps}
+						cursor="cursor-move"
+						onPointerDown={(event) =>
+							handlePointerDown({ event, handleId: "position" })
+						}
+						onPointerMove={onPointerMove}
+						onPointerUp={onPointerUp}
+					/>
+				))}
 			{handlePositions.map((handle) => {
 				const screen = toOverlay({ canvasX: handle.x, canvasY: handle.y });
 

@@ -187,7 +187,10 @@ function extrapolateScalarEdge({
 		return edgeKey.value;
 	}
 
-	return edgeKey.value + ((time - edgeKey.time) / span) * (neighborKey.value - edgeKey.value);
+	return (
+		edgeKey.value +
+		((time - edgeKey.time) / span) * (neighborKey.value - edgeKey.value)
+	);
 }
 
 export function getScalarSegmentInterpolation({

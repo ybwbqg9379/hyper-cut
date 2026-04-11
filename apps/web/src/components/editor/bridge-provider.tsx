@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { ALLOWED_BRIDGE_ORIGINS } from "@/constants/site-constants";
 
-
 export function BridgeProvider() {
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent) => {
@@ -24,7 +23,7 @@ export function BridgeProvider() {
 				case "hypercut:ping":
 					event.source?.postMessage(
 						{ type: "hypercut:pong", payload: { version: "0.4.0" } },
-						{ targetOrigin: event.origin }
+						{ targetOrigin: event.origin },
 					);
 					break;
 				default:
@@ -33,7 +32,7 @@ export function BridgeProvider() {
 		};
 
 		window.addEventListener("message", handleMessage);
-		
+
 		// Notify parent that bridge is ready
 		if (window.parent !== window) {
 			window.parent.postMessage({ type: "hypercut:ready" }, "*");

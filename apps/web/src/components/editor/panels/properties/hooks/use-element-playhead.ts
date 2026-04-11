@@ -15,8 +15,7 @@ export function useElementPlayhead({
 		elementDuration: duration,
 	});
 	const isPlayheadWithinElementRange =
-		playheadTime >= startTime &&
-		playheadTime <= startTime + duration;
+		playheadTime >= startTime && playheadTime <= startTime + duration;
 
 	return { localTime, isPlayheadWithinElementRange };
 }

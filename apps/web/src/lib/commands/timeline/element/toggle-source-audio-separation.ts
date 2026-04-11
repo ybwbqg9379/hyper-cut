@@ -35,9 +35,7 @@ export class ToggleSourceAudioSeparationCommand extends Command {
 			...this.savedState.overlay,
 			this.savedState.main,
 			...this.savedState.audio,
-		].find(
-			(track) => track.id === this.params.trackId,
-		);
+		].find((track) => track.id === this.params.trackId);
 		if (!sourceTrack) {
 			return;
 		}
@@ -61,8 +59,7 @@ export class ToggleSourceAudioSeparationCommand extends Command {
 			return;
 		}
 
-		const mediaAsset = editor
-			.media
+		const mediaAsset = editor.media
 			.getAssets()
 			.find((asset) => asset.id === videoElement.mediaId);
 		if (!canExtractSourceAudio(videoElement, mediaAsset)) {
@@ -124,7 +121,8 @@ function updateSourceAudioEnabled({
 		tracks,
 		trackId,
 		elementId,
-		elementPredicate: (element): element is VideoElement => element.type === "video",
+		elementPredicate: (element): element is VideoElement =>
+			element.type === "video",
 		update: (element) => ({
 			...element,
 			isSourceAudioEnabled,

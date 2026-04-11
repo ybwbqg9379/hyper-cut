@@ -113,7 +113,14 @@ export function useBookmarkDrag({
 				snapPoint: result.snapPoint,
 			};
 		},
-		[snappingEnabled, tracks, playheadTime, bookmarks, zoomLevel, isShiftHeldRef],
+		[
+			snappingEnabled,
+			tracks,
+			playheadTime,
+			bookmarks,
+			zoomLevel,
+			isShiftHeldRef,
+		],
 	);
 
 	useEffect(() => {
@@ -148,7 +155,11 @@ export function useBookmarkDrag({
 					zoomLevel,
 					scrollLeft,
 				});
-			const frameSnappedTime = safeRoundToFrame({ time: Math.max(0, Math.min(mouseTime, duration)), rate: activeProject.settings.fps }) ?? Math.max(0, Math.min(mouseTime, duration));
+				const frameSnappedTime =
+					safeRoundToFrame({
+						time: Math.max(0, Math.min(mouseTime, duration)),
+						rate: activeProject.settings.fps,
+					}) ?? Math.max(0, Math.min(mouseTime, duration));
 				const { snappedTime: initialTime } = getSnapResult({
 					rawTime: frameSnappedTime,
 					excludeBookmarkTime: bookmarkTime,
@@ -176,9 +187,13 @@ export function useBookmarkDrag({
 				scrollLeft,
 			});
 			const clampedTime = Math.max(0, Math.min(mouseTime, duration));
-		const frameSnappedTime = safeRoundToFrame({ time: clampedTime, rate: activeProject.settings.fps }) ?? clampedTime;
-		const snapResult = getSnapResult({
-			rawTime: frameSnappedTime,
+			const frameSnappedTime =
+				safeRoundToFrame({
+					time: clampedTime,
+					rate: activeProject.settings.fps,
+				}) ?? clampedTime;
+			const snapResult = getSnapResult({
+				rawTime: frameSnappedTime,
 				excludeBookmarkTime: dragState.bookmarkTime,
 			});
 

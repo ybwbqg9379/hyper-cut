@@ -68,9 +68,7 @@ function migrateElementVolumes({
 				return {
 					...element,
 					volume:
-						typeof legacyVolume === "number"
-							? linearGainToDb(legacyVolume)
-							: 0,
+						typeof legacyVolume === "number" ? linearGainToDb(legacyVolume) : 0,
 				};
 			});
 

@@ -115,11 +115,9 @@ function getDragDropTarget({
 	const scrollContainer = tracksScrollRef.current;
 	if (!containerRect || !scrollContainer) return null;
 
-	const sourceTrack = [
-		...tracks.overlay,
-		tracks.main,
-		...tracks.audio,
-	].find(({ id }) => id === trackId);
+	const sourceTrack = [...tracks.overlay, tracks.main, ...tracks.audio].find(
+		({ id }) => id === trackId,
+	);
 	const movingElement = sourceTrack?.elements.find(
 		({ id }) => id === elementId,
 	);
@@ -171,11 +169,7 @@ export function useElementInteraction({
 	const isShiftHeldRef = useShiftKey();
 	const sceneTracks = editor.scenes.getActiveScene().tracks;
 	const tracks = useMemo(
-		() => [
-			...sceneTracks.overlay,
-			sceneTracks.main,
-			...sceneTracks.audio,
-		],
+		() => [...sceneTracks.overlay, sceneTracks.main, ...sceneTracks.audio],
 		[sceneTracks],
 	);
 	const {
@@ -313,17 +307,18 @@ export function useElementInteraction({
 						zoomLevel,
 						scrollLeft,
 					});
-				const adjustedTime = Math.max(
-					0,
-					mouseTime - pendingDragRef.current.clickOffsetTime,
-				);
-				const snappedTime = safeRoundToFrame({
-					time: adjustedTime,
-					rate: activeProject.settings.fps,
-				}) ?? adjustedTime;
-				startDrag({
-					...pendingDragRef.current,
-					initialCurrentTime: snappedTime,
+					const adjustedTime = Math.max(
+						0,
+						mouseTime - pendingDragRef.current.clickOffsetTime,
+					);
+					const snappedTime =
+						safeRoundToFrame({
+							time: adjustedTime,
+							rate: activeProject.settings.fps,
+						}) ?? adjustedTime;
+					startDrag({
+						...pendingDragRef.current,
+						initialCurrentTime: snappedTime,
 						initialCurrentMouseY: clientY,
 					});
 					startedDragThisEvent = true;
@@ -363,7 +358,8 @@ export function useElementInteraction({
 			});
 			const adjustedTime = Math.max(0, mouseTime - dragState.clickOffsetTime);
 			const fps = activeProject.settings.fps;
-			const frameSnappedTime = safeRoundToFrame({ time: adjustedTime, rate: fps }) ?? adjustedTime;
+			const frameSnappedTime =
+				safeRoundToFrame({ time: adjustedTime, rate: fps }) ?? adjustedTime;
 
 			const sourceTrack = tracks.find(({ id }) => id === dragState.trackId);
 			const movingElement = sourceTrack?.elements.find(
@@ -405,24 +401,25 @@ export function useElementInteraction({
 		document.addEventListener("mousemove", handleMouseMove);
 		return () => document.removeEventListener("mousemove", handleMouseMove);
 	}, [
-		dragState.isDragging, 
-		dragState.clickOffsetTime, 
-		dragState.elementId, 
-		dragState.startMouseY, 
-		dragState.trackId, 
-		zoomLevel, 
-		isElementSelected, 
-		selectElement, 
-		editor.project, 
-		timelineRef, 
-		tracksScrollRef, 
-		tracksContainerRef, 
-		headerRef, 
-		tracks, 
-		isPendingDrag, 
-		startDrag, 
-		getDragSnapResult, 
-		onSnapPointChange, sceneTracks
+		dragState.isDragging,
+		dragState.clickOffsetTime,
+		dragState.elementId,
+		dragState.startMouseY,
+		dragState.trackId,
+		zoomLevel,
+		isElementSelected,
+		selectElement,
+		editor.project,
+		timelineRef,
+		tracksScrollRef,
+		tracksContainerRef,
+		headerRef,
+		tracks,
+		isPendingDrag,
+		startDrag,
+		getDragSnapResult,
+		onSnapPointChange,
+		sceneTracks,
 	]);
 
 	useEffect(() => {
@@ -475,7 +472,8 @@ export function useElementInteraction({
 				return;
 			}
 			const movingElement =
-				sourceTrack.elements.find(({ id }) => id === dragState.elementId) ?? null;
+				sourceTrack.elements.find(({ id }) => id === dragState.elementId) ??
+				null;
 			if (
 				movingElement &&
 				!dropTarget.isNewTrack &&
@@ -523,20 +521,21 @@ export function useElementInteraction({
 		document.addEventListener("mouseup", handleMouseUp);
 		return () => document.removeEventListener("mouseup", handleMouseUp);
 	}, [
-		dragState.isDragging, 
-		dragState.elementId, 
-		dragState.startMouseY, 
-		dragState.trackId, 
-		dragState.currentTime, 
-		zoomLevel, 
-		tracks, 
-		endDrag, 
-		onSnapPointChange, 
-		editor.timeline, 
-		tracksContainerRef, 
-		tracksScrollRef, 
-		headerRef, 
-		selectElement, sceneTracks
+		dragState.isDragging,
+		dragState.elementId,
+		dragState.startMouseY,
+		dragState.trackId,
+		dragState.currentTime,
+		zoomLevel,
+		tracks,
+		endDrag,
+		onSnapPointChange,
+		editor.timeline,
+		tracksContainerRef,
+		tracksScrollRef,
+		headerRef,
+		selectElement,
+		sceneTracks,
 	]);
 
 	useEffect(() => {

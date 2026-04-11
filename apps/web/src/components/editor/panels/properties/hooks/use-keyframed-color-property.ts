@@ -4,7 +4,10 @@ import {
 	hasKeyframesForPath,
 	upsertElementKeyframe,
 } from "@/lib/animation";
-import type { AnimationPropertyPath, ElementAnimations } from "@/lib/animation/types";
+import type {
+	AnimationPropertyPath,
+	ElementAnimations,
+} from "@/lib/animation/types";
 import type { TimelineElement } from "@/lib/timeline";
 
 export function useKeyframedColorProperty({
@@ -28,7 +31,10 @@ export function useKeyframedColorProperty({
 }) {
 	const editor = useEditor();
 
-	const hasAnimatedKeyframes = hasKeyframesForPath({ animations, propertyPath });
+	const hasAnimatedKeyframes = hasKeyframesForPath({
+		animations,
+		propertyPath,
+	});
 	const keyframeAtTime = isPlayheadWithinElementRange
 		? getKeyframeAtTime({ animations, propertyPath, time: localTime })
 		: null;
@@ -59,7 +65,9 @@ export function useKeyframedColorProperty({
 		}
 
 		editor.timeline.previewElements({
-			updates: [{ trackId, elementId, updates: buildBaseUpdates({ value: color }) }],
+			updates: [
+				{ trackId, elementId, updates: buildBaseUpdates({ value: color }) },
+			],
 		});
 	};
 
@@ -72,14 +80,22 @@ export function useKeyframedColorProperty({
 
 		if (keyframeIdAtTime) {
 			editor.timeline.removeKeyframes({
-				keyframes: [{ trackId, elementId, propertyPath, keyframeId: keyframeIdAtTime }],
+				keyframes: [
+					{ trackId, elementId, propertyPath, keyframeId: keyframeIdAtTime },
+				],
 			});
 			return;
 		}
 
 		editor.timeline.upsertKeyframes({
 			keyframes: [
-				{ trackId, elementId, propertyPath, time: localTime, value: resolvedColor },
+				{
+					trackId,
+					elementId,
+					propertyPath,
+					time: localTime,
+					value: resolvedColor,
+				},
 			],
 		});
 	};

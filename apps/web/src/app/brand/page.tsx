@@ -176,8 +176,8 @@ export default function BrandPage() {
 						HyperCut is open source — the code is free to use under its license.
 						That license does not cover the name or logo. You can say you use
 						HyperCut, that your project integrates with HyperCut, or that it was
-						built on top of HyperCut. You cannot name your product HyperCut, imply
-						we made or endorse your product, or use the marks commercially
+						built on top of HyperCut. You cannot name your product HyperCut,
+						imply we made or endorse your product, or use the marks commercially
 						without asking first. For anything unclear, reach out at{" "}
 						<Link
 							href="mailto:brand@hypercut.app"

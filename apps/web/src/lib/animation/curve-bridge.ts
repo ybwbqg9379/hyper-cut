@@ -23,10 +23,7 @@ export function getNormalizedCubicBezierForScalarSegment({
 }): NormalizedCubicBezier | null {
 	const spanTime = rightKey.time - leftKey.time;
 	const spanValue = rightKey.value - leftKey.value;
-	if (
-		spanTime === 0 ||
-		Math.abs(spanValue) <= VALUE_EPSILON
-	) {
+	if (spanTime === 0 || Math.abs(spanValue) <= VALUE_EPSILON) {
 		return null;
 	}
 
@@ -57,10 +54,7 @@ export function getCurveHandlesForNormalizedCubicBezier({
 } | null {
 	const spanTime = rightKey.time - leftKey.time;
 	const spanValue = rightKey.value - leftKey.value;
-	if (
-		spanTime === 0 ||
-		Math.abs(spanValue) <= VALUE_EPSILON
-	) {
+	if (spanTime === 0 || Math.abs(spanValue) <= VALUE_EPSILON) {
 		return null;
 	}
 

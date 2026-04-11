@@ -1,7 +1,11 @@
 import { Command, type CommandResult } from "@/lib/commands/base-command";
 import type { SceneTracks } from "@/lib/timeline";
 import { EditorCore } from "@/core";
-import { canTrackHaveAudio, findTrackInSceneTracks, updateTrackInSceneTracks } from "@/lib/timeline";
+import {
+	canTrackHaveAudio,
+	findTrackInSceneTracks,
+	updateTrackInSceneTracks,
+} from "@/lib/timeline";
 
 export class ToggleTrackMuteCommand extends Command {
 	private savedState: SceneTracks | null = null;

@@ -17,7 +17,11 @@ function Dialog({
 		onOpenChange,
 	});
 	return (
-		<DialogPrimitive.Root open={open} onOpenChange={handleOpenChange} {...props} />
+		<DialogPrimitive.Root
+			open={open}
+			onOpenChange={handleOpenChange}
+			{...props}
+		/>
 	);
 }
 

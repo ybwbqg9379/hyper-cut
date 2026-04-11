@@ -69,17 +69,12 @@ function NewEditorPageContent() {
 
 				const files: File[] = [];
 				for (let i = 0; i < videoUrls.length; i++) {
-					setStatus(
-						`Downloading video ${i + 1} of ${videoUrls.length}...`,
-					);
+					setStatus(`Downloading video ${i + 1} of ${videoUrls.length}...`);
 					try {
 						const file = await fetchVideoAsFile(videoUrls[i], i);
 						files.push(file);
 					} catch (fetchError) {
-						console.error(
-							`Failed to fetch video ${i + 1}:`,
-							fetchError,
-						);
+						console.error(`Failed to fetch video ${i + 1}:`, fetchError);
 						// Continue with other videos even if one fails
 					}
 				}

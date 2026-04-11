@@ -1,8 +1,4 @@
-export type TPlatformLayout =
-	| "tiktok"
-	| "instagram"
-	| "youtube"
-	| "snapchat";
+export type TPlatformLayout = "tiktok" | "instagram" | "youtube" | "snapchat";
 
 export const PREVIEW_ZOOM_PRESETS = [25, 50, 75, 100, 150, 200];
 

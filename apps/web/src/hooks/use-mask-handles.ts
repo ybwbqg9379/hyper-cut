@@ -239,14 +239,12 @@ export function useMaskHandles({
 	);
 
 	const handlePointerUp = useCallback(() => {
-			if (dragStateRef.current) {
-				editor.timeline.commitPreview();
-				clearMaskHandleState();
-			}
-			releaseCapturedPointer();
-		},
-		[clearMaskHandleState, editor, releaseCapturedPointer],
-	);
+		if (dragStateRef.current) {
+			editor.timeline.commitPreview();
+			clearMaskHandleState();
+		}
+		releaseCapturedPointer();
+	}, [clearMaskHandleState, editor, releaseCapturedPointer]);
 
 	return {
 		selectedWithMask,

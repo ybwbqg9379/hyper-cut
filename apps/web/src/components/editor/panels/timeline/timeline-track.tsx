@@ -69,9 +69,9 @@ export function TimelineTrackContent({
 				type="button"
 				className="absolute inset-0 m-0 size-full appearance-none border-0 bg-transparent p-0"
 				aria-label={`Select ${track.name} track`}
-			onMouseUp={(event) => {
+				onMouseUp={(event) => {
 					if (shouldIgnoreClick?.()) return;
-				onTrackMouseUp?.(event);
+					onTrackMouseUp?.(event);
 				}}
 				onMouseDown={(event) => {
 					event.preventDefault();

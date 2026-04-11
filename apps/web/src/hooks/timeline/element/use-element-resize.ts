@@ -186,14 +186,17 @@ export function useTimelineElementResize({
 		({ clientX }: { clientX: number }) => {
 			if (!resizing) return;
 
-		const deltaX = clientX - resizing.startX;
-		let deltaTime = Math.round(
-			(deltaX / (BASE_TIMELINE_PIXELS_PER_SECOND * zoomLevel)) * TICKS_PER_SECOND,
-		);
-		let resizeSnapPoint: SnapPoint | null = null;
+			const deltaX = clientX - resizing.startX;
+			let deltaTime = Math.round(
+				(deltaX / (BASE_TIMELINE_PIXELS_PER_SECOND * zoomLevel)) *
+					TICKS_PER_SECOND,
+			);
+			let resizeSnapPoint: SnapPoint | null = null;
 
-		const projectFps = editor.project.getActive().settings.fps;
-		const minDuration = Math.round(TICKS_PER_SECOND * projectFps.denominator / projectFps.numerator);
+			const projectFps = editor.project.getActive().settings.fps;
+			const minDuration = Math.round(
+				(TICKS_PER_SECOND * projectFps.denominator) / projectFps.numerator,
+			);
 			const shouldSnap = snappingEnabled && !isShiftHeldRef.current;
 			if (shouldSnap) {
 				const tracks = editor.scenes.getActiveScene().tracks;
@@ -284,14 +287,30 @@ export function useTimelineElementResize({
 					resizing.initialTrimStart + getSourceDeltaForClipDelta(deltaTime);
 
 				if (calculated >= 0 && calculated <= maxAllowed) {
-				const newTrimStart = safeRoundToFrame({ time: Math.min(maxAllowed, Math.max(minTrimStartForNeighbor, calculated)), rate: projectFps }) ?? Math.min(maxAllowed, Math.max(minTrimStartForNeighbor, calculated));
+					const newTrimStart =
+						safeRoundToFrame({
+							time: Math.min(
+								maxAllowed,
+								Math.max(minTrimStartForNeighbor, calculated),
+							),
+							rate: projectFps,
+						}) ??
+						Math.min(maxAllowed, Math.max(minTrimStartForNeighbor, calculated));
 					const visibleSourceSpan = Math.max(
 						0,
 						sourceDuration - newTrimStart - resizing.initialTrimEnd,
 					);
-				const newDuration = safeRoundToFrame({ time: getDurationForVisibleSourceSpan(visibleSourceSpan), rate: projectFps }) ?? getDurationForVisibleSourceSpan(visibleSourceSpan);
-				const trimDelta = resizing.initialDuration - newDuration;
-				const newStartTime = safeRoundToFrame({ time: resizing.initialStartTime + trimDelta, rate: projectFps }) ?? resizing.initialStartTime + trimDelta;
+					const newDuration =
+						safeRoundToFrame({
+							time: getDurationForVisibleSourceSpan(visibleSourceSpan),
+							rate: projectFps,
+						}) ?? getDurationForVisibleSourceSpan(visibleSourceSpan);
+					const trimDelta = resizing.initialDuration - newDuration;
+					const newStartTime =
+						safeRoundToFrame({
+							time: resizing.initialStartTime + trimDelta,
+							rate: projectFps,
+						}) ?? resizing.initialStartTime + trimDelta;
 
 					setCurrentTrimStart(newTrimStart);
 					setCurrentStartTime(newStartTime);
@@ -313,8 +332,16 @@ export function useTimelineElementResize({
 									)
 								: Math.min(extensionAmount, maxExtension),
 						);
-					const newStartTime = safeRoundToFrame({ time: resizing.initialStartTime - actualExtension, rate: projectFps }) ?? resizing.initialStartTime - actualExtension;
-					const newDuration = safeRoundToFrame({ time: resizing.initialDuration + actualExtension, rate: projectFps }) ?? resizing.initialDuration + actualExtension;
+						const newStartTime =
+							safeRoundToFrame({
+								time: resizing.initialStartTime - actualExtension,
+								rate: projectFps,
+							}) ?? resizing.initialStartTime - actualExtension;
+						const newDuration =
+							safeRoundToFrame({
+								time: resizing.initialDuration + actualExtension,
+								rate: projectFps,
+							}) ?? resizing.initialDuration + actualExtension;
 
 						setCurrentTrimStart(0);
 						setCurrentStartTime(newStartTime);
@@ -340,8 +367,20 @@ export function useTimelineElementResize({
 							0,
 							sourceDuration - newTrimStart - resizing.initialTrimEnd,
 						);
-					const newDuration = safeRoundToFrame({ time: getDurationForVisibleSourceSpan(visibleSourceSpan), rate: projectFps }) ?? getDurationForVisibleSourceSpan(visibleSourceSpan);
-					const newStartTime = safeRoundToFrame({ time: resizing.initialStartTime + (resizing.initialDuration - newDuration), rate: projectFps }) ?? resizing.initialStartTime + (resizing.initialDuration - newDuration);
+						const newDuration =
+							safeRoundToFrame({
+								time: getDurationForVisibleSourceSpan(visibleSourceSpan),
+								rate: projectFps,
+							}) ?? getDurationForVisibleSourceSpan(visibleSourceSpan);
+						const newStartTime =
+							safeRoundToFrame({
+								time:
+									resizing.initialStartTime +
+									(resizing.initialDuration - newDuration),
+								rate: projectFps,
+							}) ??
+							resizing.initialStartTime +
+								(resizing.initialDuration - newDuration);
 
 						setCurrentTrimStart(newTrimStart);
 						setCurrentStartTime(newStartTime);
@@ -368,7 +407,15 @@ export function useTimelineElementResize({
 						const extensionNeeded = Math.abs(newTrimEnd);
 						const baseDuration =
 							resizing.initialDuration + resizing.initialTrimEnd;
-					const newDuration = safeRoundToFrame({ time: Math.min(baseDuration + extensionNeeded, maxAllowedDuration), rate: projectFps }) ?? Math.min(baseDuration + extensionNeeded, maxAllowedDuration);
+						const newDuration =
+							safeRoundToFrame({
+								time: Math.min(
+									baseDuration + extensionNeeded,
+									maxAllowedDuration,
+								),
+								rate: projectFps,
+							}) ??
+							Math.min(baseDuration + extensionNeeded, maxAllowedDuration);
 
 						setCurrentDuration(newDuration);
 						setCurrentTrimEnd(0);
@@ -378,7 +425,11 @@ export function useTimelineElementResize({
 						const unclampedDuration = getDurationForVisibleSourceSpan(
 							Math.max(0, sourceDuration - resizing.initialTrimStart),
 						);
-					const newDuration = safeRoundToFrame({ time: Math.min(unclampedDuration, maxAllowedDuration), rate: projectFps }) ?? Math.min(unclampedDuration, maxAllowedDuration);
+						const newDuration =
+							safeRoundToFrame({
+								time: Math.min(unclampedDuration, maxAllowedDuration),
+								rate: projectFps,
+							}) ?? Math.min(unclampedDuration, maxAllowedDuration);
 
 						setCurrentDuration(newDuration);
 						setCurrentTrimEnd(0);
@@ -402,12 +453,18 @@ export function useTimelineElementResize({
 						maxTrimEnd,
 						Math.max(minTrimEndForNeighbor, newTrimEnd),
 					);
-				const finalTrimEnd = safeRoundToFrame({ time: clampedTrimEnd, rate: projectFps }) ?? clampedTrimEnd;
+					const finalTrimEnd =
+						safeRoundToFrame({ time: clampedTrimEnd, rate: projectFps }) ??
+						clampedTrimEnd;
 					const visibleSourceSpan = Math.max(
 						0,
 						sourceDuration - resizing.initialTrimStart - finalTrimEnd,
 					);
-				const newDuration = safeRoundToFrame({ time: getDurationForVisibleSourceSpan(visibleSourceSpan), rate: projectFps }) ?? getDurationForVisibleSourceSpan(visibleSourceSpan);
+					const newDuration =
+						safeRoundToFrame({
+							time: getDurationForVisibleSourceSpan(visibleSourceSpan),
+							rate: projectFps,
+						}) ?? getDurationForVisibleSourceSpan(visibleSourceSpan);
 
 					setCurrentTrimEnd(finalTrimEnd);
 					setCurrentDuration(newDuration);

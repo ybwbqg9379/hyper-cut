@@ -12,9 +12,7 @@ import {
 	hasAnimatedVolume,
 	resolveEffectiveAudioGain,
 } from "@/lib/timeline/audio-state";
-import {
-	doesElementHaveEnabledAudio,
-} from "@/lib/timeline/audio-separation";
+import { doesElementHaveEnabledAudio } from "@/lib/timeline/audio-separation";
 import { canElementHaveAudio, hasMediaId } from "@/lib/timeline/element-utils";
 import { canTrackHaveAudio } from "@/lib/timeline";
 import { mediaSupportsAudio } from "@/lib/media/media-utils";
@@ -340,16 +338,16 @@ async function fetchLibraryAudioSource({
 			type: "audio/mpeg",
 		});
 
-	return {
-		timelineElement: element,
-		file,
-		startTime: element.startTime / TICKS_PER_SECOND,
-		duration: element.duration / TICKS_PER_SECOND,
-		trimStart: element.trimStart / TICKS_PER_SECOND,
-		trimEnd: element.trimEnd / TICKS_PER_SECOND,
-		volume,
-		retime: element.retime,
-	};
+		return {
+			timelineElement: element,
+			file,
+			startTime: element.startTime / TICKS_PER_SECOND,
+			duration: element.duration / TICKS_PER_SECOND,
+			trimStart: element.trimStart / TICKS_PER_SECOND,
+			trimEnd: element.trimEnd / TICKS_PER_SECOND,
+			volume,
+			retime: element.retime,
+		};
 	} catch (error) {
 		console.warn("Failed to fetch library audio:", error);
 		return null;

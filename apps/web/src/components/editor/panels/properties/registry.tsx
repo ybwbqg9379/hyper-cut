@@ -150,7 +150,9 @@ function buildGraphicTab({
 		id: "graphic",
 		label: "Graphic",
 		icon: <OcShapesIcon size={16} />,
-		content: ({ trackId }) => <GraphicTab element={element} trackId={trackId} />,
+		content: ({ trackId }) => (
+			<GraphicTab element={element} trackId={trackId} />
+		),
 	};
 }
 

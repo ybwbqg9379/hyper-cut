@@ -1,7 +1,5 @@
 import { type JSX, useLayoutEffect, useRef } from "react";
-import {
-	BASE_TIMELINE_PIXELS_PER_SECOND,
-} from "@/lib/timeline/scale";
+import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/lib/timeline/scale";
 import { safeMediaTimeToSeconds } from "@/lib/wasm/safe-timecode";
 import { TICKS_PER_SECOND } from "@/lib/wasm";
 import { TIMELINE_RULER_HEIGHT_PX } from "./layout";
@@ -36,14 +34,18 @@ export function TimelineRuler({
 	const durationSeconds = safeMediaTimeToSeconds({ time: durationTicks });
 	const pixelsPerSecond = BASE_TIMELINE_PIXELS_PER_SECOND * zoomLevel;
 	const visibleDurationSeconds = dynamicTimelineWidth / pixelsPerSecond;
-	const effectiveDurationSeconds = Math.max(durationSeconds, visibleDurationSeconds);
+	const effectiveDurationSeconds = Math.max(
+		durationSeconds,
+		visibleDurationSeconds,
+	);
 	const fps =
 		useEditor((e) => e.project.getActiveOrNull()?.settings.fps) ?? DEFAULT_FPS;
 	const { labelIntervalSeconds, tickIntervalSeconds } = getRulerConfig({
 		zoomLevel,
 		fps,
 	});
-	const tickCount = Math.ceil(effectiveDurationSeconds / tickIntervalSeconds) + 1;
+	const tickCount =
+		Math.ceil(effectiveDurationSeconds / tickIntervalSeconds) + 1;
 
 	const { scrollLeft, viewportWidth } = useScrollPosition({
 		scrollRef: tracksScrollRef,
@@ -90,7 +92,10 @@ export function TimelineRuler({
 		if (timeSeconds > effectiveDurationSeconds) break;
 
 		const timeTicks = Math.round(timeSeconds * TICKS_PER_SECOND);
-		const showLabel = shouldShowLabel({ time: timeSeconds, labelIntervalSeconds });
+		const showLabel = shouldShowLabel({
+			time: timeSeconds,
+			labelIntervalSeconds,
+		});
 		timelineTicks.push(
 			<TimelineTick
 				key={tickIndex}
