@@ -2,7 +2,10 @@ import { Command, type CommandResult } from "@/lib/commands/base-command";
 import type { SceneTracks, TimelineElement } from "@/lib/timeline";
 import { generateUUID } from "@/utils/id";
 import { EditorCore } from "@/core";
-import { applyPlacement, resolveTrackPlacement } from "@/lib/timeline/placement";
+import {
+	applyPlacement,
+	resolveTrackPlacement,
+} from "@/lib/timeline/placement";
 import { cloneAnimations } from "@/lib/animation";
 
 interface DuplicateElementsParams {

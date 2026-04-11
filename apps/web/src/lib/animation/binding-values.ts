@@ -27,9 +27,7 @@ export type AnimationComponentValue = number | DiscreteValue;
 const toRgb = converter("rgb");
 
 function srgbToLinear({ value }: { value: number }): number {
-	return value <= 0.04045
-		? value / 12.92
-		: ((value + 0.055) / 1.055) ** 2.4;
+	return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
 function linearToSrgb({ value }: { value: number }): number {
@@ -44,7 +42,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function isVectorValue(value: unknown): value is VectorValue {
-	return isRecord(value) && typeof value.x === "number" && typeof value.y === "number";
+	return (
+		isRecord(value) &&
+		typeof value.x === "number" &&
+		typeof value.y === "number"
+	);
 }
 
 export function getBindingComponentKeys({
@@ -150,7 +152,11 @@ export function createAnimationBinding({
 }
 
 const animationBindingCloners = {
-	color: ({ binding }: { binding: ColorAnimationBinding }): ColorAnimationBinding => ({
+	color: ({
+		binding,
+	}: {
+		binding: ColorAnimationBinding;
+	}): ColorAnimationBinding => ({
 		...binding,
 		components: cloneBindingComponents({
 			components: binding.components,
@@ -235,11 +241,7 @@ export function parseColorToLinearRgba({
 	};
 }
 
-export function formatLinearRgba({
-	color,
-}: {
-	color: LinearRgba;
-}): string {
+export function formatLinearRgba({ color }: { color: LinearRgba }): string {
 	const rgb = {
 		mode: "rgb",
 		r: linearToSrgb({ value: color.r }),

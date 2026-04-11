@@ -4,7 +4,11 @@ import {
 	getSourceSpanAtClipTime,
 	getTimelineDurationForSourceSpan,
 } from "@/lib/retime";
-import type { RetimeConfig, SceneTracks, TimelineElement } from "@/lib/timeline";
+import type {
+	RetimeConfig,
+	SceneTracks,
+	TimelineElement,
+} from "@/lib/timeline";
 import { isRetimableElement } from "@/lib/timeline";
 
 type ElementUpdateField = keyof TimelineElement | string;
@@ -136,9 +140,7 @@ export function applyElementUpdate({
 	context: ElementUpdateContext;
 }): TimelineElement {
 	let nextElement = { ...element, ...patch } as TimelineElement;
-	const changedFields = new Set(
-		Object.keys(patch) as ElementUpdateField[],
-	);
+	const changedFields = new Set(Object.keys(patch) as ElementUpdateField[]);
 
 	for (const rule of deriveRules) {
 		if (!shouldApplyRule({ rule, changedFields })) {

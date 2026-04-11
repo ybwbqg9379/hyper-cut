@@ -19,7 +19,7 @@ export class CommandManager {
 
 	execute({ command }: { command: Command }): Command {
 		const beforeTracks = this.isRippleEnabled
-			? this.editor.scenes.getActiveSceneOrNull()?.tracks ?? null
+			? (this.editor.scenes.getActiveSceneOrNull()?.tracks ?? null)
 			: null;
 		const previousSelection = this.getSelectionSnapshot();
 		const result = command.execute();
@@ -74,7 +74,7 @@ export class CommandManager {
 		}
 
 		const beforeTracks = this.isRippleEnabled
-			? this.editor.scenes.getActiveSceneOrNull()?.tracks ?? null
+			? (this.editor.scenes.getActiveSceneOrNull()?.tracks ?? null)
 			: null;
 		const previousSelection = this.getSelectionSnapshot();
 		const result = entry.command.redo();

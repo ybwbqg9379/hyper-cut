@@ -1,6 +1,10 @@
 import { MAX_FEATHER } from "@/constants/mask-constants";
 import type { ParamDefinition } from "@/lib/params";
-import type { BaseMaskParams, MaskDefinition, MaskType } from "@/lib/masks/types";
+import type {
+	BaseMaskParams,
+	MaskDefinition,
+	MaskType,
+} from "@/lib/masks/types";
 import type { HugeiconsIconProps } from "@hugeicons/react";
 import { DefinitionRegistry } from "@/lib/registry";
 

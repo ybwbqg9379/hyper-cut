@@ -31,7 +31,11 @@ export interface AnimationPropertyDefinition {
 	defaultInterpolation: AnimationInterpolation;
 	numericRanges?: Partial<Record<string, NumericSpec>>;
 	supportsElement: ({ element }: { element: TimelineElement }) => boolean;
-	getValue: ({ element }: { element: TimelineElement }) => AnimationValue | null;
+	getValue: ({
+		element,
+	}: {
+		element: TimelineElement;
+	}) => AnimationValue | null;
 	coerceValue: ({ value }: { value: AnimationValue }) => AnimationValue | null;
 	setValue: ({
 		element,
@@ -76,11 +80,7 @@ function coerceNumberValue({
 	return applyNumericSpec({ value, numericRange });
 }
 
-function coerceColorValue({
-	value,
-}: {
-	value: AnimationValue;
-}): string | null {
+function coerceColorValue({ value }: { value: AnimationValue }): string | null {
 	return typeof value === "string" && parseColorToLinearRgba({ color: value })
 		? value
 		: null;
@@ -187,7 +187,7 @@ const ANIMATION_PROPERTY_REGISTRY: Record<
 		numericRange: { min: VOLUME_DB_MIN, max: VOLUME_DB_MAX, step: 0.01 },
 		supportsElement: ({ element }) => canElementHaveAudio(element),
 		getValue: ({ element }) =>
-			canElementHaveAudio(element) ? element.volume ?? 0 : null,
+			canElementHaveAudio(element) ? (element.volume ?? 0) : null,
 		setValue: ({ element, value }) =>
 			canElementHaveAudio(element)
 				? { ...element, volume: value as number }
@@ -294,7 +294,10 @@ const ANIMATION_PROPERTY_REGISTRY: Record<
 			element.type === "text"
 				? {
 						...element,
-						background: { ...element.background, cornerRadius: value as number },
+						background: {
+							...element.background,
+							cornerRadius: value as number,
+						},
 					}
 				: element,
 	}),

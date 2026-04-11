@@ -26,6 +26,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/lib/timeline/creation";
+import { TICKS_PER_SECOND } from "@/lib/wasm";
 import { useEditor } from "@/hooks/use-editor";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { useParentMediaBridge } from "@/hooks/use-parent-media-bridge";
@@ -173,7 +174,10 @@ export function MediaView() {
 					const blob = await response.blob();
 					files.push(new File([blob], item.name, { type: item.mimeType }));
 				} catch (fetchError) {
-					console.error(`Failed to fetch library asset: ${item.name}`, fetchError);
+					console.error(
+						`Failed to fetch library asset: ${item.name}`,
+						fetchError,
+					);
 				}
 			}
 			if (files.length > 0) {
@@ -313,8 +317,9 @@ function MediaAssetDraggable({
 		asset: MediaAsset;
 		startTime: number;
 	}) => {
-		const duration =
-			asset.duration ?? DEFAULT_NEW_ELEMENT_DURATION;
+		const duration = asset.duration
+			? Math.round(asset.duration * TICKS_PER_SECOND)
+			: DEFAULT_NEW_ELEMENT_DURATION;
 		const element = buildElementFromMedia({
 			mediaId: asset.id,
 			mediaType: asset.type,

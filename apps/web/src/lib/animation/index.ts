@@ -89,6 +89,4 @@ export {
 	type GroupKeyframeRef,
 } from "./property-groups";
 
-export {
-	isVectorValue,
-} from "./binding-values";
+export { isVectorValue } from "./binding-values";

@@ -20,10 +20,7 @@ import {
 	timelineTimeToSnappedPixels,
 } from "@/lib/timeline";
 import { getTrackHeight } from "./track-layout";
-import {
-	getTimelineElementClassName,
-	TIMELINE_TRACK_THEME,
-} from "./theme";
+import { getTimelineElementClassName, TIMELINE_TRACK_THEME } from "./theme";
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -84,7 +81,6 @@ import { usePropertiesStore } from "@/components/editor/panels/properties/stores
 
 const KEYFRAME_INDICATOR_MIN_WIDTH_PX = 40;
 const ELEMENT_RING_WIDTH_PX = 1.5;
-const THUMBNAIL_ASPECT_RATIO = 16 / 9;
 
 interface KeyframeIndicator {
 	time: number;
@@ -355,11 +351,11 @@ export function TimelineElement({
 				)}
 				{canToggleCurrentSourceAudio && (
 					<ContextMenuItem
-					icon={
-						<HugeiconsIcon
-							icon={isElementSourceAudioSeparated ? Unlink02Icon : Link02Icon}
-						/>
-					}
+						icon={
+							<HugeiconsIcon
+								icon={isElementSourceAudioSeparated ? Unlink02Icon : Link02Icon}
+							/>
+						}
 						onClick={(event: React.MouseEvent) => {
 							event.stopPropagation();
 							invokeAction("toggle-source-audio");
@@ -775,7 +771,9 @@ function TiledMediaContent({
 	}
 
 	const trackHeight = getTrackHeight({ type: track.type });
-	const tileWidth = trackHeight * THUMBNAIL_ASPECT_RATIO;
+	const width = mediaAsset?.width || 16;
+	const height = mediaAsset?.height || 9;
+	const tileWidth = trackHeight * (width / height);
 
 	return (
 		<>

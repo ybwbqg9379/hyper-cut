@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import type { EditorCore } from "@/core";
 import { useEditor } from "@/hooks/use-editor";
 import type { BookmarkDragState } from "@/hooks/timeline/use-bookmark-drag";
-import {
-	DEFAULT_TIMELINE_BOOKMARK_COLOR,
-} from "./theme";
+import { DEFAULT_TIMELINE_BOOKMARK_COLOR } from "./theme";
 import { TIMELINE_BOOKMARK_ROW_HEIGHT_PX } from "./layout";
 import { DEFAULT_FPS } from "@/lib/fps/constants";
 import { safeSnappedSeekTime } from "@/lib/wasm/safe-timecode";
@@ -360,7 +358,10 @@ function BookmarkPopoverContent({
 					/>
 					{bookmark.color &&
 						bookmark.color.replace(/^#/, "").toUpperCase() !==
-							DEFAULT_TIMELINE_BOOKMARK_COLOR.replace(/^#/, "").toUpperCase() && (
+							DEFAULT_TIMELINE_BOOKMARK_COLOR.replace(
+								/^#/,
+								"",
+							).toUpperCase() && (
 							<Button
 								type="button"
 								variant="text"

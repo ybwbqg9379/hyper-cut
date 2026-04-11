@@ -6,6 +6,7 @@ import { showMediaUploadToast } from "@/lib/media/upload-toast";
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/lib/timeline/creation";
 import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/lib/timeline/scale";
 import { safeRoundToFrame } from "@/lib/wasm/safe-timecode";
+import { TICKS_PER_SECOND } from "@/lib/wasm";
 import {
 	buildTextElement,
 	buildGraphicElement,
@@ -87,7 +88,9 @@ export function useTimelineDragDrop({
 			if (mediaId) {
 				const mediaAssets = editor.media.getAssets();
 				const media = mediaAssets.find((m) => m.id === mediaId);
-				return media?.duration ?? DEFAULT_NEW_ELEMENT_DURATION;
+				return media?.duration
+					? Math.round(media.duration * TICKS_PER_SECOND)
+					: DEFAULT_NEW_ELEMENT_DURATION;
 			}
 			return DEFAULT_NEW_ELEMENT_DURATION;
 		},
@@ -341,8 +344,9 @@ export function useTimelineDragDrop({
 			const trackType: TrackType =
 				dragData.mediaType === "audio" ? "audio" : "video";
 
-			const duration =
-				mediaAsset.duration ?? DEFAULT_NEW_ELEMENT_DURATION;
+			const duration = mediaAsset.duration
+				? Math.round(mediaAsset.duration * TICKS_PER_SECOND)
+				: DEFAULT_NEW_ELEMENT_DURATION;
 			const element = buildElementFromMedia({
 				mediaId: mediaAsset.id,
 				mediaType: mediaAsset.type,
@@ -463,9 +467,9 @@ export function useTimelineDragDrop({
 						});
 						if (!createdAsset) continue;
 
-						const duration =
-							createdAsset.duration ??
-							DEFAULT_NEW_ELEMENT_DURATION;
+						const duration = createdAsset.duration
+							? Math.round(createdAsset.duration * TICKS_PER_SECOND)
+							: DEFAULT_NEW_ELEMENT_DURATION;
 						const sceneTracks = editor.scenes.getActiveScene().tracks;
 						const currentTime = editor.playback.getCurrentTime();
 						const reuseMainTrackId =

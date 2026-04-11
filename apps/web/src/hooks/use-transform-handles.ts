@@ -31,11 +31,7 @@ type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 type Edge = "right" | "left" | "bottom";
 type HandleType = Corner | Edge | "rotation";
 
-function getPreferredEdge({
-	edge,
-}: {
-	edge: Edge;
-}): ScaleEdgePreference {
+function getPreferredEdge({ edge }: { edge: Edge }): ScaleEdgePreference {
 	return edge === "right"
 		? { right: true }
 		: edge === "left"
@@ -191,7 +187,12 @@ export function useTransformHandles({
 				releaseCapturedPointer();
 			},
 		});
-	}, [activeHandle, clearActiveHandleState, editor.timeline, releaseCapturedPointer]);
+	}, [
+		activeHandle,
+		clearActiveHandleState,
+		editor.timeline,
+		releaseCapturedPointer,
+	]);
 
 	const handleCornerPointerDown = useCallback(
 		({ event, corner }: { event: React.PointerEvent; corner: Corner }) => {
@@ -333,11 +334,10 @@ export function useTransformHandles({
 				edge === "right" || edge === "left"
 					? "transform.scaleX"
 					: "transform.scaleY";
-			const shouldClearScaleAnimation =
-				hasKeyframesForPath({
-					animations: element.animations,
-					propertyPath,
-				});
+			const shouldClearScaleAnimation = hasKeyframesForPath({
+				animations: element.animations,
+				propertyPath,
+			});
 			const animationsWithoutScale = shouldClearScaleAnimation
 				? setChannel({
 						animations: element.animations,
@@ -605,18 +605,16 @@ export function useTransformHandles({
 	);
 
 	const handlePointerUp = useCallback(() => {
-			if (
-				scaleStateRef.current ||
-				rotationStateRef.current ||
-				edgeScaleStateRef.current
-			) {
-				editor.timeline.commitPreview();
-				clearActiveHandleState();
-			}
-			releaseCapturedPointer();
-		},
-		[clearActiveHandleState, editor, releaseCapturedPointer],
-	);
+		if (
+			scaleStateRef.current ||
+			rotationStateRef.current ||
+			edgeScaleStateRef.current
+		) {
+			editor.timeline.commitPreview();
+			clearActiveHandleState();
+		}
+		releaseCapturedPointer();
+	}, [clearActiveHandleState, editor, releaseCapturedPointer]);
 
 	return {
 		selectedWithBounds,

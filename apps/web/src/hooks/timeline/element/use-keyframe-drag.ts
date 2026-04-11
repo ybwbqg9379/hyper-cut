@@ -8,7 +8,10 @@ import {
 import { useEditor } from "@/hooks/use-editor";
 import { getKeyframeById } from "@/lib/animation";
 import { useKeyframeSelection } from "./use-keyframe-selection";
-import { safeRoundToFrame, safeSnappedSeekTime } from "@/lib/wasm/safe-timecode";
+import {
+	safeRoundToFrame,
+	safeSnappedSeekTime,
+} from "@/lib/wasm/safe-timecode";
 import { timelineTimeToSnappedPixels } from "@/lib/timeline";
 import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/lib/timeline/scale";
 import { TICKS_PER_SECOND } from "@/lib/wasm";
@@ -145,9 +148,12 @@ export function useKeyframeDrag({
 
 			if (!dragState.isDragging) return;
 
-		const startX = mouseDownXRef.current ?? clientX;
-		const rawDelta = Math.round(((clientX - startX) / pixelsPerSecond) * TICKS_PER_SECOND);
-		const snappedDelta = safeRoundToFrame({ time: rawDelta, rate: fps }) ?? rawDelta;
+			const startX = mouseDownXRef.current ?? clientX;
+			const rawDelta = Math.round(
+				((clientX - startX) / pixelsPerSecond) * TICKS_PER_SECOND,
+			);
+			const snappedDelta =
+				safeRoundToFrame({ time: rawDelta, rate: fps }) ?? rawDelta;
 
 			setDragState((previous) => ({ ...previous, deltaTime: snappedDelta }));
 		};
@@ -211,27 +217,27 @@ export function useKeyframeDrag({
 			event.preventDefault();
 			event.stopPropagation();
 
-		mouseDownXRef.current = event.clientX;
+			mouseDownXRef.current = event.clientX;
 
-		const anySelected = keyframes.some((keyframe) =>
-			isKeyframeSelected({ keyframe }),
-		);
+			const anySelected = keyframes.some((keyframe) =>
+				isKeyframeSelected({ keyframe }),
+			);
 
-		const isModifierKey = event.shiftKey || event.metaKey || event.ctrlKey;
-		if (!anySelected && !isModifierKey) {
-			setKeyframeSelection({ keyframes });
-		}
+			const isModifierKey = event.shiftKey || event.metaKey || event.ctrlKey;
+			if (!anySelected && !isModifierKey) {
+				setKeyframeSelection({ keyframes });
+			}
 
-		const keyframeRefsToTrack = anySelected ? selectedKeyframes : keyframes;
+			const keyframeRefsToTrack = anySelected ? selectedKeyframes : keyframes;
 
-		pendingDragRef.current = {
-			keyframeRefs: keyframeRefsToTrack,
-			startMouseX: event.clientX,
-		};
-		setIsPendingDrag(true);
-	},
-	[isKeyframeSelected, selectedKeyframes, setKeyframeSelection],
-);
+			pendingDragRef.current = {
+				keyframeRefs: keyframeRefsToTrack,
+				startMouseX: event.clientX,
+			};
+			setIsPendingDrag(true);
+		},
+		[isKeyframeSelected, selectedKeyframes, setKeyframeSelection],
+	);
 
 	const handleKeyframeClick = useCallback(
 		({
@@ -250,13 +256,18 @@ export function useKeyframeDrag({
 			const wasDrag =
 				mouseDownXRef.current !== null &&
 				Math.abs(event.clientX - mouseDownXRef.current) >
-				TIMELINE_DRAG_THRESHOLD_PX;
+					TIMELINE_DRAG_THRESHOLD_PX;
 			mouseDownXRef.current = null;
 
 			if (wasDrag) return;
 
 			const duration = editor.timeline.getTotalDuration();
-			const seekTime = safeSnappedSeekTime({ time: displayedStartTime + indicatorTime, duration, rate: fps }) ?? displayedStartTime + indicatorTime;
+			const seekTime =
+				safeSnappedSeekTime({
+					time: displayedStartTime + indicatorTime,
+					duration,
+					rate: fps,
+				}) ?? displayedStartTime + indicatorTime;
 			editor.playback.seek({ time: seekTime });
 
 			if (event.shiftKey) {
@@ -273,7 +284,13 @@ export function useKeyframeDrag({
 				isMultiKey: event.metaKey || event.ctrlKey,
 			});
 		},
-		[toggleKeyframeSelection, selectKeyframeRange, editor, displayedStartTime, fps],
+		[
+			toggleKeyframeSelection,
+			selectKeyframeRange,
+			editor,
+			displayedStartTime,
+			fps,
+		],
 	);
 
 	const getVisualOffsetPx = useCallback(

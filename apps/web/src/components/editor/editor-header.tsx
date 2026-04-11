@@ -13,10 +13,10 @@ import { DeleteProjectDialog } from "./dialogs/delete-project-dialog";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ExportButton } from "./export-button";
 import { ThemeToggle } from "../theme-toggle";
-import { DEFAULT_LOGO_URL, } from "@/constants/site-constants";
+import { DEFAULT_LOGO_URL } from "@/constants/site-constants";
 import { toast } from "sonner";
 import { useEditor } from "@/hooks/use-editor";
-import { CommandIcon, Logout05Icon, } from "@hugeicons/core-free-icons";
+import { CommandIcon, Logout05Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShortcutsDialog } from "./dialogs/shortcuts-dialog";
 import Image from "next/image";
@@ -116,7 +116,11 @@ function ProjectDropdown({ isEmbed: _isEmbed = false }: { isEmbed?: boolean }) {
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="icon" className="p-1 rounded-sm size-8 hover:bg-accent/50 transition-colors">
+					<Button
+						variant="ghost"
+						size="icon"
+						className="p-1 rounded-sm size-8 hover:bg-accent/50 transition-colors"
+					>
 						<Image
 							src={DEFAULT_LOGO_URL}
 							alt="HyperCut Logo"
@@ -141,7 +145,6 @@ function ProjectDropdown({ isEmbed: _isEmbed = false }: { isEmbed?: boolean }) {
 					>
 						Shortcuts
 					</DropdownMenuItem>
-
 				</DropdownMenuContent>
 			</DropdownMenu>
 			<RenameProjectDialog

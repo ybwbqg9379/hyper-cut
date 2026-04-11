@@ -3,10 +3,7 @@ import type { MediaAsset } from "@/lib/media/types";
 import { STICKER_INTRINSIC_SIZE_FALLBACK } from "@/constants/sticker-constants";
 import { DEFAULT_GRAPHIC_SOURCE_SIZE } from "@/lib/graphics";
 import { measureTextElement } from "@/lib/text/measure-element";
-import {
-	getElementLocalTime,
-	resolveTransformAtTime,
-} from "@/lib/animation";
+import { getElementLocalTime, resolveTransformAtTime } from "@/lib/animation";
 
 export interface ElementBounds {
 	cx: number;
@@ -236,7 +233,8 @@ export function getEdgeHandlePosition({
 	const angleRad = (bounds.rotation * Math.PI) / 180;
 	const cos = Math.cos(angleRad);
 	const sin = Math.sin(angleRad);
-	const localX = edge === "right" ? halfWidth : edge === "left" ? -halfWidth : 0;
+	const localX =
+		edge === "right" ? halfWidth : edge === "left" ? -halfWidth : 0;
 	const localY = edge === "bottom" ? halfHeight : 0;
 	return {
 		x: bounds.cx + (localX * cos - localY * sin),

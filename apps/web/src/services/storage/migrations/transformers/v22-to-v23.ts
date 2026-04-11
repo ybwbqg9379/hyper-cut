@@ -193,7 +193,9 @@ function migrateAnimationChannel({ channel }: { channel: unknown }): unknown {
 
 	return {
 		...channel,
-		keys: channel.keys.map((keyframe) => migrateAnimationKeyframe({ keyframe })),
+		keys: channel.keys.map((keyframe) =>
+			migrateAnimationKeyframe({ keyframe }),
+		),
 	};
 }
 
@@ -290,7 +292,8 @@ function migrateFrameRate({ fps }: { fps: unknown }): unknown {
 	}
 
 	const standardFrameRate = STANDARD_FRAME_RATES.find(
-		(candidate) => Math.abs(fps - candidate.value) <= STANDARD_FRAME_RATE_TOLERANCE,
+		(candidate) =>
+			Math.abs(fps - candidate.value) <= STANDARD_FRAME_RATE_TOLERANCE,
 	);
 	if (standardFrameRate) {
 		return {

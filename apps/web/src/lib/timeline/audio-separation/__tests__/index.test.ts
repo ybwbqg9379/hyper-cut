@@ -47,12 +47,12 @@ describe("audio separation", () => {
 			muted: true,
 			retime: { rate: 1.25, maintainPitch: true },
 		});
-		expect(Object.keys(separatedAudioElement.animations?.bindings ?? {})).toEqual([
-			"volume",
-		]);
-		expect(Object.keys(separatedAudioElement.animations?.channels ?? {})).toEqual([
-			"volume:value",
-		]);
+		expect(
+			Object.keys(separatedAudioElement.animations?.bindings ?? {}),
+		).toEqual(["volume"]);
+		expect(
+			Object.keys(separatedAudioElement.animations?.channels ?? {}),
+		).toEqual(["volume:value"]);
 		expect(
 			separatedAudioElement.animations?.channels["volume:value"]?.keys[0]?.id,
 		).not.toBe("volume-keyframe");
@@ -79,9 +79,7 @@ describe("audio separation", () => {
 	});
 });
 
-function buildVideoElement(
-	overrides: Partial<VideoElement>,
-): VideoElement {
+function buildVideoElement(overrides: Partial<VideoElement>): VideoElement {
 	return {
 		id: "video-1",
 		type: "video",

@@ -44,14 +44,14 @@ export default function TermsPage() {
 								Everything runs locally in your browser - nothing is ever
 								uploaded to our servers
 							</li>
-							<li>
-								We never claim ownership of your content
-							</li>
+							<li>We never claim ownership of your content</li>
 							<li>
 								Free for personal and commercial use with no watermarks or
 								restrictions
 							</li>
-							<li>You're responsible for how you use it - don't break the law</li>
+							<li>
+								You're responsible for how you use it - don't break the law
+							</li>
 							<li>
 								Service provided "as is" - we can't guarantee perfect uptime
 							</li>
@@ -86,9 +86,7 @@ export default function TermsPage() {
 					HyperCut.
 				</p>
 				<ul className="list-disc space-y-2 pl-6">
-					<li>
-						Your content never leaves your device
-					</li>
+					<li>Your content never leaves your device</li>
 					<li>You retain all intellectual property rights to your content</li>
 					<li>You can export and use your content however you choose</li>
 					<li>No watermarks, no licensing restrictions from HyperCut</li>
@@ -109,8 +107,8 @@ export default function TermsPage() {
 					</li>
 				</ul>
 				<p>
-					You're responsible for how you use HyperCut and the content you create.
-					Don't use it for anything illegal in your jurisdiction.
+					You're responsible for how you use HyperCut and the content you
+					create. Don't use it for anything illegal in your jurisdiction.
 				</p>
 			</section>
 
@@ -126,9 +124,9 @@ export default function TermsPage() {
 			<section className="flex flex-col gap-3">
 				<h2 className="text-2xl font-semibold">Service</h2>
 				<p>
-					HyperCut does not currently require an account. The service is provided
-					"as is" without warranties. While we strive for reliability, we can't
-					guarantee uninterrupted service.
+					HyperCut does not currently require an account. The service is
+					provided "as is" without warranties. While we strive for reliability,
+					we can't guarantee uninterrupted service.
 				</p>
 			</section>
 

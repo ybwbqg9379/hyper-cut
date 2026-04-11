@@ -6,7 +6,11 @@ import type {
 	ClipboardItem,
 } from "@/lib/timeline";
 import { generateUUID } from "@/utils/id";
-import { applyPlacement, resolveTrackPlacement, enforceMainTrackStart } from "@/lib/timeline/placement";
+import {
+	applyPlacement,
+	resolveTrackPlacement,
+	enforceMainTrackStart,
+} from "@/lib/timeline/placement";
 import { cloneAnimations } from "@/lib/animation";
 
 export class PasteCommand extends Command {
@@ -186,4 +190,3 @@ function buildPastedElements({
 
 	return elementsToAdd;
 }
-

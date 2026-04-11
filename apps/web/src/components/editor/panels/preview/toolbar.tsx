@@ -93,7 +93,11 @@ function TimecodeDisplay() {
 			/>
 			<span className="text-muted-foreground px-2 font-mono text-xs">/</span>
 			<span className="text-muted-foreground font-mono text-xs">
-				{safeFormatTimecode({ time: totalDuration, format: "HH:MM:SS:FF", rate: fps })}
+				{safeFormatTimecode({
+					time: totalDuration,
+					format: "HH:MM:SS:FF",
+					rate: fps,
+				})}
 			</span>
 		</div>
 	);

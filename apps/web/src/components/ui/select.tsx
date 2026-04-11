@@ -20,7 +20,11 @@ function Select({
 		onOpenChange,
 	});
 	return (
-		<SelectPrimitive.Root open={open} onOpenChange={handleOpenChange} {...props} />
+		<SelectPrimitive.Root
+			open={open}
+			onOpenChange={handleOpenChange}
+			{...props}
+		/>
 	);
 }
 

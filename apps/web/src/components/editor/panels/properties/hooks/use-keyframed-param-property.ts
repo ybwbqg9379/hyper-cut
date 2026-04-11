@@ -10,9 +10,7 @@ import {
 	hasKeyframesForPath,
 	upsertPathKeyframe,
 } from "@/lib/animation";
-import type {
-	ElementAnimations,
-} from "@/lib/animation/types";
+import type { ElementAnimations } from "@/lib/animation/types";
 import type { ParamDefinition } from "@/lib/params";
 import type { TimelineElement } from "@/lib/timeline";
 
