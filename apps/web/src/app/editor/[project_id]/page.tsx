@@ -28,7 +28,7 @@ export default function Editor() {
 		<MobileGate>
 			<EditorProvider projectId={projectId}>
 				<div className="bg-background flex h-screen w-screen flex-col overflow-hidden">
-					{!isEmbed && <EditorHeader isEmbed={isEmbed} />}
+					<EditorHeader isEmbed={isEmbed} />
 					<div className="min-h-0 min-w-0 flex-1">
 						<EditorLayout />
 					</div>

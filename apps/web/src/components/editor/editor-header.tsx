@@ -25,19 +25,21 @@ import { cn } from "@/utils/ui";
 export function EditorHeader({ isEmbed = false }: { isEmbed?: boolean }) {
 	return (
 		<header className="bg-background flex h-[3.4rem] items-center justify-between px-4 pt-0.5 border-b border-border/40">
-			<div className="flex items-center gap-1.5 ">
-				<ProjectDropdown isEmbed={isEmbed} />
-				<EditableProjectName />
-			</div>
-			<nav className="flex items-center gap-3">
+			{!isEmbed && (
+				<div className="flex items-center gap-1.5 ">
+					<ProjectDropdown />
+					<EditableProjectName />
+				</div>
+			)}
+			<nav className="ml-auto flex items-center gap-3">
 				<ExportButton />
-				<ThemeToggle />
+				{!isEmbed && <ThemeToggle />}
 			</nav>
 		</header>
 	);
 }
 
-function ProjectDropdown({ isEmbed: _isEmbed = false }: { isEmbed?: boolean }) {
+function ProjectDropdown() {
 	const [openDialog, setOpenDialog] = useState<
 		"delete" | "rename" | "shortcuts" | null
 	>(null);
